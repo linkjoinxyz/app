@@ -147,10 +147,14 @@ async def database_ws(websocket: WebSocket, ticket: str = Query(...)):
         return
 
     await manager.connect(websocket, email)
-    await manager.broadcast(await configure_data(email), email)
+    try:
+        await manager.broadcast(await configure_data(email), email)
+    except Exception:
+        manager.disconnect(websocket, email)
+        return
 
     try:
         while True:
             await websocket.receive_text()
-    except (WebSocketDisconnect, ConnectionError):
+    except (WebSocketDisconnect, ConnectionError, Exception):
         manager.disconnect(websocket, email)
