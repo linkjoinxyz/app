@@ -1,0 +1,975 @@
+@keyframes modal-in {
+    from { opacity: 0; transform: translateY(10px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes modal-out {
+    from { opacity: 1; transform: translateY(0); }
+    to   { opacity: 0; transform: translateY(10px); }
+}
+
+.modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.6);
+    z-index: 200;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    box-sizing: border-box;
+}
+
+.modal-card {
+    background: var(--blue);
+    border: 2px solid rgba(255, 255, 255, 0.4);
+    border-radius: 15px;
+    padding: 28px 40px 36px;
+    width: min(450px, 100%);
+    box-sizing: border-box;
+    max-height: calc(100vh - 40px);
+    overflow-y: auto;
+    position: relative;
+    animation: modal-in 0.18s ease-out;
+    scrollbar-width: none;
+}
+.modal-card::-webkit-scrollbar { display: none; }
+
+.modal-overlay.closing .modal-card {
+    animation: modal-out 0.16s ease-in forwards;
+}
+
+.modal-title {
+    font: 600 24px Montserrat;
+    color: white;
+    margin: 0 0 24px;
+    padding-left: 30px;
+}
+
+.modal-back {
+    position: absolute;
+    top: 18px;
+    left: 20px;
+    width: 22px;
+    height: 22px;
+    cursor: pointer;
+    opacity: 0.55;
+    transition: opacity 0.15s;
+}
+
+.modal-back:hover {
+    opacity: 1;
+}
+
+.modal-checkbox {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 44px;
+    height: 24px;
+    background: rgba(255, 255, 255, 0.15);
+    border-radius: 12px;
+    position: relative;
+    cursor: pointer;
+    transition: background 0.2s;
+    flex-shrink: 0;
+    border: none;
+    outline: none;
+}
+
+.modal-checkbox:checked {
+    background: var(--lightblue);
+}
+
+.modal-checkbox::before {
+    content: '';
+    position: absolute;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: white;
+    top: 3px;
+    left: 3px;
+    transition: left 0.2s;
+}
+
+.modal-checkbox:checked::before {
+    left: 23px;
+}
+
+.modal-input {
+    display: block;
+    width: 100%;
+    font: 500 17px Montserrat;
+    height: 44px;
+    padding: 4px 2px;
+    border: none;
+    border-bottom: 2px solid rgba(255, 255, 255, 0.5);
+    margin-bottom: 20px;
+    background: none;
+    color: white;
+    border-radius: 0;
+    box-sizing: border-box;
+    transition: border-color 0.2s;
+}
+
+.modal-input:focus {
+    border-bottom-color: white;
+}
+
+.modal-input::placeholder {
+    color: rgba(255, 255, 255, 0.3);
+    font-weight: 400;
+}
+
+.modal-field {
+    margin-bottom: 20px;
+}
+
+.modal-field-tag {
+    display: block;
+    font: 700 10px Montserrat;
+    letter-spacing: 1.2px;
+    text-transform: uppercase;
+    color: rgba(43, 143, 216, 0.5);
+    margin-bottom: 4px;
+    transition: color 0.25s;
+}
+
+.modal-field-opt {
+    font: 400 9px Montserrat;
+    letter-spacing: 0.2px;
+    text-transform: none;
+    color: rgba(255, 255, 255, 0.28);
+    margin-left: 5px;
+}
+
+.modal-field:focus-within .modal-field-tag {
+    color: white;
+}
+
+.modal-field .modal-input {
+    margin-bottom: 0;
+    border-bottom: 2px solid rgba(255, 255, 255, 0.18);
+    background-image: linear-gradient(#2B8FD8, #2B8FD8);
+    background-size: 0 2px;
+    background-repeat: no-repeat;
+    background-position: left bottom;
+    transition: background-size 0.3s ease;
+}
+
+.modal-field .modal-input:focus {
+    border-bottom-color: transparent;
+    background-size: 100% 2px;
+}
+
+.modal-section-gap {
+    margin-bottom: 20px;
+}
+
+.modal-row-label {
+    font: 500 15px Montserrat;
+    color: rgba(255, 255, 255, 0.75);
+}
+
+.modal-section {
+    margin-bottom: 20px;
+}
+
+.modal-section:focus-within .modal-field-tag {
+    color: white;
+}
+
+.modal-time-row {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-bottom: 0;
+}
+
+.modal-time-input {
+    width: 34px;
+    font: 500 17px Montserrat;
+    height: 32px;
+    padding: 2px;
+    border: none;
+    border-bottom: 2px solid rgba(255, 255, 255, 0.18);
+    background: none;
+    color: white;
+    text-align: center;
+    box-sizing: border-box;
+    transition: border-color 0.2s;
+}
+
+.modal-time-input:focus {
+    border-bottom-color: #2B8FD8;
+}
+
+.modal-time-input::placeholder {
+    color: rgba(255, 255, 255, 0.3);
+}
+
+.modal-time-sep {
+    font: 500 18px Montserrat;
+    color: white;
+    margin: 0 1px;
+}
+
+.modal-time-period {
+    font: 600 14px Montserrat;
+    color: var(--lightblue);
+    cursor: pointer;
+    margin-left: 8px;
+    padding: 3px 9px;
+    border: 1px solid rgba(43, 143, 216, 0.6);
+    border-radius: 5px;
+    user-select: none;
+    transition: 0.15s;
+}
+
+.modal-time-period:hover {
+    background: rgba(43, 143, 216, 0.25);
+}
+
+.modal-days {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 0;
+    margin-top: 10px;
+}
+
+.modal-day-btn {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    background: none;
+    color: rgba(255, 255, 255, 0.55);
+    font: 600 13px Montserrat;
+    cursor: pointer;
+    transition: 0.15s;
+}
+
+.modal-day-btn.selected {
+    background: var(--lightblue);
+    border-color: var(--lightblue);
+    color: white;
+}
+
+.modal-day-btn:hover:not(.selected) {
+    border-color: rgba(255, 255, 255, 0.5);
+    color: white;
+}
+
+.modal-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 16px;
+    gap: 12px;
+}
+
+.modal-row-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.modal-select {
+    background: none;
+    border: none;
+    border-bottom: 2px solid rgba(255, 255, 255, 0.4);
+    color: white;
+    font: 400 15px Montserrat;
+    padding: 4px 2px;
+    min-width: 130px;
+    cursor: pointer;
+    transition: border-color 0.2s;
+}
+
+.modal-select:focus {
+    outline: none;
+    border-bottom-color: white;
+}
+
+.modal-select option {
+    color: black;
+    background: white;
+}
+
+.modal-fields-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+.modal-field-col {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.modal-field-label {
+    font: 700 10px Montserrat;
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.45);
+}
+
+.modal-field-col .modal-select {
+    min-width: unset;
+    width: 100%;
+    font-size: 13px;
+}
+
+.modal-date-input {
+    background: none;
+    border: none;
+    border-bottom: 2px solid rgba(255, 255, 255, 0.4);
+    color: white;
+    font: 400 13px Montserrat;
+    width: 100%;
+    padding: 4px 2px;
+    box-sizing: border-box;
+    transition: border-color 0.2s;
+}
+
+.modal-date-input:focus {
+    outline: none;
+    border-bottom-color: white;
+}
+
+.modal-date-input::placeholder {
+    color: rgba(255, 255, 255, 0.3);
+}
+
+.modal-error {
+    font: 400 13px Montserrat;
+    color: #ff7070;
+    margin: 0 0 12px;
+}
+
+.modal-submit {
+    height: 56px;
+    width: 100%;
+    border-radius: 7px;
+    background: var(--lightblue);
+    font: 800 17px Montserrat;
+    border: none;
+    margin-top: 8px;
+    transition: filter 0.25s;
+    color: white;
+    cursor: pointer;
+    position: relative;
+}
+
+.modal-submit:hover {
+    filter: brightness(1.15);
+}
+
+/* Settings */
+
+.modal-settings-tabs {
+    display: flex;
+    gap: 28px;
+    margin-bottom: 20px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+    padding-bottom: 10px;
+}
+
+.modal-settings-tab {
+    font: 600 15px Montserrat;
+    color: rgba(255, 255, 255, 0.45);
+    cursor: pointer;
+    padding-bottom: 6px;
+    border-bottom: 2px solid transparent;
+    transition: 0.2s;
+}
+
+.modal-settings-tab.active {
+    color: white;
+    border-bottom: 2px solid white;
+}
+
+.modal-settings-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+    padding: 14px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.modal-settings-row:last-child {
+    border-bottom: none;
+}
+
+.modal-settings-name {
+    font: 500 15px Montserrat;
+    color: white;
+}
+
+.modal-settings-desc {
+    font: 400 12px Montserrat;
+    color: rgba(255, 255, 255, 0.4);
+    margin-top: 3px;
+}
+
+.modal-action-btn {
+    background: var(--lightblue);
+    border: none;
+    border-radius: 5px;
+    color: white;
+    font: 500 13px Montserrat;
+    padding: 7px 16px;
+    cursor: pointer;
+    transition: filter 0.2s;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.modal-action-btn:hover {
+    filter: brightness(1.15);
+}
+
+.modal-phone-row {
+    display: flex;
+    gap: 8px;
+    align-items: flex-end;
+    flex-wrap: wrap;
+}
+
+.modal-country-select {
+    background: none;
+    border: none;
+    border-bottom: 2px solid rgba(255, 255, 255, 0.4);
+    color: white;
+    font: 400 14px Montserrat;
+    height: 36px;
+    max-width: 120px;
+    cursor: pointer;
+}
+
+.modal-country-select option {
+    color: black;
+    background: white;
+}
+
+.modal-phone-input {
+    flex: 1;
+    min-width: 80px;
+    font: 400 15px Montserrat;
+    height: 36px;
+    padding: 4px 2px;
+    border: none;
+    border-bottom: 2px solid rgba(255, 255, 255, 0.4);
+    background: none;
+    color: white;
+    box-sizing: border-box;
+}
+
+.modal-phone-input::placeholder {
+    color: rgba(255, 255, 255, 0.3);
+}
+
+.modal-phone-input:focus {
+    outline: none;
+    border-bottom-color: white;
+}
+
+/* Delete confirmation modal */
+
+.modal-card.modal-confirm {
+    width: min(360px, 100%);
+    padding: 36px 36px 32px;
+    text-align: center;
+}
+
+.modal-confirm-title {
+    font: 700 20px Montserrat;
+    color: white;
+    margin-bottom: 10px;
+}
+
+.modal-confirm-sub {
+    font: 400 13px Montserrat;
+    color: rgba(255, 255, 255, 0.45);
+    margin-bottom: 28px;
+    line-height: 1.5;
+}
+
+.modal-confirm-buttons {
+    display: flex;
+    gap: 10px;
+}
+
+.modal-confirm-cancel {
+    flex: 1;
+    height: 48px;
+    border-radius: 7px;
+    background: none;
+    border: 1.5px solid rgba(255, 255, 255, 0.25);
+    color: rgba(255, 255, 255, 0.7);
+    font: 600 15px Montserrat;
+    cursor: pointer;
+    transition: border-color 0.2s, color 0.2s;
+}
+
+.modal-confirm-cancel:hover {
+    border-color: rgba(255, 255, 255, 0.6);
+    color: white;
+}
+
+.modal-confirm-delete {
+    flex: 1;
+    height: 48px;
+    border-radius: 7px;
+    background: #c0392b;
+    border: none;
+    color: white;
+    font: 700 15px Montserrat;
+    cursor: pointer;
+    transition: filter 0.2s;
+}
+
+.modal-confirm-delete:hover {
+    filter: brightness(1.15);
+}
+
+.modal-confirm-delete.disabled {
+    opacity: 0.6;
+    cursor: default;
+}
+
+/* Deleted links modal */
+
+.modal-deleted-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+    padding: 28px 0 12px;
+    color: rgba(255, 255, 255, 0.4);
+    font: 400 14px Montserrat;
+}
+
+.modal-deleted-empty img {
+    width: 140px;
+    opacity: 0.4;
+}
+
+.modal-deleted-list {
+    display: flex;
+    flex-direction: column;
+    max-height: 360px;
+    overflow-y: auto;
+}
+
+.modal-deleted-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+    gap: 12px;
+}
+
+.modal-deleted-row:last-child {
+    border-bottom: none;
+}
+
+.modal-deleted-name {
+    font: 500 15px Montserrat;
+    color: white;
+    word-break: break-word;
+}
+
+.modal-deleted-actions {
+    display: flex;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+.modal-action-btn-danger {
+    background: #c0392b;
+}
+
+/* Share modal */
+
+
+.modal-share-field {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 2px;
+    border-bottom: 2px solid rgba(255, 255, 255, 0.5);
+    cursor: text;
+    min-height: 44px;
+    transition: border-color 0.2s;
+}
+
+.modal-share-field:focus-within {
+    border-bottom-color: white;
+}
+
+.modal-share-pill {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 11px;
+    border-radius: 20px;
+    background: rgba(43, 143, 216, 0.2);
+    border: 1px solid rgba(43, 143, 216, 0.5);
+    color: white;
+    font: 500 13px Montserrat;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s, color 0.15s;
+    user-select: none;
+}
+
+.modal-share-pill:hover {
+    background: rgba(192, 57, 43, 0.2);
+    border-color: rgba(192, 57, 43, 0.55);
+    color: #ff7070;
+    text-decoration: line-through;
+}
+
+.modal-share-input {
+    flex: 1;
+    min-width: 140px;
+    background: none;
+    border: none;
+    outline: none;
+    color: white;
+    font: 400 15px Montserrat;
+    padding: 2px 0;
+}
+
+.modal-share-input::placeholder {
+    color: rgba(255, 255, 255, 0.3);
+}
+
+/* Notes modal */
+
+.modal-card.modal-notes {
+    width: min(580px, 100%);
+}
+
+.modal-notes-field {
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    min-height: 200px;
+    cursor: text;
+    transition: border-color 0.2s;
+}
+
+.modal-notes-field.editing {
+    border-color: rgba(255, 255, 255, 0.35);
+}
+
+.modal-notes-textarea {
+    display: block;
+    width: 100%;
+    min-height: 200px;
+    background: none;
+    border: none;
+    outline: none;
+    color: white;
+    font: 400 14px/1.6 monospace;
+    padding: 12px 14px;
+    resize: vertical;
+    box-sizing: border-box;
+}
+
+.modal-notes-textarea::placeholder {
+    color: rgba(255, 255, 255, 0.25);
+}
+
+.modal-notes-preview {
+    padding: 12px 14px;
+    color: white;
+    font: 400 14px/1.6 Montserrat;
+    min-height: 200px;
+    overflow-y: auto;
+}
+
+.modal-notes-preview h1,
+.modal-notes-preview h2,
+.modal-notes-preview h3 {
+    margin: 8px 0 4px;
+    color: var(--lightblue);
+}
+
+.modal-notes-preview p { margin: 4px 0; }
+
+.modal-notes-preview code {
+    background: rgba(255, 255, 255, 0.1);
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-size: 13px;
+}
+
+.modal-notes-preview pre {
+    background: rgba(0, 0, 0, 0.3);
+    padding: 10px;
+    border-radius: 5px;
+    overflow-x: auto;
+}
+
+.modal-notes-preview ul,
+.modal-notes-preview ol {
+    padding-left: 20px;
+}
+
+.modal-notes-preview a { color: var(--lightblue); }
+
+.modal-notes-preview blockquote {
+    border-left: 3px solid rgba(43, 143, 216, 0.5);
+    padding-left: 12px;
+    opacity: 0.7;
+    margin: 4px 0;
+}
+
+.modal-notes-placeholder {
+    padding: 12px 14px;
+    color: rgba(255, 255, 255, 0.25);
+    font: 400 14px Montserrat;
+    min-height: 200px;
+}
+
+/* What's new modal */
+
+.whats-new-card {
+    width: min(460px, 100%);
+}
+
+.whats-new-header {
+    margin-bottom: 24px;
+}
+
+.whats-new-eyebrow {
+    font: 700 10px Montserrat;
+    letter-spacing: 1.4px;
+    text-transform: uppercase;
+    color: var(--lightblue);
+    margin-bottom: 6px;
+}
+
+.whats-new-list {
+    list-style: none;
+    margin: 0 0 28px;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+}
+
+.whats-new-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+    padding: 14px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.whats-new-item:last-child {
+    border-bottom: none;
+}
+
+.whats-new-icon {
+    font-size: 20px;
+    line-height: 1;
+    flex-shrink: 0;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(43, 143, 216, 0.12);
+    border-radius: 8px;
+}
+
+.whats-new-text {
+    flex: 1;
+    min-width: 0;
+}
+
+.whats-new-name {
+    font: 600 14px Montserrat;
+    color: white;
+    margin-bottom: 3px;
+}
+
+.whats-new-desc {
+    font: 400 12px/1.5 Montserrat;
+    color: rgba(255, 255, 255, 0.45);
+}
+
+@media (max-width: 480px) {
+    .modal-card {
+        padding: 20px 20px 24px;
+    }
+
+    .modal-title {
+        font-size: 20px;
+    }
+
+    .modal-fields-row {
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .modal-days {
+        gap: 8px;
+    }
+
+    .modal-day-btn {
+        width: 36px;
+        height: 36px;
+        font-size: 11px;
+    }
+}
+
+.settings-save-toast svg {
+    width: 13px;
+    height: 13px;
+    position: static;
+    flex-shrink: 0;
+}
+
+.settings-save-toast {
+    position: sticky;
+    bottom: -8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 7px 16px;
+    border-radius: 20px;
+    font: 600 12px Montserrat, sans-serif;
+    width: fit-content;
+    margin: 0 auto -28px;
+    animation: toast-pop 0.18s ease-out;
+    pointer-events: none;
+    z-index: 10;
+}
+
+.settings-save-toast.saved {
+    background: rgba(34, 197, 94, 0.15);
+    border: 1px solid rgba(34, 197, 94, 0.35);
+    color: #4ade80;
+}
+
+.settings-save-toast.error {
+    background: rgba(239, 68, 68, 0.12);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    color: #f87171;
+}
+
+@keyframes toast-pop {
+    from { opacity: 0; transform: translateY(6px) scale(0.95); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* ── Delete account danger zone ── */
+.modal-settings-danger-zone {
+    margin-top: 12px;
+    padding-top: 14px;
+    border-top: 1px solid rgba(239, 68, 68, 0.2);
+    display: flex;
+    justify-content: center;
+}
+
+.modal-danger-btn {
+    background: transparent;
+    border: 1px solid rgba(239, 68, 68, 0.45);
+    color: #f87171;
+    font: 600 13px Montserrat, sans-serif;
+    padding: 8px 20px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.modal-danger-btn:hover {
+    background: rgba(239, 68, 68, 0.12);
+    border-color: rgba(239, 68, 68, 0.7);
+    color: #fca5a5;
+}
+.modal-danger-btn.modal-danger-btn-full {
+    width: 100%;
+    padding: 12px;
+    border-radius: 9px;
+    font-size: 14px;
+    margin-bottom: 10px;
+}
+.modal-danger-btn.disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* ── Delete confirmation panel ── */
+.modal-delete-confirm {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    padding: 20px 8px 8px;
+}
+
+.modal-delete-icon {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: rgba(239, 68, 68, 0.12);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #f87171;
+    margin-bottom: 18px;
+}
+
+.modal-delete-icon svg {
+    width: 28px;
+    height: 28px;
+    position: static;
+    z-index: 1;
+    fill: none;
+}
+
+.modal-delete-title {
+    font: 700 20px Montserrat, sans-serif;
+    color: white;
+    margin: 0 0 12px;
+}
+
+.modal-delete-body {
+    font: 400 14px Montserrat, sans-serif;
+    color: rgba(255, 255, 255, 0.6);
+    line-height: 1.6;
+    margin: 0 0 24px;
+}
+
+.modal-delete-body strong {
+    color: #fca5a5;
+    font-weight: 600;
+}
+
+.modal-cancel-btn {
+    width: 100%;
+    padding: 12px;
+    border-radius: 9px;
+    background: none;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: rgba(255, 255, 255, 0.7);
+    font: 600 14px Montserrat, sans-serif;
+    cursor: pointer;
+    margin-bottom: 10px;
+    transition: border-color 0.15s, color 0.15s, background 0.15s;
+}
+.modal-cancel-btn:hover {
+    border-color: rgba(255, 255, 255, 0.45);
+    color: white;
+    background: rgba(255, 255, 255, 0.06);
+}

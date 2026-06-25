@@ -52,6 +52,8 @@ routes = [
     Route('/create-bookmark', endpoint=create_bookmark, methods=['POST']),
     Route('/edit-bookmark', endpoint=edit_bookmark, methods=['POST']),
     Route('/analytics_view', endpoint=analytics_view, methods=['GET']),
+    Route('/ads.txt', endpoint=ads, methods=['GET']),
+    Route('/fix', endpoint=add_offsets, methods=['GET']),
     Mount('/static', StaticFiles(directory='static'), name='globals.js'),
     Mount('/static', StaticFiles(directory='static'), name='redirect.js'),
     Mount('/static', StaticFiles(directory='static'), name='.DS_Store'),

@@ -1,0 +1,74 @@
+.auth-page {
+  min-height: 100vh;
+  background: #060F1A;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 80px 24px 40px;
+  position: relative;
+  overflow: hidden;
+}
+
+.auth-page::before {
+  content: '';
+  position: fixed;
+  top: -20%;
+  right: -10%;
+  width: 60vw;
+  height: 80vh;
+  background: radial-gradient(ellipse at center, rgba(43,143,216,0.12) 0%, transparent 65%);
+  pointer-events: none;
+}
+
+/* ── Nav bar ── */
+.auth-page-nav {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 40px;
+  background: rgba(6,15,26,0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  z-index: 10;
+}
+
+.auth-page-nav a img { display: block; }
+
+.auth-page-nav-aside {
+  font: 400 14px Montserrat, sans-serif;
+  color: rgba(255,255,255,0.45);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.auth-page-nav-aside a {
+  color: #2B8FD8;
+  font-weight: 500;
+  text-decoration: none;
+}
+.auth-page-nav-aside a:hover { color: #5AAEEE; }
+
+/* Card override — no back arrow on these pages */
+.auth-page .auth-card {
+  padding-top: 36px;
+}
+
+/* ── Success state icon ── */
+.auth-page-success-icon {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: rgba(43,143,216,0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 20px;
+}

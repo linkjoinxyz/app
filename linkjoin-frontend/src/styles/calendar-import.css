@@ -1,0 +1,253 @@
+.ci-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.5);
+}
+
+.ci-card {
+  background: #0C1E30;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 16px;
+  width: 100%;
+  max-width: 520px;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.5);
+}
+
+/* Header */
+.ci-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 24px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  flex-shrink: 0;
+}
+
+.ci-title {
+  font: 600 16px Montserrat, sans-serif;
+  color: white;
+}
+
+.ci-close {
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.35);
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+  transition: color 0.15s;
+}
+.ci-close:hover { color: white; }
+
+/* Loading / empty / error */
+.ci-state {
+  padding: 52px 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  text-align: center;
+}
+.ci-state p {
+  font: 400 14px/1.65 Montserrat, sans-serif;
+  color: rgba(255, 255, 255, 0.55);
+  margin: 0;
+}
+.ci-state-sub { color: rgba(255, 255, 255, 0.3) !important; font-size: 13px !important; }
+.ci-error-text { color: rgba(255, 90, 90, 0.85) !important; }
+
+.ci-spinner {
+  width: 28px;
+  height: 28px;
+  border: 2px solid rgba(255, 255, 255, 0.1);
+  border-top-color: #2B8FD8;
+  border-radius: 50%;
+  animation: ci-spin 0.75s linear infinite;
+  margin-bottom: 6px;
+}
+@keyframes ci-spin { to { transform: rotate(360deg); } }
+
+.ci-retry {
+  margin-top: 6px;
+  background: none;
+  border: 1px solid rgba(43, 143, 216, 0.35);
+  border-radius: 8px;
+  color: #2B8FD8;
+  font: 500 13px Montserrat, sans-serif;
+  padding: 8px 20px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.ci-retry:hover { background: rgba(43, 143, 216, 0.1); }
+
+/* Subheader */
+.ci-subheader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 24px 6px;
+  font: 400 12px Montserrat, sans-serif;
+  color: rgba(255, 255, 255, 0.35);
+  flex-shrink: 0;
+}
+.ci-select-all {
+  background: none;
+  border: none;
+  color: #2B8FD8;
+  font: 500 12px Montserrat, sans-serif;
+  cursor: pointer;
+  padding: 0;
+}
+.ci-select-all:hover { text-decoration: underline; }
+
+/* Event list */
+.ci-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 4px 12px 8px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.1) transparent;
+}
+
+.ci-event {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 12px;
+  border-radius: 10px;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: background 0.12s, border-color 0.12s;
+}
+.ci-event:hover { background: rgba(255, 255, 255, 0.04); }
+.ci-event-on {
+  background: rgba(43, 143, 216, 0.07);
+  border-color: rgba(43, 143, 216, 0.18);
+}
+.ci-event-on:hover { background: rgba(43, 143, 216, 0.1); }
+
+.ci-check {
+  width: 18px;
+  height: 18px;
+  border: 1.5px solid rgba(255, 255, 255, 0.2);
+  border-radius: 5px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: visible;
+  transition: background 0.12s, border-color 0.12s;
+}
+.ci-check-on {
+  background: #2B8FD8;
+  border-color: #2B8FD8;
+}
+.ci-check svg {
+  position: static;
+  width: 11px;
+  height: 9px;
+  fill: none;
+  z-index: auto;
+}
+
+.ci-event-info { flex: 1; min-width: 0; }
+
+.ci-event-name {
+  font: 500 14px Montserrat, sans-serif;
+  color: white;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: 3px;
+}
+
+.ci-event-meta {
+  font: 400 12px Montserrat, sans-serif;
+  color: rgba(255, 255, 255, 0.4);
+}
+.ci-sep { opacity: 0.6; }
+
+/* Platform badges */
+.ci-badge {
+  font: 600 10px Montserrat, sans-serif;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  border-radius: 20px;
+  flex-shrink: 0;
+}
+.ci-badge-zoom        { background: rgba(43, 130, 255, 0.12); color: #5B9FFF; }
+.ci-badge-google-meet { background: rgba(0, 180, 100, 0.12);  color: #2DC97E; }
+.ci-badge-teams       { background: rgba(120, 90, 255, 0.12); color: #9B7EFF; }
+.ci-badge-webex       { background: rgba(255, 130, 0, 0.12);  color: #FF9A3C; }
+.ci-badge-meeting     { background: rgba(255, 255, 255, 0.07); color: rgba(255,255,255,0.45); }
+
+/* Footer */
+.ci-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 16px 24px;
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+  flex-shrink: 0;
+}
+
+.ci-cancel {
+  background: none;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 9px;
+  color: rgba(255, 255, 255, 0.55);
+  font: 500 13px Montserrat, sans-serif;
+  padding: 9px 18px;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+}
+.ci-cancel:hover { border-color: rgba(255,255,255,0.25); color: white; }
+
+.ci-import-btn {
+  background: #2B8FD8;
+  border: none;
+  border-radius: 9px;
+  color: white;
+  font: 600 13px Montserrat, sans-serif;
+  padding: 9px 20px;
+  cursor: pointer;
+  transition: filter 0.15s, opacity 0.15s;
+}
+.ci-import-btn:hover:not(:disabled) { filter: brightness(1.12); }
+.ci-import-btn:disabled { opacity: 0.4; cursor: default; }
+
+/* Search container layout when import button is present */
+#links-search-container {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* Import button in meetings page */
+.lp-cal-import-btn {
+  background: none;
+  border: 1px solid rgba(43, 143, 216, 0.3);
+  border-radius: 8px;
+  color: rgba(43, 143, 216, 0.85);
+  font: 500 12px Montserrat, sans-serif;
+  padding: 6px 14px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+  white-space: nowrap;
+}
+.lp-cal-import-btn:hover {
+  background: rgba(43, 143, 216, 0.1);
+  border-color: rgba(43, 143, 216, 0.55);
+  color: #2B8FD8;
+}

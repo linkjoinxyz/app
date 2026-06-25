@@ -1,4 +1,5 @@
 .env
+.env.*
 .idea
 .DS_Store
 .vscode
@@ -10,3 +11,9 @@ app.yaml
 nginx.conf
 google-cloud-sdk
 venv
+.gstack/
+linkjoin-frontend/node_modules/
+linkjoin-frontend/dist/
+linkjoin-backend/__pycache__/
+linkjoin-backend/venv/
+linkjoin-backend/jobs.sqlite

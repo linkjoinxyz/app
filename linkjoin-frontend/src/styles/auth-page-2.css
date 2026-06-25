@@ -1,0 +1,148 @@
+/* ─────────────────────────────────────────────
+   AuthPage2 — right panel, artsy card stack
+   Prefix: a2-
+───────────────────────────────────────────── */
+
+.a2-right {
+  flex: 1;
+  background: #07111d;
+  border-left: 1px solid rgba(255, 255, 255, 0.06);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Faint dot grid texture */
+.a2-right::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(rgba(43, 143, 216, 0.08) 1px, transparent 1px);
+  background-size: 28px 28px;
+  pointer-events: none;
+}
+
+/* ── Card stack wrapper ── */
+.a2-stack {
+  position: relative;
+  width: 360px;
+  height: 560px;
+  z-index: 1;
+}
+
+/* ── Individual cards ── */
+.a2-card {
+  position: absolute;
+  width: 340px;
+  padding: 34px 34px 30px;
+  border-radius: 18px;
+  font-family: Montserrat, sans-serif;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Back card */
+.a2-card-c {
+  background: #0c1e30;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  top: 240px;
+  left: 20px;
+  transform: rotate(14deg);
+  opacity: 0.3;
+  z-index: 1;
+}
+
+/* Middle card */
+.a2-card-b {
+  background: #0d2035;
+  border: 1px solid rgba(43, 143, 216, 0.15);
+  top: 120px;
+  left: 10px;
+  transform: rotate(-8deg);
+  opacity: 0.88;
+  z-index: 2;
+}
+
+/* Front card */
+.a2-card-a {
+  background: #0f2540;
+  border: 1px solid rgba(43, 143, 216, 0.35);
+  box-shadow:
+    0 20px 60px rgba(0, 0, 0, 0.5),
+    0 0 0 1px rgba(43, 143, 216, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  top: 0;
+  left: 0;
+  transform: rotate(-1deg);
+  z-index: 3;
+}
+
+/* ── Card content ── */
+.a2-card-time {
+  font: 800 52px/1 Montserrat, sans-serif;
+  color: white;
+  letter-spacing: -0.03em;
+}
+
+.a2-card-a .a2-card-time {
+  color: white;
+}
+.a2-card-b .a2-card-time,
+.a2-card-c .a2-card-time {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.a2-card-period {
+  font: 500 16px Montserrat, sans-serif;
+  color: #2B8FD8;
+  letter-spacing: 0.06em;
+  margin-top: 2px;
+}
+
+.a2-card-name {
+  font: 600 19px Montserrat, sans-serif;
+  color: rgba(255, 255, 255, 0.85);
+  margin-top: 14px;
+  letter-spacing: -0.01em;
+}
+
+.a2-card-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 2px;
+}
+
+.a2-card-badge {
+  font: 600 9px Montserrat, sans-serif;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  border-radius: 20px;
+}
+.a2-badge-zoom  { background: rgba(43, 130, 255, 0.15); color: #5B9FFF; }
+.a2-badge-meet  { background: rgba(0, 180, 100, 0.15);  color: #2DC97E; }
+.a2-badge-teams { background: rgba(120, 90, 255, 0.15); color: #9B7EFF; }
+
+.a2-card-days {
+  font: 400 11px Montserrat, sans-serif;
+  color: rgba(255, 255, 255, 0.25);
+  letter-spacing: 0.04em;
+}
+
+/* ── Caption below the stack ── */
+.a2-caption {
+  position: absolute;
+  bottom: 52px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1;
+  font: 300 11px Montserrat, sans-serif;
+  color: rgba(255, 255, 255, 0.18);
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+  text-transform: uppercase;
+}
