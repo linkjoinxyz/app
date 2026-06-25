@@ -117,7 +117,10 @@ async def health():
 @limiter.limit("20/minute")
 async def ws_ticket(request: Request, user: dict = Depends(get_confirmed_user)):
     ticket = secrets.token_urlsafe(32)
-    await get_redis().setex(f"wstkt:{ticket}", 60, user["username"])
+    try:
+        await get_redis().setex(f"wstkt:{ticket}", 60, user["username"])
+    except Exception:
+        pass
     return {"ticket": ticket}
 
 

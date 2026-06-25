@@ -40,8 +40,14 @@ async def get_current_user(
     payload = decode_token(credentials.credentials)
 
     jti = payload.get("jti")
-    if jti and await get_redis().exists(f"jti:{jti}"):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token revoked")
+    if jti:
+        try:
+            if await get_redis().exists(f"jti:{jti}"):
+                raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token revoked")
+        except HTTPException:
+            raise
+        except Exception:
+            pass
 
     email: str = payload.get("sub")
     if not email:
