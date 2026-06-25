@@ -14,7 +14,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from app.config import get_settings
 from app.limiter import limiter
 from app.scheduler import scheduler, load_all_text_jobs
-from app.auth import get_confirmed_user
+from app.auth import get_confirmed_user, create_token, decode_token
 from app.utils import configure_data
 from app.websocket_manager import manager
 from app.database import motor_db
@@ -107,8 +107,7 @@ async def health():
 @app.get("/ws-ticket")
 @limiter.limit("20/minute")
 async def ws_ticket(request: Request, user: dict = Depends(get_confirmed_user)):
-    ticket = secrets.token_urlsafe(32)
-    await get_redis().setex(f"wstkt:{ticket}", 60, user["username"])
+    ticket = create_token(user["username"], minutes=1, extra={"purpose": "ws"})
     return {"ticket": ticket}
 
 
@@ -127,19 +126,26 @@ if _DIST.exists():
 
 @app.websocket("/ws/database")
 async def database_ws(websocket: WebSocket, ticket: str = Query(...)):
-    redis = get_redis()
-    email = await redis.get(f"wstkt:{ticket}")
-    if email:
-        await redis.delete(f"wstkt:{ticket}")
-    if not email:
+    try:
+        payload = decode_token(ticket)
+        if payload.get("purpose") != "ws":
+            raise ValueError("wrong purpose")
+        email = payload.get("sub")
+        if not email:
+            raise ValueError("no sub")
+    except Exception:
         await websocket.close(code=4001)
         return
 
     await manager.connect(websocket, email)
-    await manager.broadcast(await configure_data(email), email)
+    try:
+        await manager.broadcast(await configure_data(email), email)
+    except Exception:
+        manager.disconnect(websocket, email)
+        return
 
     try:
         while True:
             await websocket.receive_text()
-    except (WebSocketDisconnect, ConnectionError):
+    except (WebSocketDisconnect, ConnectionError, Exception):
         manager.disconnect(websocket, email)

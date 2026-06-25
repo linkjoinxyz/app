@@ -27,7 +27,7 @@ class WebSocketManager:
         for ws in conns:
             try:
                 await ws.send_json(data)
-            except (ConnectionClosedOK, ConnectionClosedError, RuntimeError):
+            except Exception:
                 dead.append(ws)
         for ws in dead:
             self.disconnect(ws, email)

@@ -8,9 +8,16 @@ const GOOGLE_CLIENT_ID = '189748485716-d2pih6avqivdondcfjbt0ve8hkj33sts.apps.goo
 let cachedGoogleToken = null
 let googleTokenExpiry = 0
 
+function clearMsalInteractionLock() {
+  for (const key of Object.keys(sessionStorage)) {
+    if (/msal.*interaction/i.test(key)) sessionStorage.removeItem(key)
+  }
+}
+
 async function acquireMicrosoftToken() {
   const { msalInstance, msalReady } = await import('../msalInstance.js')
-  await msalReady
+  try { await msalReady } catch {}
+  clearMsalInteractionLock()
   const scopes = ['Calendars.Read']
   const accounts = msalInstance.getAllAccounts()
   if (accounts.length > 0) {
