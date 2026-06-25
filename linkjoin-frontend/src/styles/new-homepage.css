@@ -1103,6 +1103,7 @@
   position: relative;
   z-index: 1;
   padding: 80px 0 100px;
+  overflow: hidden;
 }
 
 .nh-testimonials-head {
@@ -1149,6 +1150,8 @@
   scroll-snap-type: x mandatory;
   padding: 4px clamp(24px, 4vw, 56px) 16px;
   scroll-padding-left: clamp(24px, 4vw, 56px);
+  width: 100%;
+  box-sizing: border-box;
 }
 .nh-tcarousel::-webkit-scrollbar { display: none; }
 

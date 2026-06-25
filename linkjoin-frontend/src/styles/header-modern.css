@@ -178,6 +178,7 @@
 
 @media (max-width: 600px) {
   .hm-nav { display: none; }
+  .hm-nav-actions { display: none; }
   .hm-hamburger { display: flex; }
   .hm-header { height: 60px; padding: 0 16px; }
   .hm-mobile-menu { top: 60px; }
