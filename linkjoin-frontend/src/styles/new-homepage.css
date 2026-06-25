@@ -1439,6 +1439,7 @@
 
 @media (max-width: 380px) {
   .nh-nav-cta { display: none; }
+  .nh-nav-logo img { max-width: 110px; }
 }
 
 /* Mirror: hide dropdown items when their nav counterpart is visible */
