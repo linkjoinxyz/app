@@ -79,9 +79,14 @@ app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 app.add_middleware(SecurityHeadersMiddleware)
+_origins = [_settings.frontend_url, "http://localhost:5173"]
+if _settings.frontend_url.startswith("https://"):
+    _bare = _settings.frontend_url.replace("https://", "")
+    _origins += [f"https://www.{_bare}", f"https://{_bare}"]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[_settings.frontend_url, "http://localhost:5173"],
+    allow_origins=list(set(_origins)),
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["Content-Type", "Authorization"],
