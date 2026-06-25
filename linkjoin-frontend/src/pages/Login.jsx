@@ -77,7 +77,6 @@ export default function Login() {
       if (!alive || !window.google) return
       window.google.accounts.id.initialize({ client_id: GOOGLE_CLIENT_ID, callback: handleGoogleResponse })
       window.google.accounts.id.renderButton(hiddenGoogleRef.current, { type: 'standard', theme: 'outline', size: 'large' })
-      if (window.innerWidth <= 600) window.google.accounts.id.cancel()
       if (alive) setGoogleReady(true)
     }
 
