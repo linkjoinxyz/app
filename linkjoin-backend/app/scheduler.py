@@ -1,21 +1,14 @@
 import asyncio
 import logging
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from apscheduler.jobstores.mongodb import MongoDBJobStore
+from apscheduler.jobstores.memory import MemoryJobStore
 from pytz import utc, timezone as pytz_timezone
 from app.config import get_settings
-from app.database import sync_db, _get_sync_client
+from app.database import sync_db
 from app.utils import get_text_time
 
 _settings = get_settings()
-_jobstores = {
-    "default": MongoDBJobStore(
-        database="zoom_opener",
-        collection="apscheduler_jobs",
-        client=_get_sync_client(),
-    )
-}
-scheduler = AsyncIOScheduler(timezone=utc, jobstores=_jobstores)
+scheduler = AsyncIOScheduler(timezone=utc, jobstores={"default": MemoryJobStore()})
 log = logging.getLogger(__name__)
 
 _text_messages = [

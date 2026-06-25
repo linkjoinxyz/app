@@ -63,8 +63,11 @@ async def lifespan(app: FastAPI):
     await motor_db.bookmarks.create_index([("username", 1), ("id", 1)])
     await motor_db.pending_links.create_index("username")
     await motor_db.deleted_links.create_index("username")
-    load_all_text_jobs()
-    scheduler.start()
+    async def _init_scheduler():
+        await asyncio.to_thread(load_all_text_jobs)
+        scheduler.start()
+
+    asyncio.create_task(_init_scheduler())
     yield
     scheduler.shutdown()
 
