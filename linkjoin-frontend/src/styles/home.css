@@ -1,0 +1,632 @@
+/* ─────────────────────────────────────────────────────────
+   Home page – fully self-contained layout
+   ───────────────────────────────────────────────────────── */
+
+.home-root {
+    background-color: var(--blue);
+    min-height: 100vh;
+    overflow-x: hidden;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+}
+
+/* SVG curve – fixed behind all content, blurs on scroll via JS */
+.home-curve {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 110vw;
+    height: 1000vh;
+    z-index: 0;
+    pointer-events: none;
+    fill: var(--darkblue);
+    will-change: filter, opacity;
+    transition: filter 0.05s linear, opacity 0.05s linear;
+}
+
+/* All page content sits above the curve */
+.home-header,
+.home-hero,
+.home-what,
+.home-info-section,
+.home-footer {
+    position: relative;
+    z-index: 1;
+}
+
+/* ── Header ── */
+.home-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 20px 40px 20px 20px;
+    height: 70px;
+    box-sizing: border-box;
+    width: 100%;
+}
+
+.home-logo {
+    height: 40px;
+    width: auto;
+    margin-left: 35px;
+    flex-shrink: 0;
+}
+
+.home-nav {
+    display: flex;
+    align-items: center;
+}
+
+.home-nav a {
+    margin: 0 18px;
+    font: 600 18px Montserrat, sans-serif;
+    color: white;
+    text-decoration: none;
+    position: relative;
+}
+
+.home-nav a::after {
+    content: '';
+    position: absolute;
+    width: 100%;
+    transform: scaleX(0);
+    height: 2px;
+    left: 0;
+    bottom: -4px;
+    background-color: white;
+    transform-origin: bottom right;
+    transition: transform 0.25s ease-out;
+}
+
+.home-nav a:hover::after {
+    transform: scaleX(1);
+    transform-origin: bottom left;
+}
+
+.home-nav .home-login-btn {
+    background: none;
+    border: 2px solid white;
+    border-radius: 10px;
+    padding: 10px 18px;
+    height: 50px;
+    min-width: 100px;
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    margin-left: 8px;
+    transition: background 0.3s;
+    font: 600 18px Montserrat, sans-serif;
+    color: white;
+    text-decoration: none;
+}
+
+.home-nav .home-login-btn:hover {
+    background: var(--lightblue);
+}
+
+.home-nav .home-login-btn::after { display: none; }
+
+/* Plain nav button (Sign Up) — looks like a nav link */
+.home-nav-plain-btn {
+    background: none;
+    border: none;
+    margin: 0 18px;
+    font: 600 18px Montserrat, sans-serif;
+    color: white;
+    cursor: pointer;
+    position: relative;
+    padding: 0;
+}
+.home-nav-plain-btn::after {
+    content: '';
+    position: absolute;
+    width: 100%;
+    transform: scaleX(0);
+    height: 2px;
+    left: 0;
+    bottom: -4px;
+    background-color: white;
+    transform-origin: bottom right;
+    transition: transform 0.25s ease-out;
+}
+.home-nav-plain-btn:hover::after {
+    transform: scaleX(1);
+    transform-origin: bottom left;
+}
+
+/* Hamburger dropdown buttons that look like links */
+.home-hamburger-link {
+    display: block;
+    width: 100%;
+    background: none;
+    border: none;
+    text-align: center;
+    padding: 8px 20px;
+    font: 600 16px Montserrat, sans-serif;
+    color: white;
+    cursor: pointer;
+}
+
+/* Footer link buttons styled like anchors */
+.home-footer-link-btn {
+    background: none;
+    border: none;
+    color: rgba(255, 255, 255, 0.7);
+    margin-bottom: 8px;
+    text-decoration: none;
+    font-family: Montserrat, sans-serif;
+    font-size: 15px;
+    cursor: pointer;
+    padding: 0;
+    text-align: left;
+    display: block;
+}
+.home-footer-link-btn:hover { color: #0AFFED; }
+
+/* ── Mobile hamburger ── */
+.home-hamburger {
+    display: none;
+    position: relative;
+    margin-right: 20px;
+    cursor: pointer;
+}
+
+.home-hamburger input {
+    display: block;
+    width: 40px;
+    height: 32px;
+    position: absolute;
+    top: -7px;
+    left: -5px;
+    cursor: pointer;
+    opacity: 0;
+    z-index: 2;
+}
+
+.home-hamburger span {
+    display: block;
+    width: 33px;
+    height: 4px;
+    margin-bottom: 5px;
+    background: white;
+    border-radius: 3px;
+    z-index: 1;
+    transform-origin: 4px 0;
+    transition: transform 0.5s cubic-bezier(.77,.2,.05,1.0), background 0.5s, opacity 0.55s;
+}
+
+.home-hamburger-dropdown {
+    display: none;
+    position: absolute;
+    top: 40px;
+    right: -20px;
+    background: var(--blue);
+    border-radius: 3px;
+    padding: 10px;
+    flex-direction: column;
+    box-shadow: 3px 3px 12px rgba(0,0,0,0.25);
+    min-width: 140px;
+    z-index: 10;
+}
+
+.home-hamburger input:checked ~ .home-hamburger-dropdown { display: flex; }
+
+.home-hamburger-dropdown a {
+    display: block;
+    text-align: center;
+    padding: 8px 20px;
+    font: 600 16px Montserrat, sans-serif;
+    color: white;
+    text-decoration: none;
+}
+
+/* ── Hero ── */
+.home-hero {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    min-height: 82vh;
+    margin-bottom: 40px;
+    overflow: hidden;      /* clip calendar SVG from bleeding below */
+}
+
+.home-hero-left {
+    margin: 30px 0 0 max(10vw, 100px);
+    display: flex;
+    flex-direction: column;
+    width: 40vw;
+    flex-shrink: 0;
+}
+
+.home-hero-left a {
+    width: 285px;
+    text-decoration: none;
+}
+
+.home-hero-right {
+    flex: 1;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding-right: 40px;
+    flex-shrink: 0;
+}
+
+.home-hero-right img {
+    height: min(82vh, 740px);
+    width: 37vw;
+    object-fit: contain;
+    object-position: center;
+}
+
+#motto {
+    font-size: 55px;
+    max-width: 500px;
+    margin: 0 0 10px 0;
+    font-weight: 500;
+    color: white;
+    font-family: Montserrat, sans-serif;
+    line-height: 1.1;
+}
+
+#description {
+    font: 300 20px Montserrat, sans-serif;
+    margin: 0;
+    max-width: 450px;
+    line-height: 30px;
+    color: rgba(255, 255, 255, 0.8);
+}
+
+/* CTA buttons */
+.home-cta-btn {
+    border-radius: 10px;
+    font: 600 19px Montserrat, sans-serif;
+    height: 75px;
+    background-color: var(--lightblue);
+    border: none;
+    width: 285px;
+    margin-top: 30px;
+    transition: margin 0.3s, box-shadow 0.3s;
+    color: white;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    text-decoration: none;
+    padding: 0 18px;
+    box-sizing: border-box;
+    white-space: nowrap;
+}
+
+.home-cta-btn:hover {
+    margin-left: 10px;
+    box-shadow: 5px 5px 10px rgba(0,0,0,0.3);
+}
+
+.home-cta-btn.secondary {
+    background-color: var(--blue);
+}
+
+/* ── Streamlines section ── */
+.home-what {
+    width: 84vw;
+    margin: 0 auto;
+    padding-top: 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.home-what h1 {
+    font-size: 60px;
+    text-align: center;
+    color: white;
+    font-family: Montserrat, sans-serif;
+    margin: 0 0 20px 0;
+}
+
+.home-description {
+    width: 60%;
+    font-size: 20px;
+    text-align: center;
+    line-height: 28px;
+    color: rgba(255,255,255,0.8);
+    font-weight: 200;
+    font-family: Montserrat, sans-serif;
+    margin: 0;
+}
+
+.home-big-btn {
+    border-radius: 10px;
+    font: 600 20px Montserrat, sans-serif;
+    height: 75px;
+    background-color: var(--lightblue);
+    border: none;
+    width: 275px;
+    margin: 35px 0 30px 0;
+    transition: filter 0.3s;
+    color: white;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    text-decoration: none;
+    padding: 0 20px;
+    box-sizing: border-box;
+}
+
+.home-big-btn:hover { filter: brightness(1.15); }
+
+.home-down-arrow {
+    height: 50px;
+    display: block;
+    cursor: pointer;
+    margin: 20px auto 0;
+    animation: bounce 1.2s ease-in-out alternate infinite;
+}
+
+@keyframes bounce {
+    from { transform: translateY(0); }
+    to   { transform: translateY(20px); }
+}
+
+/* ── Info boxes ── */
+#info-boxes {
+    width: 100%;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-evenly;
+    margin-top: 60px;
+    padding-bottom: 80px;
+}
+
+.info-box {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    background: var(--blue);
+    box-shadow: 5px 5px 14px rgba(0,0,0,0.6);
+    width: calc(30% - 30px);
+    border-radius: 10px;
+    padding: 25px 20px 20px 20px;
+    text-align: center;
+    transition: border 0.2s, padding 0.2s;
+    min-width: 260px;
+    border: 2px solid white;
+    margin: 10px;
+    color: white;
+    font-family: Montserrat, sans-serif;
+    box-sizing: border-box;
+}
+
+.info-box:hover {
+    border: 5px solid white;
+    padding: 22px 17px 17px 17px;
+}
+
+.info-box h2 {
+    color: white;
+    font-family: Montserrat, sans-serif;
+    font-size: 22px;
+    margin: 14px 0 10px;
+}
+
+.info-box p {
+    line-height: 22px;
+    color: rgba(255,255,255,0.85);
+    font-size: 15px;
+    margin: 0;
+}
+
+.info-image {
+    height: 40px;
+    width: 40px;
+    display: block;
+    margin: 0 auto;
+}
+
+/* ── FAQ section ── */
+.home-faq-section {
+    width: 100%;
+    padding: 60px 0 40px;
+}
+
+.home-faq-intro {
+    text-align: center;
+    margin-bottom: 40px;
+}
+
+.home-faq-intro h1 {
+    font-size: 60px;
+    color: white;
+    font-family: Montserrat, sans-serif;
+    margin: 0 0 10px 0;
+}
+
+.home-faq-intro p {
+    font-size: 20px;
+    color: rgba(255,255,255,0.7);
+    font-family: Montserrat, sans-serif;
+    margin: -10px 0 30px 0;
+}
+
+#faq {
+    display: flex;
+    flex-direction: column;
+    width: 80%;
+    padding: 0 6%;
+    margin: 0 auto;
+    border-radius: 5px;
+}
+
+.faq-question {
+    width: 100%;
+    position: relative;
+    font-size: 22px;
+    background: var(--darkblue);
+    box-sizing: border-box;
+    padding: 18px 55px 18px 18px;
+    margin-bottom: 12px;
+    box-shadow: 0 6px 5px rgba(0,0,0,0.2);
+    border-radius: 3px;
+    cursor: pointer;
+    overflow: hidden;
+    transition: height 0.3s;
+    color: white;
+    font-family: Montserrat, sans-serif;
+    font-weight: 500;
+    user-select: none;
+}
+
+.faq-question p {
+    margin: 0;
+    font-size: 22px;
+    color: white;
+    font-family: Montserrat, sans-serif;
+}
+
+.faq-down {
+    position: absolute;
+    height: 24px;
+    top: 18px;
+    right: 20px;
+    transition: transform 0.3s;
+}
+
+.faq-question.faq-open .faq-down {
+    transform: rotate(180deg);
+}
+
+.faq-answer {
+    background: var(--blue);
+    font-size: 16px;
+    margin: 10px 0 5px 0;
+    padding: 0 20px;
+    border-radius: 2px;
+    line-height: 1.6;
+    color: rgba(255,255,255,0.85);
+    font-family: Montserrat, sans-serif;
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.35s ease, padding 0.35s ease;
+}
+
+.faq-answer p {
+    color: var(--lightblue);
+    display: inline;
+    font-size: 16px;
+    margin: 0;
+}
+
+.faq-question.faq-open .faq-answer {
+    max-height: 400px;
+    padding: 16px 20px;
+}
+
+/* ── Footer ── */
+.home-footer {
+    background: var(--darkblue);
+    min-height: 350px;
+    width: 100%;
+    padding: 30px 20px;
+    box-sizing: border-box;
+    display: flex;
+    flex-wrap: wrap;
+    margin-top: 60px;
+}
+
+.home-footer .footer-logo {
+    width: 300px;
+    display: flex;
+    flex-direction: column;
+    margin: 0 0 20px 15px;
+    text-align: center;
+}
+
+.home-footer .footer-logo img { width: 280px; margin-top: 15px; }
+
+.home-footer .footer-logo p {
+    font-size: 18px;
+    margin: 5px 0 0 35px;
+    color: rgba(255,255,255,0.7);
+    font-family: Montserrat, sans-serif;
+}
+
+.home-footer .column-container {
+    display: flex;
+    flex-grow: 1;
+    justify-content: space-around;
+    flex-wrap: wrap;
+}
+
+.home-footer .footer-column {
+    display: flex;
+    flex-direction: column;
+    margin: 20px;
+}
+
+.home-footer .footer-column a,
+.home-footer .footer-column p {
+    color: rgba(255,255,255,0.7);
+    margin-bottom: 8px;
+    text-decoration: none;
+    font-family: Montserrat, sans-serif;
+    font-size: 15px;
+}
+
+.home-footer .footer-column .title {
+    font-size: 22px;
+    color: white;
+    margin-bottom: 15px;
+    font-family: Montserrat, sans-serif;
+}
+
+.home-footer .footer-column a:hover { color: #0AFFED; }
+
+.home-footer .copyright {
+    width: 100%;
+    margin-top: 30px;
+    text-align: center;
+    color: rgba(255,255,255,0.5);
+    font-family: Montserrat, sans-serif;
+    font-size: 14px;
+}
+
+.home-footer .copyright hr {
+    opacity: 0.2;
+    width: 90%;
+    margin: 0 auto 15px;
+}
+
+/* ── Responsive ── */
+@media (max-width: 900px) {
+    .home-nav a:not(.home-login-btn) { display: none; }
+    .home-hamburger { display: block; }
+    .home-hero-right { display: none; }
+    .home-hero-left {
+        align-items: center;
+        width: 96vw;
+        text-align: center;
+        margin: 50px 0 0 2vw;
+    }
+    .home-hero-left a { margin: 0 auto; }
+    .home-cta-btn { margin-left: 0 !important; }
+    .home-curve { display: none; }
+    .home-root { background: var(--darkblue); }
+    #faq { width: 96vw; padding: 0 2%; }
+}
+
+@media (max-width: 815px) {
+    .info-box { width: 80%; }
+}
+
+@media (max-width: 600px) {
+    #motto { font-size: 40px; }
+    .home-what h1 { font-size: 42px; }
+    .home-faq-intro h1 { font-size: 42px; }
+}

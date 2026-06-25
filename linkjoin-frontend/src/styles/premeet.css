@@ -1,0 +1,133 @@
+* { box-sizing: border-box; }
+
+.pm-page {
+  min-height: 100vh;
+  background: #060F1A;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  font-family: Montserrat, sans-serif;
+}
+
+.pm-logo {
+  position: fixed;
+  top: 32px;
+  left: 40px;
+}
+
+.pm-logo a { display: inline-block; text-decoration: none; }
+
+.pm-logo img {
+  display: block;
+  height: 26px;
+  width: auto;
+}
+
+.pm-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 28px;
+  padding: 56px 64px;
+  background: rgba(255,255,255,0.025);
+  border: 1px solid rgba(43,143,216,0.15);
+  border-radius: 20px;
+  min-width: 340px;
+  max-width: 460px;
+  text-align: center;
+}
+
+.pm-name {
+  font-size: 28px;
+  font-weight: 700;
+  color: white;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+
+.pm-sub {
+  font-size: 14px;
+  color: rgba(255,255,255,0.35);
+  font-weight: 400;
+  margin-top: -14px;
+}
+
+/* ── Countdown ring ── */
+
+.pm-ring-wrap {
+  position: relative;
+  width: 96px;
+  height: 96px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pm-ring-svg {
+  position: absolute;
+  inset: 0;
+  transform: rotate(-90deg);
+}
+
+.pm-ring-track {
+  fill: none;
+  stroke: rgba(43,143,216,0.12);
+  stroke-width: 5;
+}
+
+.pm-ring-fill {
+  fill: none;
+  stroke: #2B8FD8;
+  stroke-width: 5;
+  stroke-linecap: round;
+  stroke-dasharray: 238.76;
+  transition: stroke-dashoffset 1s linear;
+}
+
+.pm-seconds {
+  font-size: 34px;
+  font-weight: 800;
+  color: white;
+  letter-spacing: -0.03em;
+  position: relative;
+  z-index: 1;
+}
+
+/* ── Buttons ── */
+
+.pm-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.pm-btn {
+  height: 44px;
+  padding: 0 22px;
+  border-radius: 10px;
+  border: none;
+  font: 600 14px Montserrat, sans-serif;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  transition: filter 0.15s, transform 0.15s;
+  white-space: nowrap;
+}
+
+.pm-btn:hover {
+  filter: brightness(1.1);
+  transform: translateY(-1px);
+}
+
+.pm-btn-primary {
+  background: #2B8FD8;
+  color: white;
+}
+
+.pm-btn-ghost {
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.1);
+  color: rgba(255,255,255,0.7);
+}

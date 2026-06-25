@@ -1,0 +1,192 @@
+.hm-header {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  height: 72px;
+  display: flex;
+  align-items: center;
+  padding: 0 32px;
+  background: rgba(12, 30, 48, 0.92);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  box-sizing: border-box;
+}
+
+/* Reset global header a / header img rules that bleed in */
+.hm-header .hm-nav a,
+.hm-header .hm-mobile-menu a { margin: 0; font: 500 13px Montserrat, sans-serif; z-index: auto; }
+.hm-header .hm-logo img { margin: 0; }
+
+.hm-logo {
+  display: flex;
+  align-items: center;
+  margin-right: auto;
+  text-decoration: none;
+}
+.hm-logo img { display: block; position: relative; top: -3px; }
+
+.hm-nav {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.hm-nav-right {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 24px;
+}
+
+.hm-nav-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.hm-btn-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 12px;
+  background: #2B8FD8;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font: 600 14px Montserrat, sans-serif;
+  cursor: pointer;
+  text-decoration: none;
+  transition: filter 0.2s, transform 0.15s;
+  white-space: nowrap;
+}
+.hm-btn-primary:hover { filter: brightness(1.15); transform: translateY(-1px); }
+.hm-btn-primary img { flex-shrink: 0; }
+
+.hm-btn-ghost {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 12px;
+  background: none;
+  color: rgba(240,244,248,0.55);
+  border: 1px solid rgba(255,255,255,0.18);
+  border-radius: 8px;
+  font: 500 14px Montserrat, sans-serif;
+  cursor: pointer;
+  text-decoration: none;
+  transition: color 0.2s, border-color 0.2s, background 0.2s;
+  white-space: nowrap;
+}
+.hm-btn-ghost:hover {
+  color: white;
+  border-color: rgba(255,255,255,0.45);
+  background: rgba(255,255,255,0.06);
+}
+
+.hm-nav-link {
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.5);
+  font: 500 13px Montserrat, sans-serif;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  padding: 6px 12px;
+  border-radius: 6px;
+  transition: color 0.15s, background 0.15s;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+}
+.hm-nav-link:hover {
+  color: white;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.hm-add-btn {
+  margin-left: 8px;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: #2B8FD8;
+  border: none;
+  color: white;
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: filter 0.15s;
+  flex-shrink: 0;
+  font-family: Montserrat, sans-serif;
+}
+.hm-add-btn:hover { filter: brightness(1.15); }
+
+/* Mobile hamburger */
+.hm-hamburger {
+  display: none;
+  flex-direction: column;
+  gap: 5px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+}
+.hm-hamburger span {
+  display: block;
+  width: 22px;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.7);
+  border-radius: 2px;
+  transition: transform 0.2s, opacity 0.2s;
+}
+
+.hm-hamburger.open span:nth-child(1) { transform: translateY(7px) rotate(45deg); }
+.hm-hamburger.open span:nth-child(2) { opacity: 0; }
+.hm-hamburger.open span:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
+
+.hm-mobile-menu {
+  position: fixed;
+  top: 72px;
+  left: 0;
+  right: 0;
+  background: #0C1E30;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  display: flex;
+  flex-direction: column;
+  padding: 8px 0 16px;
+  z-index: 99;
+}
+.hm-mobile-menu a,
+.hm-mobile-menu button {
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.7);
+  font: 500 14px Montserrat, sans-serif;
+  padding: 12px 24px;
+  text-align: left;
+  cursor: pointer;
+  text-decoration: none;
+}
+.hm-mobile-menu a:hover,
+.hm-mobile-menu button:hover { color: white; }
+
+/* Public header (pricing page): logo + nav on left, buttons on right */
+.hm-public .hm-logo { margin-right: 32px; }
+.hm-public .hm-nav-right { margin-left: auto; }
+
+@media (max-width: 600px) {
+  .hm-nav { display: none; }
+  .hm-hamburger { display: flex; }
+  .hm-header { height: 60px; padding: 0 16px; }
+  .hm-mobile-menu { top: 60px; }
+}
+
+@media (max-width: 480px) {
+  .hm-btn-ghost { display: none; }
+}
+
+@media (max-width: 360px) {
+  .hm-btn-primary { display: none; }
+}

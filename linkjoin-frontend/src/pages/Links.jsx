@@ -196,6 +196,7 @@ export default function Links() {
   const [resendState, setResendState] = useState('idle') // idle | sending | sent
   const [tzMismatch, setTzMismatch] = useState(null) // { from, to, newOffset } | null
   const [showWhatsNew, setShowWhatsNew] = useState(false)
+  const [modifiedNames, setModifiedNames] = useState([])
 
   useEffect(() => {
     document.documentElement.id = 'links_html'
@@ -207,9 +208,7 @@ export default function Links() {
     if (confirmed) syncTimezone()
     setFetchError(false)
     linksApi.getAll().then(data => {
-      if (data['links'] !== undefined) setLinks(data['links'] || [])
-      if (data['pending-links'] !== undefined) setPendingLinks(data['pending-links'] || [])
-      if (data['deleted-links'] !== undefined) setDeletedLinks(data['deleted-links'] || [])
+      applyLinksData(data)
     }).catch(() => setFetchError(true)).finally(() => setLoading(false))
   }, [])
 
@@ -250,10 +249,22 @@ export default function Links() {
     } catch { return tz }
   }
 
-  const handleWsMessage = useCallback((data) => {
-    if (data['links'] !== undefined) setLinks(data['links'] || [])
+  function applyLinksData(data) {
+    if (data['links'] !== undefined) {
+      const incoming = data['links'] || []
+      setLinks(incoming)
+      const names = incoming.filter(l => l.modified && l.share_id).map(l => l.name)
+      if (names.length) setModifiedNames(prev => {
+        const merged = [...new Set([...prev, ...names])]
+        return merged
+      })
+    }
     if (data['pending-links'] !== undefined) setPendingLinks(data['pending-links'] || [])
     if (data['deleted-links'] !== undefined) setDeletedLinks(data['deleted-links'] || [])
+  }
+
+  const handleWsMessage = useCallback((data) => {
+    applyLinksData(data)
   }, [])
 
   async function refreshLinks() {
@@ -357,6 +368,25 @@ export default function Links() {
 
       <div className={calendarEnabled ? 'lp-body' : ''}>
         <div className={calendarEnabled ? 'lp-links-col' : ''}>
+          {modifiedNames.length > 0 && (
+            <div className="modified-banner">
+              <span className="modified-banner-icon">↑</span>
+              <span className="modified-banner-text">
+                {modifiedNames.length === 1
+                  ? <><strong>{modifiedNames[0]}</strong> was updated by its owner.</>
+                  : <><strong>{modifiedNames.join(', ')}</strong> were updated by their owner.</>
+                }
+              </span>
+              <button
+                className="modified-banner-dismiss"
+                onClick={async () => {
+                  setModifiedNames([])
+                  try { await linksApi.dismissModifications() } catch {}
+                }}
+              >✕</button>
+            </div>
+          )}
+
           <div id="links-search-container">
             <input
               id="links-search"
@@ -368,7 +398,10 @@ export default function Links() {
 
           {pendingLinks.length > 0 && (
             <div id="pending-links">
-              <div style={{ fontWeight: 600, fontSize: 18, margin: '20px 0 10px', opacity: 0.7 }}>Pending Invitations</div>
+              <div className="pending-section-heading">
+                <span>Pending Invitations</span>
+                <span className="pending-count">{pendingLinks.length}</span>
+              </div>
               {pendingLinks.map(l => (
                 <LinkCard
                   key={l.id} link={l} isPending
@@ -376,7 +409,7 @@ export default function Links() {
                   onDelete={handleDelete} onNotes={handleNotes}
                 />
               ))}
-              <hr className="hr-pending-links" />
+              <div className="pending-divider" />
             </div>
           )}
 

@@ -112,19 +112,24 @@ function BookmarkModal({ visible, editBookmark, onClose, onSuccess }) {
       <div className="modal-card" onClick={e => e.stopPropagation()}>
         <img src="/images/arrow-left.svg" className="modal-back" alt="back" onClick={handleClose} />
         <div className="modal-title">{isEdit ? 'Edit bookmark' : 'Add a bookmark'}</div>
-        <input
-          className="modal-input"
-          placeholder="Name"
-          value={name}
-          onChange={e => setName(e.target.value)}
-        />
-        <input
-          className="modal-input"
-          placeholder="URL"
-          value={url}
-          onChange={e => setUrl(e.target.value)}
-          style={{ marginBottom: 28 }}
-        />
+        <div className="modal-field">
+          <span className="modal-field-tag">Name</span>
+          <input
+            className="modal-input"
+            placeholder="e.g. Engineering docs"
+            value={name}
+            onChange={e => setName(e.target.value)}
+          />
+        </div>
+        <div className="modal-field" style={{ marginBottom: 28 }}>
+          <span className="modal-field-tag">URL</span>
+          <input
+            className="modal-input"
+            placeholder="https://"
+            value={url}
+            onChange={e => setUrl(e.target.value)}
+          />
+        </div>
         {error && <div className="modal-error">{error}</div>}
         <button
           className={`modal-submit${loading ? ' disabled' : ''}`}
