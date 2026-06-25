@@ -23,5 +23,6 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: ./linkjoin-backend
+          file: ./linkjoin-backend/Dockerfile
           push: true
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/linkjoin-backend:latest
