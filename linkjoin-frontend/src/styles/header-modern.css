@@ -185,8 +185,10 @@
 
 @media (max-width: 480px) {
   .hm-btn-ghost { display: none; }
+  .hm-logo img { max-width: 130px; }
 }
 
 @media (max-width: 360px) {
   .hm-btn-primary { display: none; }
+  .hm-logo img { max-width: 110px; }
 }
