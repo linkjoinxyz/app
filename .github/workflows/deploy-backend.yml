@@ -13,16 +13,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Debug checkout
+        run: ls -la linkjoin-backend/
+
       - name: Log in to Docker Hub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
 
       - name: Build and push
-        uses: docker/build-push-action@v6
-        with:
-          context: ./linkjoin-backend
-          file: ./linkjoin-backend/Dockerfile
-          push: true
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/linkjoin-backend:latest
+        run: |
+          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/linkjoin-backend:latest ./linkjoin-backend
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/linkjoin-backend:latest
