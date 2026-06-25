@@ -1,0 +1,70 @@
+#page .link {
+    position: relative;
+    justify-content: center;
+    width: calc(50% - 40px);
+    margin: 10px 15px;
+    padding: 15px 50px;
+    height: unset;
+    min-height: 100px;
+}
+
+#page .name {
+    word-break: break-word;
+}
+
+#page .join-meeting {
+    width: 90%;
+}
+
+#page #insert {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+}
+
+#page .dot-menu {
+    position: static;
+    margin-left: auto;
+}
+
+#page #links-search-container {
+    margin-left: 15px;
+}
+
+#page #links-search {
+    width: 167px;
+}
+
+@media (max-width: 730px) {
+    #page .link .dot-menu {
+        opacity: 1;
+        display: initial;
+    }
+
+    #page .link {
+        width: 98%;
+        margin: 10px 0;
+    }
+
+    #page #insert {
+        flex-direction: column;
+    }
+
+
+}
+
+#page #popup {
+    height: 300px;
+}
+
+#page .submit {
+    margin-left: 65px;
+    margin-top: 30px;
+}
+
+#page .submit:hover {
+    margin-left: 80px;
+}
+
+
+

@@ -57,11 +57,13 @@ async def login(request: Request) -> Response:
             except KeyError:
                 return JSONResponse({"url": redirect_link, "error": 'no_password', 'email': email,
                                      'keep': data.get('keep'), 'token': token})
-
-        if db.login.find_one({'username': email}) is None:
+        user = db.login.find_one({'username': email})
+        if user is None:
             return JSONResponse({'redirect': data['redirect'], "error": 'email_not_found', 'token': token})
-        elif db.login.find_one({'username': email}).get('confirmed') == "false":
+        elif user.get('confirmed') == "false":
             return JSONResponse({'redirect': data['redirect'], "error": 'not_confirmed', 'token': token})
+        if user.get('offset') is None:
+            db.login.find_one_and_update({'username': email}, {'$set': {'offset': "0.0"}})
         # tokens.find_one_and_delete({'token': token})
         token = gen_session()
         db.tokens.insert_one({'token': token, 'email': email})
@@ -219,4 +221,3 @@ async def analytics_view(request: Request) -> Response:
     return templates.TemplateResponse('analytics.html', {'request': request, 'links_made': links_made,
                                                          'users': users, 'logins': logins, 'signups': signups,
                                                          'links_opened': links_opened})
-

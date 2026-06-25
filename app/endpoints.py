@@ -277,7 +277,7 @@ async def loading(request: Request) -> FileResponse:
 
 
 async def ads(request: Request) -> FileResponse:
-    return FileResponse('ads.txt')
+    return FileResponse('static/ads.txt')
 
 
 async def robots(request: Request) -> FileResponse:

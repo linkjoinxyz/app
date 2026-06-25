@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useModalClose } from '../hooks/useModalClose.js'
 import { apiFetch } from '../api/client.js'
 import { usersApi } from '../api/users.js'
+import { useAuth } from '../context/AuthContext.jsx'
 import countryCodes from '../../public/country_codes.json'
 import '../styles/modal.css'
 
@@ -10,6 +11,7 @@ const SORT_OPTIONS = ['None', 'Day & Time', 'Upcoming']
 
 export default function SettingsModal({ user, visible, onClose, onShowDeleted, onCalendarImport, onOutlookImport, onUserRefresh }) {
   const { closing, handleClose } = useModalClose(onClose)
+  const { logout } = useAuth()
   const [tab, setTab] = useState('personal')
   const [sort, setSort] = useState(user?.sort || 'None')
   const [openEarly, setOpenEarly] = useState(user?.open_early || 0)
@@ -22,6 +24,9 @@ export default function SettingsModal({ user, visible, onClose, onShowDeleted, o
   const [showCalendar, setShowCalendar] = useState(!!user?.show_calendar)
   const [resetSent, setResetSent] = useState(false)
   const [saveStatus, setSaveStatus] = useState(null)
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState('')
 
   function flashSaved(ok = true) {
     setSaveStatus(ok ? 'saved' : 'error')
@@ -70,8 +75,47 @@ export default function SettingsModal({ user, visible, onClose, onShowDeleted, o
   return (
     <div className={`modal-overlay${closing ? ' closing' : ''}`} onClick={handleClose}>
       <div className="modal-card" onClick={e => e.stopPropagation()}>
-        <img src="/images/arrow-left.svg" className="modal-back" alt="back" onClick={resetSent ? () => setResetSent(false) : handleClose} />
-        {resetSent ? (
+        <img
+          src="/images/arrow-left.svg"
+          className="modal-back"
+          alt="back"
+          onClick={confirmDelete ? () => { setConfirmDelete(false); setDeleteError('') } : resetSent ? () => setResetSent(false) : handleClose}
+        />
+        {confirmDelete ? (
+          <div className="modal-delete-confirm">
+            <div className="modal-delete-icon">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
+                <path d="M12 9v4M12 17h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            </div>
+            <h2 className="modal-delete-title">Delete your account?</h2>
+            <p className="modal-delete-body">
+              This will permanently delete your account, all your meetings, bookmarks, and settings.
+              <strong> This cannot be undone.</strong>
+            </p>
+            {deleteError && <div className="modal-error" style={{ marginBottom: 12 }}>{deleteError}</div>}
+            <button className="modal-cancel-btn" onClick={() => { setConfirmDelete(false); setDeleteError('') }}>
+              Cancel
+            </button>
+            <button
+              className={`modal-danger-btn modal-danger-btn-full${deleting ? ' disabled' : ''}`}
+              disabled={deleting}
+              onClick={async () => {
+                setDeleting(true)
+                setDeleteError('')
+                try {
+                  await usersApi.deleteAccount()
+                  await logout()
+                } catch {
+                  setDeleteError('Something went wrong. Please try again.')
+                  setDeleting(false)
+                }
+              }}
+            >
+              {deleting ? 'Deleting…' : 'Yes, delete my account'}
+            </button>
+          </div>
+        ) : resetSent ? (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, padding: '24px 0 8px' }}>
             <div style={{ fontSize: 40 }}>📧</div>
             <div style={{ font: '600 20px Montserrat', color: 'white' }}>Check your inbox</div>
@@ -83,8 +127,11 @@ export default function SettingsModal({ user, visible, onClose, onShowDeleted, o
         ) : <>
         <div className="modal-title">Settings</div>
         {saveStatus && (
-          <div style={{ fontSize: 12, color: saveStatus === 'saved' ? '#4caf50' : '#f44336', textAlign: 'center', marginTop: -8, marginBottom: 4, fontWeight: 600 }}>
-            {saveStatus === 'saved' ? 'Saved' : 'Failed to save'}
+          <div className={`settings-save-toast ${saveStatus}`}>
+            {saveStatus === 'saved'
+              ? <><svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M5 13l4 4L19 7" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/></svg> Saved</>
+              : <><svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M18 6L6 18M6 6l12 12" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"/></svg> Failed to save</>
+            }
           </div>
         )}
 
@@ -209,9 +256,15 @@ export default function SettingsModal({ user, visible, onClose, onShowDeleted, o
               <button className="modal-action-btn" onClick={() => { handleClose(); onOutlookImport?.() }}>Import</button>
             </div>
 
-            <div className="modal-settings-row">
+            <div className="modal-settings-row" style={{ borderBottom: 'none' }}>
               <div className="modal-settings-name">Password</div>
               <button className="modal-action-btn" onClick={sendPasswordReset}>Reset</button>
+            </div>
+
+            <div className="modal-settings-danger-zone">
+              <button className="modal-danger-btn" onClick={() => setConfirmDelete(true)}>
+                Delete Account
+              </button>
             </div>
           </>
         )}
