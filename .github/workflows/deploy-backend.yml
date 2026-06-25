@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - 'linkjoin-backend/**'
+  workflow_dispatch:
 
 jobs:
   build-and-push:
