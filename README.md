@@ -6,15 +6,15 @@ Save recurring meetings once. LinkJoin opens them for you when it's time, so you
 
 ## Features
 
-- **Auto-open meetings** — meetings open automatically at their scheduled time, with a configurable early-open window
-- **Pre-meet countdown** — a popup appears before each meeting with a live countdown and optional password copy
-- **Bookmarks** — save any link for one-click access, separate from your meetings
-- **Calendar view** — monthly calendar alongside your meetings list, with per-day meeting breakdowns
-- **Sharing** — invite others to a recurring meeting; they can accept or decline
-- **Notes** — per-meeting notes that persist across sessions
-- **Google Calendar & Outlook import** — pull recurring meetings in automatically
-- **Vacation mode** — pause all auto-opens temporarily
-- **AI assistant** — ask questions about your schedule
+- **Auto-open meetings:** meetings open at their scheduled time, with a configurable early-open window
+- **Pre-meet countdown:** a popup appears before each meeting with a live countdown and optional password copy
+- **Bookmarks:** save any link for one-click access, separate from your meetings
+- **Calendar view:** monthly calendar alongside your meetings list, with per-day breakdowns
+- **Sharing:** invite others to a recurring meeting; they can accept or decline
+- **Notes:** per-meeting notes that persist across sessions
+- **Google Calendar and Outlook import:** pull recurring meetings in automatically
+- **Vacation mode:** pause all auto-opens temporarily
+- **Meeting assistant:** ask questions about your schedule
 
 ## Tech stack
 
@@ -54,8 +54,8 @@ The Vite dev server proxies `/api` to `localhost:8000`, so both can run together
 
 ## Browser extensions
 
-The Chrome and Firefox extensions live in [linkjoinxyz/extension](https://github.com/linkjoinxyz/extension). They let you add bookmarks from any page and handle the pre-meet popup outside the browser tab.
+The Chrome and Firefox extensions live in [linkjoinxyz/extension](https://github.com/linkjoinxyz/extension). They handle the pre-meet popup outside the browser tab and let you add bookmarks from any page.
 
 ## Contributing
 
-PRs go to `dev`. Once `dev` is stable, `dev` → `main` ships to production.
+PRs go to `dev`. Once `dev` is stable, `dev` -> `main` ships to production.
