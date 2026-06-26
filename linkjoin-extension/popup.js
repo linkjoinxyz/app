@@ -424,6 +424,35 @@ async function handleAddSubmit(el) {
     }
 }
 
+// --- Settings ---
+
+async function renderSettings() {
+    const { ljAutoDetect = true } = await chrome.storage.local.get('ljAutoDetect')
+    const app = document.getElementById('app')
+    app.innerHTML = `
+        <div class="header">
+            <button class="back-btn" id="back-btn">&#8592;</button>
+            <span class="logo-text">Settings</span>
+        </div>
+        <div class="settings-body">
+            <div class="setting-row">
+                <div class="setting-info">
+                    <div class="setting-label">Auto-detect meetings</div>
+                    <div class="setting-desc">Show overlay when a meeting link is found in Gmail</div>
+                </div>
+                <label class="toggle">
+                    <input type="checkbox" id="auto-detect-toggle" ${ljAutoDetect ? 'checked' : ''}>
+                    <span class="toggle-track"></span>
+                </label>
+            </div>
+        </div>
+    `
+    document.getElementById('back-btn').addEventListener('click', () => renderDashboard())
+    document.getElementById('auto-detect-toggle').addEventListener('change', async e => {
+        await chrome.storage.local.set({ ljAutoDetect: e.target.checked })
+    })
+}
+
 // --- Dashboard ---
 
 function renderLogin() {
@@ -447,6 +476,12 @@ async function renderDashboard() {
             <span class="logo-text">LinkJoin</span>
             <button id="dashboard-btn">Dashboard</button>
             <button id="logout-btn">Log out</button>
+            <button class="gear-btn" id="settings-btn" aria-label="Settings">
+                <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="7.5" cy="7.5" r="2"/>
+                    <path d="M7.5 1v1.5M7.5 12.5V14M1 7.5h1.5M12.5 7.5H14M2.93 2.93l1.06 1.06M11.01 11.01l1.06 1.06M2.93 12.07l1.06-1.06M11.01 3.99l1.06-1.06"/>
+                </svg>
+            </button>
         </div>
         <div class="user-email">${escHtml(auth.email)}</div>
         <button class="scan-btn" id="scan-btn">
@@ -465,6 +500,7 @@ async function renderDashboard() {
         chrome.tabs.create({ url: `${APP_URL}/links` })
     })
     document.getElementById('logout-btn').addEventListener('click', handleLogout)
+    document.getElementById('settings-btn').addEventListener('click', renderSettings)
     document.getElementById('scan-btn').addEventListener('click', handleScan)
 
     const data = await apiFetch('/links')

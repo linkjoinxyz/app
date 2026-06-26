@@ -132,6 +132,8 @@ function urlsMatch(a, b) {
 
 async function processEmailBody(bodyEl) {
     if (!chrome?.storage?.local) return
+    const { ljAutoDetect = true } = await chrome.storage.local.get('ljAutoDetect')
+    if (!ljAutoDetect) return
     const msgContainer = bodyEl.closest('[data-message-id]')
     const msgId = msgContainer?.dataset?.messageId
     if (msgId && seen.has(msgId)) return
