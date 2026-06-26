@@ -116,10 +116,11 @@ async function processEmailBody(bodyEl) {
     const msgContainer = bodyEl.closest('[data-message-id]')
     const msgId = msgContainer?.dataset?.messageId
     if (msgId && seen.has(msgId)) return
-    if (msgId) seen.add(msgId)
 
     const detectedLink = findMeetingLink(bodyEl)
     if (!detectedLink) return
+
+    if (msgId) seen.add(msgId)
 
     const { ljDismissed = [] } = await chrome.storage.local.get('ljDismissed')
     if (ljDismissed.some(url => urlsMatch(url, detectedLink))) return
@@ -144,6 +145,7 @@ async function processEmailBody(bodyEl) {
 
 const observer = new MutationObserver((mutations) => {
     for (const mutation of mutations) {
+        // Case 1: a new .a3s.aiL node was added to the DOM
         for (const node of mutation.addedNodes) {
             if (node.nodeType !== 1) continue
             const bodies = node.matches?.('.a3s.aiL')
@@ -153,6 +155,9 @@ const observer = new MutationObserver((mutations) => {
                 processEmailBody(body)
             }
         }
+        // Case 2: content was injected into an existing .a3s.aiL container
+        const existing = mutation.target.closest?.('.a3s.aiL')
+        if (existing) processEmailBody(existing)
     }
 })
 
@@ -165,13 +170,14 @@ function scanExisting() {
 // Catch emails already in the DOM on load
 setTimeout(scanExisting, 1000)
 
-// Catch SPA navigation (Gmail uses history.pushState when opening emails)
+// Catch SPA navigation — Gmail uses both pushState and hash routing (#inbox/...)
 const _origPushState = history.pushState.bind(history)
 history.pushState = function (...args) {
     _origPushState(...args)
-    setTimeout(scanExisting, 800)
+    setTimeout(scanExisting, 1000)
 }
-window.addEventListener('popstate', () => setTimeout(scanExisting, 800))
+window.addEventListener('popstate', () => setTimeout(scanExisting, 1000))
+window.addEventListener('hashchange', () => setTimeout(scanExisting, 1000))
 
 // --- Analyzing badge ---
 
