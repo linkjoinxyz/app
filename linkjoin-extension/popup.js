@@ -508,6 +508,7 @@ async function renderDashboard() {
 
     const data = await apiFetch('/links')
     const list = document.getElementById('meetings-list')
+    if (!list) return  // user navigated away while fetch was in-flight
 
     if (!data?.links) {
         list.innerHTML = '<p class="muted-msg">Could not load meetings.</p>'
@@ -529,7 +530,7 @@ async function renderDashboard() {
         <div class="meeting-card">
             <div class="meeting-name">${escHtml(l.name)}</div>
             <div class="meeting-meta">
-                <span class="meeting-days">${l.days.join(', ')}</span>
+                <span class="meeting-days">${l.days.map(escHtml).join(', ')}</span>
                 <span class="meeting-next">${formatNext(l._next)}</span>
             </div>
         </div>
