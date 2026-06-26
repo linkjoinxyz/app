@@ -3,6 +3,87 @@ const APP_URL = 'http://localhost:5173'
 
 const MEETING_RE = /https?:\/\/(?:[a-z0-9-]+\.)?(?:zoom\.us\/j\/|meet\.google\.com\/[a-z-]{3,}|teams\.microsoft\.com\/l\/meetup-join\/|webex\.com\/meet\/|gotomeeting\.com\/join\/)[^\s"'<>]*/i
 
+const DAYS_ALL = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+const REPEAT_OPTIONS = ['never', 'week', 'month', '2 times', '3 times', '4 times']
+const REPEAT_LABELS = {
+    never: 'One-time', week: 'Weekly', month: 'Same date every month',
+    '2 times': 'Every 2 weeks', '3 times': 'Every 3 weeks', '4 times': 'Every 4 weeks',
+}
+const REMINDER_OPTIONS = [
+    { value: 'false', label: 'Never' },
+    { value: '5',     label: '5 min before' },
+    { value: '10',    label: '10 min before' },
+    { value: '15',    label: '15 min before' },
+    { value: '30',    label: '30 min before' },
+    { value: '60',    label: '1 hour before' },
+]
+
+function normalizeRepeat(r) {
+    if (!r) return 'never'
+    if (REPEAT_OPTIONS.includes(r)) return r
+    if (/^day \d+$/.test(r) || r === 'same_weekday') return r
+    return 'never'
+}
+
+function repeatLabel(r) {
+    if (r === 'same_weekday') return 'Same date every month'
+    if (REPEAT_LABELS[r]) return REPEAT_LABELS[r]
+    if (/^day \d+$/.test(r)) {
+        const n = parseInt(r.split(' ')[1])
+        const s = n === 1 ? 'st' : n === 2 ? 'nd' : n === 3 ? 'rd' : 'th'
+        return `${n}${s} of month`
+    }
+    return r
+}
+
+function _to12h(time24) {
+    if (!time24 || !time24.includes(':')) return { h: '', m: '', period: 'AM' }
+    const [hStr, mStr] = time24.split(':')
+    let h = parseInt(hStr) || 0
+    const m = String(parseInt(mStr) || 0).padStart(2, '0')
+    const period = h >= 12 ? 'PM' : 'AM'
+    h = h % 12 || 12
+    return { h: String(h), m, period }
+}
+
+function _dateFmt(d) {
+    if (!d) return ''
+    let i = 0, out = ''
+    const m0 = d[0]
+    if (m0 >= '2') { out = m0 + '/'; i = 1 }
+    else if (d.length > 1) {
+        const raw = d.slice(0, 2), n = parseInt(raw)
+        out = (n < 1 ? '01' : n > 12 ? '12' : raw) + '/'; i = 2
+    } else { return m0 }
+    if (i >= d.length) return out
+    const day0 = d[i]
+    if (day0 >= '4') { out += day0 + '/'; i++ }
+    else if (d.length > i + 1) {
+        const raw = d.slice(i, i + 2), n = parseInt(raw)
+        out += (n < 1 ? '01' : n > 31 ? '31' : raw) + '/'; i += 2
+    } else { return out + day0 }
+    if (i >= d.length) return out
+    out += d.slice(i, i + 4)
+    return out
+}
+
+function _dateFmtSimple(d) {
+    let v = d
+    if (d.length > 2) v = d.slice(0, 2) + '/' + d.slice(2)
+    if (d.length > 4) v = d.slice(0, 2) + '/' + d.slice(2, 4) + '/' + d.slice(4)
+    return v
+}
+
+function _dateExpandYear(val) {
+    const p = val.split('/')
+    if (p.length === 3 && /^\d{2}$/.test(p[2])) return p[0] + '/' + p[1] + '/20' + p[2]
+    return val
+}
+
+function escAttr(str) {
+    return (str || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#x27;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+}
+
 async function getAuth() {
     const { token, email } = await chrome.storage.local.get(['token', 'email'])
     return token && email ? { token, email } : null
@@ -66,14 +147,6 @@ function formatNext(date) {
     return `${dayName} at ${timeStr}`
 }
 
-function _to24h(hour, min, period) {
-    let h = parseInt(hour)
-    const m = parseInt(min) || 0
-    if (period === 'PM' && h !== 12) h += 12
-    if (period === 'AM' && h === 12) h = 0
-    return `${h}:${String(m).padStart(2, '0')}`
-}
-
 function escHtml(str) {
     return String(str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 }
@@ -108,7 +181,8 @@ async function handleScan() {
         })
         found = results?.[0]?.result
     } catch (e) {
-        renderScanError('Could not scan this page. Try navigating to the page first.')
+        console.error('[LJ scan error]', e)
+        renderScanError(`Could not scan this page: ${e?.message || e}`)
         return
     }
 
@@ -148,141 +222,200 @@ function renderScanError(msg) {
     document.getElementById('manual-btn').addEventListener('click', () => renderAddForm('', {}))
 }
 
-// --- Add form ---
+// --- Add form (same UI as the Gmail overlay) ---
 
 function renderAddForm(detectedLink, prefilled) {
-    const DAYS_ALL = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
-    const preDays = prefilled.days || []
-    const preRepeat = prefilled.repeats || 'week'
+    const name = prefilled.name || ''
+    const link = prefilled.link || detectedLink || ''
+    const t12 = _to12h(prefilled.time || '')
+    const date = prefilled.date || ''
+    const repeat = normalizeRepeat(prefilled.repeat || prefilled.repeats)
 
-    // Parse prefilled time
-    let preHour = '', preMin = '00', prePeriod = 'AM'
-    if (prefilled.time) {
-        const [h, m] = prefilled.time.split(':').map(Number)
-        prePeriod = h >= 12 ? 'PM' : 'AM'
-        preHour = h === 0 ? '12' : h > 12 ? String(h - 12) : String(h)
-        preMin = String(m || 0).padStart(2, '0')
-    }
+    const dayPills = DAYS_ALL.map(d => {
+        const active = Array.isArray(prefilled.days) && prefilled.days.includes(d)
+        return `<button class="lj-day-pill${active ? ' active' : ''}" data-day="${d}">${d}</button>`
+    }).join('')
 
-    const isMonth = preRepeat === 'month'
+    const repeatOptions = [...REPEAT_OPTIONS, ...(/^day \d+$/.test(repeat) || repeat === 'same_weekday' ? [repeat] : [])]
+        .map(v => `<option value="${v}"${v === repeat ? ' selected' : ''}>${repeatLabel(v)}</option>`).join('')
 
-    document.getElementById('app').innerHTML = `
+    const el = document.getElementById('app')
+    el.innerHTML = `
         <div class="header">
             <button class="back-btn" id="back-btn">&#8592;</button>
             <span class="logo-text">Add meeting</span>
         </div>
-        <div class="add-form">
-            <div class="add-field">
-                <label class="add-label">Name <span class="req">*</span></label>
-                <input id="add-name" class="add-input" type="text" placeholder="Weekly Sync"
-                    value="${escHtml(prefilled.name || '')}">
-            </div>
-            <div class="add-field">
-                <label class="add-label">Link <span class="req">*</span></label>
-                <input id="add-link" class="add-input" type="url" placeholder="https://zoom.us/j/..."
-                    value="${escHtml(detectedLink)}">
-            </div>
-            <div class="add-field">
-                <label class="add-label">Repeat</label>
-                <select id="add-repeat" class="add-select">
-                    <option value="never" ${preRepeat==='never'?'selected':''}>One time</option>
-                    <option value="week" ${preRepeat==='week'?'selected':''}>Weekly</option>
-                    <option value="2 times" ${preRepeat==='2 times'?'selected':''}>Every 2 weeks</option>
-                    <option value="month" ${preRepeat==='month'?'selected':''}>Monthly</option>
-                </select>
-            </div>
-            <div class="add-field" id="days-field" style="${isMonth ? 'display:none' : ''}">
-                <label class="add-label">Days <span class="req">*</span></label>
-                <div class="day-pills" id="day-pills">
-                    ${DAYS_ALL.map(d => `<button class="day-pill${preDays.includes(d) ? ' active' : ''}" data-day="${d}">${d}</button>`).join('')}
+        <div class="lj-body" style="overflow-y:auto;max-height:420px">
+            <label class="lj-label">Name <span class="lj-req">*</span></label>
+            <input class="lj-input${!name ? ' lj-missing' : ''}" id="lj-name" type="text"
+                value="${escAttr(name)}" placeholder="Meeting name">
+
+            <label class="lj-label">Meeting link <span class="lj-req">*</span></label>
+            <input class="lj-input${!link ? ' lj-missing' : ''}" id="lj-link" type="url"
+                value="${escAttr(link)}" placeholder="https://zoom.us/j/...">
+
+            <div id="lj-days-section"${repeat === 'month' ? ' style="display:none"' : ''}>
+                <label class="lj-label">Days <span class="lj-req">*</span></label>
+                <div class="lj-days${!Array.isArray(prefilled.days) || !prefilled.days.length ? ' lj-missing-days' : ''}" id="lj-days">
+                    ${dayPills}
                 </div>
             </div>
-            <div class="add-field">
-                <label class="add-label">Time <span class="req">*</span></label>
-                <div class="time-row">
-                    <input id="add-hour" class="add-input time-input" type="number" min="1" max="12" placeholder="10" value="${escHtml(preHour)}">
-                    <span class="time-colon">:</span>
-                    <input id="add-min" class="add-input time-input" type="number" min="0" max="59" placeholder="00" value="${escHtml(preMin)}">
-                    <button class="period-btn" id="add-period">${prePeriod}</button>
-                </div>
+
+            <label class="lj-label">Time <span class="lj-req">*</span></label>
+            <div class="lj-time-row">
+                <input class="lj-input lj-time-part${!t12.h ? ' lj-missing' : ''}" id="lj-hour" type="text" placeholder="12" maxlength="2" value="${escAttr(t12.h)}">
+                <span class="lj-time-colon">:</span>
+                <input class="lj-input lj-time-part" id="lj-min" type="text" placeholder="00" maxlength="2" value="${escAttr(t12.m)}">
+                <button class="lj-period-btn" id="lj-period" type="button">${escAttr(t12.period)}</button>
             </div>
-            <div id="add-error" class="add-error" style="display:none"></div>
-            <button class="add-submit" id="add-submit" disabled>Add to LinkJoin</button>
+
+            <label class="lj-label">Repeat</label>
+            <select class="lj-select" id="lj-repeat">${repeatOptions}</select>
+
+            <label class="lj-label">Start date <span style="font-weight:400;text-transform:none;letter-spacing:0;color:#6b8fac;font-size:10px">(optional)</span></label>
+            <input class="lj-input" id="lj-date" type="text" placeholder="MM/DD/YYYY" value="${escAttr(date)}">
+
+            <label class="lj-label">Text reminder</label>
+            <select class="lj-select" id="lj-reminder">${REMINDER_OPTIONS.map(o =>
+                `<option value="${o.value}">${o.label}</option>`).join('')}</select>
+
+            <div class="lj-error" id="lj-error" style="display:none"></div>
+            <button class="lj-submit" id="lj-submit">Add to LinkJoin</button>
         </div>
     `
 
     document.getElementById('back-btn').addEventListener('click', () => renderDashboard())
 
-    document.getElementById('add-repeat').addEventListener('change', e => {
-        document.getElementById('days-field').style.display = e.target.value === 'month' ? 'none' : ''
-        updateAddState()
+    el.querySelector('#lj-repeat').addEventListener('change', () => {
+        el.querySelector('#lj-days-section').style.display = el.querySelector('#lj-repeat').value === 'month' ? 'none' : ''
+        updateSubmitState(el)
     })
 
-    document.getElementById('day-pills').addEventListener('click', e => {
-        const pill = e.target.closest('.day-pill')
-        if (pill) { pill.classList.toggle('active'); updateAddState() }
+    el.querySelectorAll('.lj-day-pill').forEach(pill => {
+        pill.addEventListener('click', () => {
+            pill.classList.toggle('active')
+            updateDaysMissing(el)
+            updateSubmitState(el)
+        })
     })
 
-    document.getElementById('add-period').addEventListener('click', () => {
-        const btn = document.getElementById('add-period')
-        btn.textContent = btn.textContent === 'AM' ? 'PM' : 'AM'
+    const hourInp = el.querySelector('#lj-hour')
+    const minInp = el.querySelector('#lj-min')
+    const periodBtn = el.querySelector('#lj-period')
+
+    hourInp.addEventListener('keydown', e => {
+        if (['Backspace', 'Delete', 'ArrowLeft', 'ArrowRight', 'Tab', 'Enter'].includes(e.key)) return
+        if (!/^\d$/.test(e.key)) { e.preventDefault(); return }
+        const k = parseInt(e.key)
+        const val = hourInp.value.replace(/\D/g, '')
+        const allSel = hourInp.selectionStart === 0 && hourInp.selectionEnd === hourInp.value.length
+        if (allSel) { if (k === 0) { e.preventDefault(); return } }
+        else {
+            if (val.length === 0 && k === 0) { e.preventDefault(); return }
+            if (val.length === 1 && val[0] === '1' && k > 2) { e.preventDefault(); return }
+            if (val.length >= 2) { e.preventDefault(); return }
+        }
+    })
+    hourInp.addEventListener('input', e => {
+        const val = e.target.value.replace(/\D/g, '').slice(0, 2)
+        e.target.value = val
+        hourInp.classList.toggle('lj-missing', !val)
+        updateSubmitState(el)
+        if ((val.length === 1 && parseInt(val) >= 2) || val.length === 2) { minInp.focus(); minInp.select() }
     })
 
-    ;['add-name', 'add-link', 'add-hour'].forEach(id => {
-        document.getElementById(id).addEventListener('input', updateAddState)
+    minInp.addEventListener('keydown', e => {
+        if (['Backspace', 'Delete', 'ArrowLeft', 'ArrowRight', 'Tab', 'Enter'].includes(e.key)) return
+        if (!/^\d$/.test(e.key)) { e.preventDefault(); return }
+        const k = parseInt(e.key)
+        const val = minInp.value.replace(/\D/g, '')
+        const allSel = minInp.selectionStart === 0 && minInp.selectionEnd === minInp.value.length
+        if (allSel) { if (k > 5) { e.preventDefault(); return } }
+        else {
+            if (val.length === 0 && k > 5) { e.preventDefault(); return }
+            if (val.length >= 2) { e.preventDefault(); return }
+        }
+    })
+    minInp.addEventListener('input', e => {
+        e.target.value = e.target.value.replace(/\D/g, '').slice(0, 2)
+        updateSubmitState(el)
     })
 
-    document.getElementById('add-submit').addEventListener('click', submitAdd)
+    periodBtn.addEventListener('click', () => {
+        periodBtn.textContent = periodBtn.textContent === 'AM' ? 'PM' : 'AM'
+    })
 
-    updateAddState()
+    const dateInp = el.querySelector('#lj-date')
+    dateInp.addEventListener('input', e => {
+        const digits = e.target.value.replace(/\D/g, '').slice(0, 8)
+        const isDel = e.inputType === 'deleteContentBackward' || e.inputType === 'deleteContentForward'
+        e.target.value = isDel ? _dateFmtSimple(digits) : _dateFmt(digits)
+    })
+    dateInp.addEventListener('blur', e => { e.target.value = _dateExpandYear(e.target.value) })
+
+    ;['lj-name', 'lj-link'].forEach(id => {
+        el.querySelector(`#${id}`).addEventListener('input', () => {
+            const inp = el.querySelector(`#${id}`)
+            inp.classList.toggle('lj-missing', !inp.value.trim())
+            updateSubmitState(el)
+        })
+    })
+
+    el.querySelector('#lj-submit').addEventListener('click', () => handleAddSubmit(el))
+    updateSubmitState(el)
 }
 
-function updateAddState() {
-    const name = document.getElementById('add-name').value.trim()
-    const link = document.getElementById('add-link').value.trim()
-    const hour = document.getElementById('add-hour').value.trim()
-    const repeat = document.getElementById('add-repeat').value
-    const days = [...document.querySelectorAll('.day-pill.active')]
-    const valid = name && link && hour && (repeat === 'month' || days.length > 0)
-    document.getElementById('add-submit').disabled = !valid
+function updateDaysMissing(el) {
+    const container = el.querySelector('#lj-days')
+    container.classList.toggle('lj-missing-days', !container.querySelectorAll('.lj-day-pill.active').length)
 }
 
-async function submitAdd() {
-    const name = document.getElementById('add-name').value.trim()
-    const link = document.getElementById('add-link').value.trim()
-    const hourVal = document.getElementById('add-hour').value.trim()
-    const minVal = document.getElementById('add-min').value.trim() || '00'
-    const period = document.getElementById('add-period').textContent
-    const repeat = document.getElementById('add-repeat').value
-    const errorEl = document.getElementById('add-error')
-    const btn = document.getElementById('add-submit')
+function updateSubmitState(el) {
+    const name = el.querySelector('#lj-name').value.trim()
+    const link = el.querySelector('#lj-link').value.trim()
+    const hour = el.querySelector('#lj-hour').value.trim()
+    const repeat = el.querySelector('#lj-repeat').value
+    const days = [...el.querySelectorAll('.lj-day-pill.active')]
+    el.querySelector('#lj-submit').disabled = !(name && link && hour && (repeat === 'month' || days.length > 0))
+}
+
+async function handleAddSubmit(el) {
+    const name = el.querySelector('#lj-name').value.trim()
+    const link = el.querySelector('#lj-link').value.trim()
+    const hourVal = el.querySelector('#lj-hour').value.trim()
+    const minVal = el.querySelector('#lj-min').value.trim() || '00'
+    const period = el.querySelector('#lj-period').textContent
+    const repeat = el.querySelector('#lj-repeat').value
+    const date = el.querySelector('#lj-date').value.trim()
+    const reminder = el.querySelector('#lj-reminder').value
+    const errorEl = el.querySelector('#lj-error')
 
     let days
-    if (repeat === 'month') {
-        days = []
+    if (repeat === 'month' && date) {
+        const [mo, dy, yr] = date.split('/')
+        const d = new Date(parseInt(yr), parseInt(mo) - 1, parseInt(dy))
+        days = isNaN(d.getDay()) ? [] : [['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d.getDay()]]
     } else {
-        days = [...document.querySelectorAll('.day-pill.active')].map(p => p.dataset.day)
+        days = [...el.querySelectorAll('.lj-day-pill.active')].map(p => p.dataset.day)
     }
 
     if (!name || !link || !hourVal || (repeat !== 'month' && !days.length)) return
 
-    const time = _to24h(hourVal, minVal, period)
-
+    const btn = el.querySelector('#lj-submit')
     btn.textContent = 'Adding…'
     btn.disabled = true
-    errorEl.style.display = 'none'
 
     const response = await new Promise(resolve => {
         chrome.runtime.sendMessage(
-            { type: 'createLink', data: { name, link, time, days, repeats: repeat, text: 'false', activated: true } },
+            { type: 'createLink', data: { name, link, time: _to24h(hourVal, minVal, period), days, repeats: repeat, text: reminder, date, activated: true } },
             resolve
         )
     })
 
     if (response?.ok) {
         btn.textContent = 'Added!'
-        btn.classList.add('success')
-        setTimeout(() => renderDashboard(), 1500)
+        btn.classList.add('lj-success')
+        setTimeout(() => renderDashboard(), 1800)
     } else {
         errorEl.textContent = 'Failed to add. Make sure you\'re logged in.'
         errorEl.style.display = 'block'
