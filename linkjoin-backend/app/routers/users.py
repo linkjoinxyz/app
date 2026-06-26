@@ -114,7 +114,7 @@ async def set_show_calendar(body: dict, user: dict = Depends(get_confirmed_user)
 
 
 @router.patch("/popup-check")
-async def popup_check(user: dict = Depends(get_confirmed_user)):
+async def popup_check(user: dict = Depends(get_current_user)):
     await motor_db.login.update_one({"username": user["username"]}, {"$set": {"popup_check_done": True}})
     return {"message": "Updated"}
 
