@@ -149,7 +149,7 @@ async def save_note(body: NoteRequest, user: dict = Depends(get_confirmed_user))
 
 
 @router.patch("/whats-new-seen")
-async def mark_whats_new_seen(user: dict = Depends(get_confirmed_user)):
+async def mark_whats_new_seen(user: dict = Depends(get_current_user)):
     await motor_db.login.update_one(
         {"username": user["username"]},
         {"$set": {"whats_new_seen": "v2"}},
