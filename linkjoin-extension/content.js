@@ -392,6 +392,33 @@ function buildOverlayHTML(data, detectedLink) {
 }
 
 function wireOverlay(el, _data, detectedLink) {
+    // Drag to move
+    const header = el.querySelector('.lj-header')
+    let dragging = false, startX = 0, startY = 0, startLeft = 0, startTop = 0
+    header.addEventListener('mousedown', e => {
+        if (e.target.closest('.lj-close')) return
+        dragging = true
+        const rect = el.getBoundingClientRect()
+        startX = e.clientX
+        startY = e.clientY
+        startLeft = rect.left
+        startTop = rect.top
+        el.style.right = 'auto'
+        el.style.left = startLeft + 'px'
+        el.style.top = startTop + 'px'
+        header.classList.add('lj-dragging')
+        e.preventDefault()
+    })
+    document.addEventListener('mousemove', e => {
+        if (!dragging) return
+        el.style.left = Math.max(0, Math.min(startLeft + e.clientX - startX, window.innerWidth - el.offsetWidth)) + 'px'
+        el.style.top = Math.max(0, Math.min(startTop + e.clientY - startY, window.innerHeight - el.offsetHeight)) + 'px'
+    })
+    document.addEventListener('mouseup', () => {
+        dragging = false
+        header.classList.remove('lj-dragging')
+    })
+
     el.querySelector('.lj-close').addEventListener('click', async () => {
         if (detectedLink) {
             try {
