@@ -235,61 +235,60 @@ if (IS_OUTLOOK) {
     }
 
     async function processOutlookBody(bodyEl) {
-        if (!chrome?.storage?.local) return
-        // Use DOM presence as the guard — no `seen` set so refresh/back-nav always retries
-        if (document.getElementById('lj-overlay') || document.getElementById('lj-analyzing')) return
+        try {
+            if (!chrome?.storage?.local) return
+            if (document.getElementById('lj-overlay') || document.getElementById('lj-analyzing')) return
 
-        const { ljAutoDetect = true } = await chrome.storage.local.get('ljAutoDetect')
-        if (!ljAutoDetect) return
+            const { ljAutoDetect = true } = await chrome.storage.local.get('ljAutoDetect')
+            if (!ljAutoDetect) return
 
-        // Re-check after await in case another call beat us here
-        if (document.getElementById('lj-overlay') || document.getElementById('lj-analyzing')) return
+            if (document.getElementById('lj-overlay') || document.getElementById('lj-analyzing')) return
 
-        const detectedLink = findMeetingLink(bodyEl)
-        if (!detectedLink) return
+            const detectedLink = findMeetingLink(bodyEl)
+            if (!detectedLink) return
 
-        const { ljDismissed = [] } = await chrome.storage.local.get('ljDismissed')
-        if (ljDismissed.some(url => urlsMatch(url, detectedLink))) return
+            const { ljDismissed = [] } = await chrome.storage.local.get('ljDismissed')
+            if (ljDismissed.some(url => urlsMatch(url, detectedLink))) return
 
-        const linksData = await chrome.runtime.sendMessage({ type: 'getLinks' })
-        if (linksData?.links?.some(l => l.link && urlsMatch(l.link, detectedLink))) return
+            const linksData = await chrome.runtime.sendMessage({ type: 'getLinks' })
+            if (linksData?.links?.some(l => l.link && urlsMatch(l.link, detectedLink))) return
 
-        if (document.getElementById('lj-overlay') || document.getElementById('lj-analyzing')) return
+            if (document.getElementById('lj-overlay') || document.getElementById('lj-analyzing')) return
 
-        const subject = getOutlookSubject()
-        const text = bodyEl.textContent || ''
-        showAnalyzing()
+            const subject = getOutlookSubject()
+            const text = bodyEl.textContent || ''
+            showAnalyzing()
 
-        const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone
+            const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone
 
-        // Fallback: show overlay with empty prefill if AI doesn't respond in 12s
-        let done = false
-        const fallback = setTimeout(() => {
-            if (!done) { done = true; removeAnalyzing(); showOverlay({}, detectedLink) }
-        }, 12000)
+            let done = false
+            const fallback = setTimeout(() => {
+                if (!done) { done = true; removeAnalyzing(); showOverlay({}, detectedLink) }
+            }, 12000)
 
-        chrome.runtime.sendMessage(
-            { type: 'extractMeeting', subject, body: text, timezone },
-            (result) => {
-                if (!done) {
-                    done = true
-                    clearTimeout(fallback)
-                    removeAnalyzing()
-                    showOverlay(result || {}, detectedLink)
+            chrome.runtime.sendMessage(
+                { type: 'extractMeeting', subject, body: text, timezone },
+                (result) => {
+                    if (!done) {
+                        done = true
+                        clearTimeout(fallback)
+                        removeAnalyzing()
+                        showOverlay(result || {}, detectedLink)
+                    }
                 }
-            }
-        )
+            )
+        } catch {}
     }
 
-    // Throttled so the MutationObserver doesn't spam processOutlookBody
+    // Trailing debounce — fires 200ms after the LAST mutation, not the first
     let _scanTimer = null
     function scanOutlook() {
-        if (_scanTimer) return
+        clearTimeout(_scanTimer)
         _scanTimer = setTimeout(() => {
             _scanTimer = null
             const body = findOutlookBody()
             if (body) processOutlookBody(body)
-        }, 150)
+        }, 200)
     }
 
     function scheduleOutlookScan() {
