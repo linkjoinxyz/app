@@ -167,8 +167,9 @@ async function handleScan() {
     let found = null
     try {
         const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
+        // allFrames: true so we also search Outlook/email iframes for the body text
         const results = await chrome.scripting.executeScript({
-            target: { tabId: tab.id },
+            target: { tabId: tab.id, allFrames: true },
             func: () => {
                 const RE = /https?:\/\/(?:[a-z0-9-]+\.)?(?:zoom\.us\/j\/|meet\.google\.com\/[a-z-]{3,}|teams\.microsoft\.com\/l\/meetup-join\/|webex\.com\/meet\/|gotomeeting\.com\/join\/)[^\s"'<>]*/i
                 for (const a of document.querySelectorAll('a[href]')) {
@@ -179,7 +180,9 @@ async function handleScan() {
                 return null
             },
         })
-        found = results?.[0]?.result
+        // Prefer the frame with a link AND body text; fall back to any frame with a link
+        const withText = results?.find(r => r.result?.text?.length > 200)
+        found = withText?.result ?? results?.find(r => r.result)?.result
     } catch (e) {
         console.error('[LJ scan error]', e)
         renderScanError(`Could not scan this page: ${e?.message || e}`)

@@ -199,6 +199,17 @@ if (IS_OUTLOOK) {
             const el = document.querySelector(sel)
             if (el) return el
         }
+        for (const iframe of document.querySelectorAll('iframe')) {
+            try {
+                const doc = iframe.contentDocument || iframe.contentWindow?.document
+                if (!doc || !doc.body) continue
+                for (const sel of OUTLOOK_SELECTORS) {
+                    const el = doc.querySelector(sel)
+                    if (el) return el
+                }
+                if (doc.body.textContent.trim()) return doc.body
+            } catch {}
+        }
         return null
     }
 
@@ -240,19 +251,22 @@ if (IS_OUTLOOK) {
         if (body) processOutlookBody(body)
     }
 
-    setTimeout(scanOutlook, 1500)
+    function scheduleOutlookScan() {
+        setTimeout(scanOutlook, 600)
+        setTimeout(scanOutlook, 1800)
+        setTimeout(scanOutlook, 3500)
+    }
+
+    scheduleOutlookScan()
 
     const _origPushStateOL = history.pushState.bind(history)
     history.pushState = function (...args) {
         _origPushStateOL(...args)
-        setTimeout(scanOutlook, 1500)
+        scheduleOutlookScan()
     }
-    window.addEventListener('popstate', () => setTimeout(scanOutlook, 1500))
+    window.addEventListener('popstate', scheduleOutlookScan)
 
-    const outlookObserver = new MutationObserver(() => {
-        const body = findOutlookBody()
-        if (body) processOutlookBody(body)
-    })
+    const outlookObserver = new MutationObserver(scanOutlook)
     outlookObserver.observe(document.body, { childList: true, subtree: true })
 }
 

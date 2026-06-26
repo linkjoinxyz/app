@@ -216,9 +216,24 @@ if (IS_OUTLOOK) {
     ]
 
     function findOutlookBody() {
+        // Try main document first
         for (const sel of OUTLOOK_SELECTORS) {
             const el = document.querySelector(sel)
             if (el) return el
+        }
+        // Outlook renders the email body inside a same-origin iframe — search those too
+        for (const iframe of document.querySelectorAll('iframe')) {
+            try {
+                const doc = iframe.contentDocument || iframe.contentWindow?.document
+                if (!doc || !doc.body) continue
+                for (const sel of OUTLOOK_SELECTORS) {
+                    const el = doc.querySelector(sel)
+                    if (el) return el
+                }
+                // If no specific selector matched, use the entire iframe body
+                // (classic OWA renders the raw email HTML as the iframe document)
+                if (doc.body.textContent.trim()) return doc.body
+            } catch {}
         }
         return null
     }
@@ -261,20 +276,23 @@ if (IS_OUTLOOK) {
         if (body) processOutlookBody(body)
     }
 
-    setTimeout(scanOutlook, 1500)
+    // Multiple attempts to catch the email body as Outlook's iframe loads
+    function scheduleOutlookScan() {
+        setTimeout(scanOutlook, 600)
+        setTimeout(scanOutlook, 1800)
+        setTimeout(scanOutlook, 3500)
+    }
+
+    scheduleOutlookScan()
 
     const _origPushStateOL = history.pushState.bind(history)
     history.pushState = function (...args) {
         _origPushStateOL(...args)
-        // URL changed — new email opened, reset seen for this URL
-        setTimeout(scanOutlook, 1500)
+        scheduleOutlookScan()
     }
-    window.addEventListener('popstate', () => setTimeout(scanOutlook, 1500))
+    window.addEventListener('popstate', scheduleOutlookScan)
 
-    const outlookObserver = new MutationObserver(() => {
-        const body = findOutlookBody()
-        if (body) processOutlookBody(body)
-    })
+    const outlookObserver = new MutationObserver(scanOutlook)
     outlookObserver.observe(document.body, { childList: true, subtree: true })
 }
 
