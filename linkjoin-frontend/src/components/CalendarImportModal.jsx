@@ -290,8 +290,9 @@ export default function CalendarImportModal({ provider = 'google', existingLinks
       await handleMicrosoftToken(token)
     } catch (err) {
       const code = err?.errorCode || err?.message || String(err)
+      console.error('[MSAL] acquireTokenPopup error:', code, err)
       if (/user_cancelled|popup_window_error|empty_window_error/i.test(code)) { onClose(); return }
-      setErrorMsg('Authorization failed. Please try again.')
+      setErrorMsg(`Authorization failed (${code}). Please try again.`)
       setStatus('error')
     }
   }

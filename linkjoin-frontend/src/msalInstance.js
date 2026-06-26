@@ -10,6 +10,11 @@ export const msalInstance = new PublicClientApplication({
     redirectUri: MS_REDIRECT_URI,
   },
   cache: { cacheLocation: 'sessionStorage' },
+  system: {
+    // Open popup directly to the auth URL instead of blank→navigate,
+    // which Chrome blocks in certain security contexts.
+    navigatePopups: false,
+  },
 })
 
 // Initialize immediately — when running inside the MSAL popup callback window,
