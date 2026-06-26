@@ -166,7 +166,7 @@ async def markdown_to_html(body: dict, user: dict = Depends(get_confirmed_user))
 
 
 @router.delete("/me")
-async def delete_account(user: dict = Depends(get_confirmed_user)):
+async def delete_account(user: dict = Depends(get_current_user)):
     email = user["username"]
     await motor_db.links.delete_many({"username": email})
     await motor_db.bookmarks.delete_many({"username": email})
