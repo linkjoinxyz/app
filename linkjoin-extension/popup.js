@@ -167,22 +167,22 @@ async function handleScan() {
     let found = null
     try {
         const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
-        // allFrames: true so we also search Outlook/email iframes for the body text
         const results = await chrome.scripting.executeScript({
-            target: { tabId: tab.id, allFrames: true },
+            target: { tabId: tab.id },
             func: () => {
                 const RE = /https?:\/\/(?:[a-z0-9-]+\.)?(?:zoom\.us\/j\/|meet\.google\.com\/[a-z-]{3,}|teams\.microsoft\.com\/l\/meetup-join\/|webex\.com\/meet\/|gotomeeting\.com\/join\/)[^\s"'<>]*/i
-                for (const a of document.querySelectorAll('a[href]')) {
-                    if (RE.test(a.href)) return { link: a.href, title: document.title, text: document.body.innerText.slice(0, 4000) }
+                const title = document.title
+                // Prefer the reading-pane area if on Outlook
+                const scope = document.querySelector('[role="main"]') || document.body
+                for (const a of scope.querySelectorAll('a[href]')) {
+                    if (RE.test(a.href)) return { link: a.href, title, text: scope.innerText.slice(0, 8000) }
                 }
-                const m = document.body.innerText.match(RE)
-                if (m) return { link: m[0], title: document.title, text: document.body.innerText.slice(0, 4000) }
+                const m = scope.innerText.match(RE)
+                if (m) return { link: m[0].startsWith('http') ? m[0] : 'https://' + m[0], title, text: scope.innerText.slice(0, 8000) }
                 return null
             },
         })
-        // Prefer the frame with a link AND body text; fall back to any frame with a link
-        const withText = results?.find(r => r.result?.text?.length > 200)
-        found = withText?.result ?? results?.find(r => r.result)?.result
+        found = results?.[0]?.result
     } catch (e) {
         console.error('[LJ scan error]', e)
         renderScanError(`Could not scan this page: ${e?.message || e}`)

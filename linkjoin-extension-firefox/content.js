@@ -210,7 +210,7 @@ if (IS_OUTLOOK) {
                 if (doc.body.textContent.trim()) return doc.body
             } catch {}
         }
-        return null
+        return document.querySelector('[role="main"]') || document.body
     }
 
     async function processOutlookBody(bodyEl) {

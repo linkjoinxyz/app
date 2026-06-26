@@ -216,12 +216,12 @@ if (IS_OUTLOOK) {
     ]
 
     function findOutlookBody() {
-        // Try main document first
+        // Try specific reading-pane selectors first
         for (const sel of OUTLOOK_SELECTORS) {
             const el = document.querySelector(sel)
             if (el) return el
         }
-        // Outlook renders the email body inside a same-origin iframe — search those too
+        // Same-origin iframes (classic OWA)
         for (const iframe of document.querySelectorAll('iframe')) {
             try {
                 const doc = iframe.contentDocument || iframe.contentWindow?.document
@@ -230,12 +230,11 @@ if (IS_OUTLOOK) {
                     const el = doc.querySelector(sel)
                     if (el) return el
                 }
-                // If no specific selector matched, use the entire iframe body
-                // (classic OWA renders the raw email HTML as the iframe document)
                 if (doc.body.textContent.trim()) return doc.body
             } catch {}
         }
-        return null
+        // Fallback: scan the entire reading pane / main content area
+        return document.querySelector('[role="main"]') || document.body
     }
 
     async function processOutlookBody(bodyEl) {
