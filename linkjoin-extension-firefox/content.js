@@ -215,16 +215,15 @@ if (IS_OUTLOOK) {
 
     async function processOutlookBody(bodyEl) {
         if (!chrome?.storage?.local) return
+        if (document.getElementById('lj-overlay') || document.getElementById('lj-analyzing')) return
+
         const { ljAutoDetect = true } = await chrome.storage.local.get('ljAutoDetect')
         if (!ljAutoDetect) return
 
-        const msgId = 'ol:' + location.pathname + location.search
-        if (seen.has(msgId)) return
+        if (document.getElementById('lj-overlay') || document.getElementById('lj-analyzing')) return
 
         const detectedLink = findMeetingLink(bodyEl)
         if (!detectedLink) return
-
-        seen.add(msgId)
 
         const { ljDismissed = [] } = await chrome.storage.local.get('ljDismissed')
         if (ljDismissed.some(url => urlsMatch(url, detectedLink))) return
@@ -232,29 +231,47 @@ if (IS_OUTLOOK) {
         const linksData = await chrome.runtime.sendMessage({ type: 'getLinks' })
         if (linksData?.links?.some(l => l.link && urlsMatch(l.link, detectedLink))) return
 
+        if (document.getElementById('lj-overlay') || document.getElementById('lj-analyzing')) return
+
         const subject = getOutlookSubject()
         const text = bodyEl.textContent || ''
         showAnalyzing()
 
         const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone
+
+        let done = false
+        const fallback = setTimeout(() => {
+            if (!done) { done = true; removeAnalyzing(); showOverlay({}, detectedLink) }
+        }, 12000)
+
         chrome.runtime.sendMessage(
             { type: 'extractMeeting', subject, body: text, timezone },
             (result) => {
-                removeAnalyzing()
-                showOverlay(result || {}, detectedLink)
+                if (!done) {
+                    done = true
+                    clearTimeout(fallback)
+                    removeAnalyzing()
+                    showOverlay(result || {}, detectedLink)
+                }
             }
         )
     }
 
+    let _scanTimer = null
     function scanOutlook() {
-        const body = findOutlookBody()
-        if (body) processOutlookBody(body)
+        if (_scanTimer) return
+        _scanTimer = setTimeout(() => {
+            _scanTimer = null
+            const body = findOutlookBody()
+            if (body) processOutlookBody(body)
+        }, 150)
     }
 
     function scheduleOutlookScan() {
-        setTimeout(scanOutlook, 600)
-        setTimeout(scanOutlook, 1800)
-        setTimeout(scanOutlook, 3500)
+        setTimeout(scanOutlook, 700)
+        setTimeout(scanOutlook, 2000)
+        setTimeout(scanOutlook, 4000)
+        setTimeout(scanOutlook, 8000)
     }
 
     scheduleOutlookScan()
@@ -262,9 +279,10 @@ if (IS_OUTLOOK) {
     const _origPushStateOL = history.pushState.bind(history)
     history.pushState = function (...args) {
         _origPushStateOL(...args)
+        removeOverlay()
         scheduleOutlookScan()
     }
-    window.addEventListener('popstate', scheduleOutlookScan)
+    window.addEventListener('popstate', () => { removeOverlay(); scheduleOutlookScan() })
 
     const outlookObserver = new MutationObserver(scanOutlook)
     outlookObserver.observe(document.body, { childList: true, subtree: true })

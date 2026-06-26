@@ -216,12 +216,10 @@ if (IS_OUTLOOK) {
     ]
 
     function findOutlookBody() {
-        // Try specific reading-pane selectors first
         for (const sel of OUTLOOK_SELECTORS) {
             const el = document.querySelector(sel)
             if (el) return el
         }
-        // Same-origin iframes (classic OWA)
         for (const iframe of document.querySelectorAll('iframe')) {
             try {
                 const doc = iframe.contentDocument || iframe.contentWindow?.document
@@ -233,22 +231,22 @@ if (IS_OUTLOOK) {
                 if (doc.body.textContent.trim()) return doc.body
             } catch {}
         }
-        // Fallback: scan the entire reading pane / main content area
         return document.querySelector('[role="main"]') || document.body
     }
 
     async function processOutlookBody(bodyEl) {
         if (!chrome?.storage?.local) return
+        // Use DOM presence as the guard — no `seen` set so refresh/back-nav always retries
+        if (document.getElementById('lj-overlay') || document.getElementById('lj-analyzing')) return
+
         const { ljAutoDetect = true } = await chrome.storage.local.get('ljAutoDetect')
         if (!ljAutoDetect) return
 
-        const msgId = 'ol:' + location.pathname + location.search
-        if (seen.has(msgId)) return
+        // Re-check after await in case another call beat us here
+        if (document.getElementById('lj-overlay') || document.getElementById('lj-analyzing')) return
 
         const detectedLink = findMeetingLink(bodyEl)
         if (!detectedLink) return
-
-        seen.add(msgId)
 
         const { ljDismissed = [] } = await chrome.storage.local.get('ljDismissed')
         if (ljDismissed.some(url => urlsMatch(url, detectedLink))) return
@@ -256,30 +254,49 @@ if (IS_OUTLOOK) {
         const linksData = await chrome.runtime.sendMessage({ type: 'getLinks' })
         if (linksData?.links?.some(l => l.link && urlsMatch(l.link, detectedLink))) return
 
+        if (document.getElementById('lj-overlay') || document.getElementById('lj-analyzing')) return
+
         const subject = getOutlookSubject()
         const text = bodyEl.textContent || ''
         showAnalyzing()
 
         const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone
+
+        // Fallback: show overlay with empty prefill if AI doesn't respond in 12s
+        let done = false
+        const fallback = setTimeout(() => {
+            if (!done) { done = true; removeAnalyzing(); showOverlay({}, detectedLink) }
+        }, 12000)
+
         chrome.runtime.sendMessage(
             { type: 'extractMeeting', subject, body: text, timezone },
             (result) => {
-                removeAnalyzing()
-                showOverlay(result || {}, detectedLink)
+                if (!done) {
+                    done = true
+                    clearTimeout(fallback)
+                    removeAnalyzing()
+                    showOverlay(result || {}, detectedLink)
+                }
             }
         )
     }
 
+    // Throttled so the MutationObserver doesn't spam processOutlookBody
+    let _scanTimer = null
     function scanOutlook() {
-        const body = findOutlookBody()
-        if (body) processOutlookBody(body)
+        if (_scanTimer) return
+        _scanTimer = setTimeout(() => {
+            _scanTimer = null
+            const body = findOutlookBody()
+            if (body) processOutlookBody(body)
+        }, 150)
     }
 
-    // Multiple attempts to catch the email body as Outlook's iframe loads
     function scheduleOutlookScan() {
-        setTimeout(scanOutlook, 600)
-        setTimeout(scanOutlook, 1800)
-        setTimeout(scanOutlook, 3500)
+        setTimeout(scanOutlook, 700)
+        setTimeout(scanOutlook, 2000)
+        setTimeout(scanOutlook, 4000)
+        setTimeout(scanOutlook, 8000)
     }
 
     scheduleOutlookScan()
@@ -287,9 +304,10 @@ if (IS_OUTLOOK) {
     const _origPushStateOL = history.pushState.bind(history)
     history.pushState = function (...args) {
         _origPushStateOL(...args)
+        removeOverlay()      // clear overlay when navigating to a different email
         scheduleOutlookScan()
     }
-    window.addEventListener('popstate', scheduleOutlookScan)
+    window.addEventListener('popstate', () => { removeOverlay(); scheduleOutlookScan() })
 
     const outlookObserver = new MutationObserver(scanOutlook)
     outlookObserver.observe(document.body, { childList: true, subtree: true })
