@@ -7,7 +7,7 @@
   "background": {
     "service_worker": "background.js"
   },
-  "permissions": ["alarms", "storage", "windows", "offscreen", "contextMenus", "notifications"],
+  "permissions": ["alarms", "storage", "windows", "offscreen", "contextMenus", "notifications", "scripting", "activeTab"],
   "content_scripts": [
     {
       "matches": ["https://mail.google.com/*"],
