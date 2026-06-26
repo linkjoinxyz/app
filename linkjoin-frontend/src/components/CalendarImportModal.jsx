@@ -14,19 +14,24 @@ function clearMsalInteractionLock() {
   }
 }
 
-async function acquireMicrosoftToken() {
+async function tryMicrosoftTokenSilent() {
   const { msalInstance, msalReady } = await import('../msalInstance.js')
   try { await msalReady } catch {}
   clearMsalInteractionLock()
   const scopes = ['Calendars.Read']
   const accounts = msalInstance.getAllAccounts()
   if (accounts.length > 0) {
-    try {
-      const result = await msalInstance.acquireTokenSilent({ scopes, account: accounts[0] })
-      return result.accessToken
-    } catch {}
+    const result = await msalInstance.acquireTokenSilent({ scopes, account: accounts[0] })
+    return result.accessToken
   }
-  const result = await msalInstance.acquireTokenPopup({ scopes })
+  throw new Error('no_cached_account')
+}
+
+async function acquireMicrosoftTokenPopup() {
+  const { msalInstance, msalReady } = await import('../msalInstance.js')
+  try { await msalReady } catch {}
+  clearMsalInteractionLock()
+  const result = await msalInstance.acquireTokenPopup({ scopes: ['Calendars.Read'] })
   return result.accessToken
 }
 
@@ -270,12 +275,24 @@ export default function CalendarImportModal({ provider = 'google', existingLinks
 
   async function startMicrosoftAuth() {
     try {
-      const token = await acquireMicrosoftToken()
+      const token = await tryMicrosoftTokenSilent()
+      await handleMicrosoftToken(token)
+    } catch {
+      // Silent failed — need a popup, which requires a user click
+      setStatus('needs-auth')
+    }
+  }
+
+  async function connectMicrosoft() {
+    setStatus('loading')
+    try {
+      const token = await acquireMicrosoftTokenPopup()
       await handleMicrosoftToken(token)
     } catch (err) {
       const code = err?.errorCode || err?.message || String(err)
+      console.error('[MSAL] acquireTokenPopup error:', code, err)
       if (/user_cancelled|popup_window_error|empty_window_error/i.test(code)) { onClose(); return }
-      setErrorMsg('Authorization failed. Please try again.')
+      setErrorMsg(`Authorization failed (${code}). Please try again.`)
       setStatus('error')
     }
   }
@@ -375,7 +392,7 @@ export default function CalendarImportModal({ provider = 'google', existingLinks
         startGoogleAuth()
       }
     } else {
-      startMicrosoftAuth()
+      connectMicrosoft()
     }
   }
 
@@ -394,6 +411,12 @@ export default function CalendarImportModal({ provider = 'google', existingLinks
           <div className="ci-state">
             <div className="ci-spinner" />
             <p>{spinnerLabel}</p>
+          </div>
+        )}
+
+        {status === 'needs-auth' && (
+          <div className="ci-state">
+            <button className="ci-retry" onClick={connectMicrosoft}>Connect to Outlook</button>
           </div>
         )}
 
