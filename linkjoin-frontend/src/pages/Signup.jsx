@@ -43,7 +43,7 @@ export default function Signup() {
   const [countryCodes, setCountryCodes] = useState({})
   const [loading, setLoading] = useState(false)
   const [googleReady, setGoogleReady] = useState(false)
-  const hiddenGoogleRef = useRef(null)
+  const tokenClientRef = useRef(null)
 
   const offset = new Date().getTimezoneOffset() / 60
   const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone
@@ -66,34 +66,36 @@ export default function Signup() {
   useEffect(() => {
     let alive = true
 
-    async function handleGoogleResponse(response) {
-      if (!alive) return
-      setLoading(true)
-      setError('')
-      try {
-        const data = await authApi.googleRegister({ jwt: response.credential, offset, timezone })
-        if (data.access_token) {
-          login(data.access_token, data.email, data.confirmed ?? false)
-          navigate(redirect, { replace: true })
-        } else {
-          if (alive) { setError('google_signup_failed'); setLoading(false) }
-        }
-      } catch (e) {
-        if (!alive) return
-        const detail = e.body?.detail || 'google_signup_failed'
-        if (detail === 'email_in_use') {
-          navigate('/login?error=email_in_use')
-        } else {
-          setError(detail)
-          setLoading(false)
-        }
-      }
-    }
-
     function init() {
       if (!alive || !window.google) return
-      window.google.accounts.id.initialize({ client_id: GOOGLE_CLIENT_ID, callback: handleGoogleResponse })
-      window.google.accounts.id.renderButton(hiddenGoogleRef.current, { type: 'standard', theme: 'outline', size: 'large' })
+      tokenClientRef.current = window.google.accounts.oauth2.initTokenClient({
+        client_id: GOOGLE_CLIENT_ID,
+        scope: 'email profile openid',
+        callback: async (response) => {
+          if (!alive) return
+          if (response.error) { setError('google_signup_failed'); return }
+          setLoading(true)
+          setError('')
+          try {
+            const data = await authApi.googleTokenLogin(response.access_token)
+            if (data.access_token) {
+              login(data.access_token, data.email, data.confirmed ?? true)
+              navigate(redirect, { replace: true })
+            } else {
+              if (alive) { setError('google_signup_failed'); setLoading(false) }
+            }
+          } catch (e) {
+            if (!alive) return
+            const detail = e.body?.detail || 'google_signup_failed'
+            if (detail === 'email_in_use') {
+              navigate('/login?error=email_in_use')
+            } else {
+              setError(detail)
+              setLoading(false)
+            }
+          }
+        },
+      })
       if (alive) setGoogleReady(true)
     }
 
@@ -113,10 +115,8 @@ export default function Signup() {
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   function handleGoogleClick() {
-    if (!googleReady) return
-    const btn = hiddenGoogleRef.current?.querySelector('[role="button"]')
-    if (btn) btn.click()
-    else window.google.accounts.id.prompt()
+    if (!googleReady || !tokenClientRef.current) return
+    tokenClientRef.current.requestAccessToken({ prompt: 'select_account' })
   }
 
   async function handleSignup() {
@@ -170,7 +170,6 @@ export default function Signup() {
 
         {error && <div className="auth-error">{ERROR_MESSAGES[error] || error}</div>}
 
-        <div ref={hiddenGoogleRef} aria-hidden="true" style={{ position: 'fixed', top: '-9999px', left: '-9999px', opacity: 0, pointerEvents: 'none' }} />
         <button className="login-google-btn" onClick={handleGoogleClick} disabled={!googleReady}>
           <GoogleIcon />
           Continue with Google

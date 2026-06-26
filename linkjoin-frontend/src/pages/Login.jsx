@@ -44,7 +44,7 @@ export default function Login() {
   const [loading, setLoading] = useState(false)
   const [showReset, setShowReset] = useState(false)
   const [googleReady, setGoogleReady] = useState(false)
-  const hiddenGoogleRef = useRef(null)
+  const tokenClientRef = useRef(null)
 
   useEffect(() => {
     document.documentElement.id = 'login_html'
@@ -60,23 +60,25 @@ export default function Login() {
   useEffect(() => {
     let alive = true
 
-    async function handleGoogleResponse(response) {
-      if (!alive) return
-      setLoading(true)
-      setError('')
-      try {
-        const data = await authApi.googleLogin(response.credential, true)
-        login(data.access_token, data.email, data.confirmed ?? true)
-        navigate(redirect, { replace: true })
-      } catch (e) {
-        if (alive) { setError(e.body?.detail || 'google_login_failed'); setLoading(false) }
-      }
-    }
-
     function init() {
       if (!alive || !window.google) return
-      window.google.accounts.id.initialize({ client_id: GOOGLE_CLIENT_ID, callback: handleGoogleResponse })
-      window.google.accounts.id.renderButton(hiddenGoogleRef.current, { type: 'standard', theme: 'outline', size: 'large' })
+      tokenClientRef.current = window.google.accounts.oauth2.initTokenClient({
+        client_id: GOOGLE_CLIENT_ID,
+        scope: 'email profile openid',
+        callback: async (response) => {
+          if (!alive) return
+          if (response.error) { setError('google_login_failed'); return }
+          setLoading(true)
+          setError('')
+          try {
+            const data = await authApi.googleTokenLogin(response.access_token)
+            login(data.access_token, data.email, data.confirmed ?? true)
+            navigate(redirect, { replace: true })
+          } catch (e) {
+            if (alive) { setError(e.body?.detail || 'google_login_failed'); setLoading(false) }
+          }
+        },
+      })
       if (alive) setGoogleReady(true)
     }
 
@@ -96,10 +98,8 @@ export default function Login() {
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   function handleGoogleClick() {
-    if (!googleReady) return
-    const btn = hiddenGoogleRef.current?.querySelector('[role="button"]')
-    if (btn) btn.click()
-    else window.google.accounts.id.prompt()
+    if (!googleReady || !tokenClientRef.current) return
+    tokenClientRef.current.requestAccessToken({ prompt: 'select_account' })
   }
 
   async function handleLogin() {
@@ -136,7 +136,6 @@ export default function Login() {
 
         {error && <div className="auth-error">{ERROR_MESSAGES[error] || error}</div>}
 
-        <div ref={hiddenGoogleRef} aria-hidden="true" style={{ position: 'fixed', top: '-9999px', left: '-9999px', opacity: 0, pointerEvents: 'none' }} />
         <button className="login-google-btn" onClick={handleGoogleClick} disabled={!googleReady}>
           <GoogleIcon />
           Continue with Google

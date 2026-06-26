@@ -91,7 +91,7 @@ export default function AuthPage2({ defaultTab = 'login' }) {
   const [loading, setLoading] = useState(false)
   const [googleReady, setGoogleReady] = useState(false)
 
-  const hiddenGoogleRef = useRef(null)
+  const tokenClientRef = useRef(null)
   const tabRef = useRef(tab)
 
   const offset = new Date().getTimezoneOffset() / 60
@@ -107,32 +107,28 @@ export default function AuthPage2({ defaultTab = 'login' }) {
   useEffect(() => {
     let alive = true
 
-    async function handleGoogleResponse(response) {
-      if (!alive) return
-      setLoading(true)
-      setError('')
-      try {
-        let data
-        if (tabRef.current === 'login') {
-          data = await authApi.googleLogin(response.credential, true)
-        } else {
-          data = await authApi.googleRegister({ jwt: response.credential, offset, timezone })
-          if (!data?.access_token) throw { body: { detail: 'google_signup_failed' } }
-        }
-        login(data.access_token, data.email, data.confirmed ?? true)
-        navigate(redirect, { replace: true })
-      } catch (e) {
-        if (!alive) return
-        const detail = e.body?.detail || (tabRef.current === 'login' ? 'google_login_failed' : 'google_signup_failed')
-        setError(detail)
-        setLoading(false)
-      }
-    }
-
     function init() {
       if (!alive || !window.google) return
-      window.google.accounts.id.initialize({ client_id: GOOGLE_CLIENT_ID, callback: handleGoogleResponse })
-      window.google.accounts.id.renderButton(hiddenGoogleRef.current, { type: 'standard', theme: 'outline', size: 'large' })
+      tokenClientRef.current = window.google.accounts.oauth2.initTokenClient({
+        client_id: GOOGLE_CLIENT_ID,
+        scope: 'email profile openid',
+        callback: async (response) => {
+          if (!alive) return
+          if (response.error) { setError(tabRef.current === 'login' ? 'google_login_failed' : 'google_signup_failed'); return }
+          setLoading(true)
+          setError('')
+          try {
+            const data = await authApi.googleTokenLogin(response.access_token)
+            login(data.access_token, data.email, data.confirmed ?? true)
+            navigate(redirect, { replace: true })
+          } catch (e) {
+            if (!alive) return
+            const detail = e.body?.detail || (tabRef.current === 'login' ? 'google_login_failed' : 'google_signup_failed')
+            setError(detail)
+            setLoading(false)
+          }
+        },
+      })
       if (alive) setGoogleReady(true)
     }
 
@@ -152,10 +148,8 @@ export default function AuthPage2({ defaultTab = 'login' }) {
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   function handleGoogleClick() {
-    if (!googleReady) return
-    const btn = hiddenGoogleRef.current?.querySelector('[role="button"]')
-    if (btn) btn.click()
-    else window.google.accounts.id.prompt()
+    if (!googleReady || !tokenClientRef.current) return
+    tokenClientRef.current.requestAccessToken({ prompt: 'select_account' })
   }
 
   function switchTab(next) {
@@ -214,8 +208,6 @@ export default function AuthPage2({ defaultTab = 'login' }) {
 
         <div className="ap-form-outer">
           <div className="ap-form-wrap">
-            <div ref={hiddenGoogleRef} aria-hidden="true" style={{ position: 'fixed', top: '-9999px', left: '-9999px', opacity: 0, pointerEvents: 'none' }} />
-
             {/* Animated heading */}
             <div className="ap-heading-wrap">
               <h1
