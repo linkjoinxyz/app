@@ -113,6 +113,12 @@ async def set_show_calendar(body: dict, user: dict = Depends(get_confirmed_user)
     return {"message": "Updated"}
 
 
+@router.patch("/popup-check")
+async def popup_check(user: dict = Depends(get_confirmed_user)):
+    await motor_db.login.update_one({"username": user["username"]}, {"$set": {"popup_check_done": True}})
+    return {"message": "Updated"}
+
+
 @router.patch("/tutorial")
 async def tutorial(body: TutorialRequest, user: dict = Depends(get_confirmed_user)):
     await motor_db.login.update_one({"username": user["username"]}, {"$set": {"tutorial": body.step}})
