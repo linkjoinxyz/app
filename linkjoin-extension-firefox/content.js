@@ -81,10 +81,13 @@ const REMINDER_OPTIONS = [
     { value: '60',    label: '1 hour before' },
 ]
 
+const IS_GMAIL = location.hostname === 'mail.google.com'
+const IS_OUTLOOK = /^outlook\.(live|office)\.com$/.test(location.hostname)
+
 const seen = new Set()
 let overlayEl = null
 
-// --- Gmail DOM watcher ---
+// --- Meeting link scanner (shared) ---
 
 function findMeetingLink(bodyEl) {
     for (const a of bodyEl.querySelectorAll('a[href]')) {
@@ -101,6 +104,15 @@ function findMeetingLink(bodyEl) {
 
 function getEmailSubject() {
     return document.querySelector('h2.hP')?.textContent?.trim() || ''
+}
+
+function getOutlookSubject() {
+    const pane = document.querySelector('[role="main"]')
+    return (
+        pane?.querySelector('[aria-label="Message subject"]')?.textContent?.trim() ||
+        pane?.querySelector('h1')?.textContent?.trim() ||
+        ''
+    )
 }
 
 function urlsMatch(a, b) {
@@ -143,41 +155,106 @@ async function processEmailBody(bodyEl) {
     )
 }
 
-const observer = new MutationObserver((mutations) => {
-    for (const mutation of mutations) {
-        // Case 1: a new .a3s.aiL node was added to the DOM
-        for (const node of mutation.addedNodes) {
-            if (node.nodeType !== 1) continue
-            const bodies = node.matches?.('.a3s.aiL')
-                ? [node]
-                : [...node.querySelectorAll('.a3s.aiL')]
-            for (const body of bodies) {
-                processEmailBody(body)
+if (IS_GMAIL) {
+    const observer = new MutationObserver((mutations) => {
+        for (const mutation of mutations) {
+            for (const node of mutation.addedNodes) {
+                if (node.nodeType !== 1) continue
+                const bodies = node.matches?.('.a3s.aiL')
+                    ? [node]
+                    : [...node.querySelectorAll('.a3s.aiL')]
+                for (const body of bodies) processEmailBody(body)
             }
+            const existing = mutation.target.closest?.('.a3s.aiL')
+            if (existing) processEmailBody(existing)
         }
-        // Case 2: content was injected into an existing .a3s.aiL container
-        const existing = mutation.target.closest?.('.a3s.aiL')
-        if (existing) processEmailBody(existing)
+    })
+    observer.observe(document.body, { childList: true, subtree: true })
+
+    function scanExisting() {
+        document.querySelectorAll('.a3s.aiL').forEach(processEmailBody)
     }
-})
 
-observer.observe(document.body, { childList: true, subtree: true })
-
-function scanExisting() {
-    document.querySelectorAll('.a3s.aiL').forEach(processEmailBody)
-}
-
-// Catch emails already in the DOM on load
-setTimeout(scanExisting, 1000)
-
-// Catch SPA navigation — Gmail uses both pushState and hash routing (#inbox/...)
-const _origPushState = history.pushState.bind(history)
-history.pushState = function (...args) {
-    _origPushState(...args)
     setTimeout(scanExisting, 1000)
+
+    const _origPushState = history.pushState.bind(history)
+    history.pushState = function (...args) {
+        _origPushState(...args)
+        setTimeout(scanExisting, 1000)
+    }
+    window.addEventListener('popstate', () => setTimeout(scanExisting, 1000))
+    window.addEventListener('hashchange', () => setTimeout(scanExisting, 1000))
 }
-window.addEventListener('popstate', () => setTimeout(scanExisting, 1000))
-window.addEventListener('hashchange', () => setTimeout(scanExisting, 1000))
+
+// --- Outlook DOM watcher ---
+
+if (IS_OUTLOOK) {
+    const OUTLOOK_SELECTORS = [
+        '[aria-label="Message body"]',
+        'div[role="document"]',
+    ]
+
+    function findOutlookBody() {
+        for (const sel of OUTLOOK_SELECTORS) {
+            const el = document.querySelector(sel)
+            if (el) return el
+        }
+        return null
+    }
+
+    async function processOutlookBody(bodyEl) {
+        if (!chrome?.storage?.local) return
+        const { ljAutoDetect = true } = await chrome.storage.local.get('ljAutoDetect')
+        if (!ljAutoDetect) return
+
+        const msgId = 'ol:' + location.pathname + location.search
+        if (seen.has(msgId)) return
+
+        const detectedLink = findMeetingLink(bodyEl)
+        if (!detectedLink) return
+
+        seen.add(msgId)
+
+        const { ljDismissed = [] } = await chrome.storage.local.get('ljDismissed')
+        if (ljDismissed.some(url => urlsMatch(url, detectedLink))) return
+
+        const linksData = await chrome.runtime.sendMessage({ type: 'getLinks' })
+        if (linksData?.links?.some(l => l.link && urlsMatch(l.link, detectedLink))) return
+
+        const subject = getOutlookSubject()
+        const text = bodyEl.textContent || ''
+        showAnalyzing()
+
+        const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone
+        chrome.runtime.sendMessage(
+            { type: 'extractMeeting', subject, body: text, timezone },
+            (result) => {
+                removeAnalyzing()
+                showOverlay(result || {}, detectedLink)
+            }
+        )
+    }
+
+    function scanOutlook() {
+        const body = findOutlookBody()
+        if (body) processOutlookBody(body)
+    }
+
+    setTimeout(scanOutlook, 1500)
+
+    const _origPushStateOL = history.pushState.bind(history)
+    history.pushState = function (...args) {
+        _origPushStateOL(...args)
+        setTimeout(scanOutlook, 1500)
+    }
+    window.addEventListener('popstate', () => setTimeout(scanOutlook, 1500))
+
+    const outlookObserver = new MutationObserver(() => {
+        const body = findOutlookBody()
+        if (body) processOutlookBody(body)
+    })
+    outlookObserver.observe(document.body, { childList: true, subtree: true })
+}
 
 // --- Analyzing badge ---
 
