@@ -113,6 +113,12 @@ async def set_show_calendar(body: dict, user: dict = Depends(get_confirmed_user)
     return {"message": "Updated"}
 
 
+@router.patch("/popup-check")
+async def popup_check(user: dict = Depends(get_current_user)):
+    await motor_db.login.update_one({"username": user["username"]}, {"$set": {"popup_check_done": True}})
+    return {"message": "Updated"}
+
+
 @router.patch("/tutorial")
 async def tutorial(body: TutorialRequest, user: dict = Depends(get_confirmed_user)):
     await motor_db.login.update_one({"username": user["username"]}, {"$set": {"tutorial": body.step}})
@@ -143,7 +149,7 @@ async def save_note(body: NoteRequest, user: dict = Depends(get_confirmed_user))
 
 
 @router.patch("/whats-new-seen")
-async def mark_whats_new_seen(user: dict = Depends(get_confirmed_user)):
+async def mark_whats_new_seen(user: dict = Depends(get_current_user)):
     await motor_db.login.update_one(
         {"username": user["username"]},
         {"$set": {"whats_new_seen": "v2"}},
@@ -160,7 +166,7 @@ async def markdown_to_html(body: dict, user: dict = Depends(get_confirmed_user))
 
 
 @router.delete("/me")
-async def delete_account(user: dict = Depends(get_confirmed_user)):
+async def delete_account(user: dict = Depends(get_current_user)):
     email = user["username"]
     await motor_db.links.delete_many({"username": email})
     await motor_db.bookmarks.delete_many({"username": email})

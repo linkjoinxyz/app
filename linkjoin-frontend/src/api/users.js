@@ -11,6 +11,7 @@ export const usersApi = {
   setAutoDelete: (enabled) => apiPatch('/users/auto-delete', { enabled }),
   setVacationMode: (enabled) => apiPatch('/users/vacation-mode', { enabled }),
   setShowCalendar: (enabled) => apiPatch('/users/show-calendar', { enabled }),
+  setPopupCheckDone: () => apiPatch('/users/popup-check', {}),
   setTutorial: (step) => apiPatch('/users/tutorial', { step }),
   setTutorialWidget: (finished) => apiPatch('/users/tutorial-widget', { finished }),
   getNotes: () => apiGet('/users/notes'),

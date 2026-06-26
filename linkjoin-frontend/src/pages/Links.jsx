@@ -197,6 +197,7 @@ export default function Links() {
   const [tzMismatch, setTzMismatch] = useState(null) // { from, to, newOffset } | null
   const [showWhatsNew, setShowWhatsNew] = useState(false)
   const [modifiedNames, setModifiedNames] = useState([])
+  const [popupBanner, setPopupBanner] = useState(null) // null | 'checking' | 'blocked'
 
   useEffect(() => {
     document.documentElement.id = 'links_html'
@@ -204,13 +205,36 @@ export default function Links() {
   }, [])
 
   useEffect(() => {
-    usersApi.me().then(u => { setUser(u); if (u && !u.whats_new_seen) setShowWhatsNew(true) }).catch(() => {})
+    usersApi.me().then(u => {
+      setUser(u)
+      if (u && !u.whats_new_seen) setShowWhatsNew(true)
+      if (u && !u.popup_check_done && window.innerWidth > 768) runPopupCheck()
+    }).catch(() => {})
     if (confirmed) syncTimezone()
     setFetchError(false)
     linksApi.getAll().then(data => {
       applyLinksData(data)
     }).catch(() => setFetchError(true)).finally(() => setLoading(false))
   }, [])
+
+  async function runPopupCheck() {
+    setPopupBanner('checking')
+    await new Promise(r => setTimeout(r, 5000))
+    const win = window.open('', '_blank', 'width=1,height=1')
+    if (win) {
+      win.close()
+      setPopupBanner(null)
+    } else {
+      setPopupBanner('blocked')
+      return
+    }
+    try { await usersApi.setPopupCheckDone() } catch {}
+  }
+
+  async function dismissPopupBanner() {
+    setPopupBanner(null)
+    try { await usersApi.setPopupCheckDone() } catch {}
+  }
 
   async function syncTimezone() {
     const tz = Intl.DateTimeFormat().resolvedOptions().timeZone
@@ -358,6 +382,17 @@ export default function Links() {
             {resendState === 'sent' ? 'Sent!' : resendState === 'sending' ? 'Sending…' : 'Resend email'}
           </button>
           <button className="verify-banner-close" onClick={() => setVerifyWarning(false)}>✕</button>
+        </div>
+      )}
+      {popupBanner === 'checking' && (
+        <div className="verify-banner">
+          <span>Checking pop-up permissions — a blank window will appear briefly, then close on its own.</span>
+        </div>
+      )}
+      {popupBanner === 'blocked' && (
+        <div className="verify-banner">
+          <span>Pop-ups are blocked. LinkJoin needs pop-ups to open your meetings automatically. Enable them in your browser settings, then refresh.</span>
+          <button className="verify-banner-close" onClick={dismissPopupBanner}>✕</button>
         </div>
       )}
       <Header

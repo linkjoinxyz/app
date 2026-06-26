@@ -53,7 +53,7 @@ export default function AuthModal({ mode: initialMode, onClose }) {
   const [showReset, setShowReset] = useState(false)
   const [googleReady, setGoogleReady] = useState(false)
   const modeRef = useRef(mode)
-  const hiddenGoogleRef = useRef(null)
+  const tokenClientRef = useRef(null)
   useEffect(() => { modeRef.current = mode }, [mode])
 
   const offset = (() => {
@@ -80,44 +80,32 @@ export default function AuthModal({ mode: initialMode, onClose }) {
   useEffect(() => {
     let alive = true
 
-    async function handleGoogle(response) {
-      if (!alive) return
-      setLoading(true)
-      setError('')
-      try {
-        if (modeRef.current === 'login') {
-          const data = await authApi.googleLogin(response.credential, true)
-          login(data.access_token, data.email)
-          navigate('/meetings', { replace: true })
-        } else {
-          const data = await authApi.googleRegister({ jwt: response.credential, offset, timezone })
-          if (data.access_token) {
-            login(data.access_token, data.email)
-            navigate('/meetings', { replace: true })
-          } else {
-            if (alive) { setError('google_signup_failed'); setLoading(false) }
-          }
-        }
-      } catch (e) {
-        if (!alive) return
-        const detail = e.body?.detail ?? (modeRef.current === 'login' ? 'google_login_failed' : 'google_signup_failed')
-        if (detail === 'email_in_use') {
-          setMode('login')
-          setEmail(e.body?.email ?? '')
-        } else {
-          setError(detail)
-        }
-        setLoading(false)
-      }
-    }
-
     function init() {
-      if (!alive || !window.google || !hiddenGoogleRef.current) return
-      window.google.accounts.id.initialize({ client_id: GOOGLE_CLIENT_ID, callback: handleGoogle })
-      // Render into a hidden off-screen container — globals.css corrupts SVGs globally,
-      // so we proxy clicks from our styled button to this hidden real button.
-      window.google.accounts.id.renderButton(hiddenGoogleRef.current, {
-        type: 'standard', theme: 'outline', size: 'large',
+      if (!alive || !window.google) return
+      tokenClientRef.current = window.google.accounts.oauth2.initTokenClient({
+        client_id: GOOGLE_CLIENT_ID,
+        scope: 'email profile openid',
+        callback: async (response) => {
+          if (!alive) return
+          if (response.error) { setError(modeRef.current === 'login' ? 'google_login_failed' : 'google_signup_failed'); return }
+          setLoading(true)
+          setError('')
+          try {
+            const data = await authApi.googleTokenLogin(response.access_token)
+            login(data.access_token, data.email, data.confirmed ?? true)
+            navigate('/meetings', { replace: true })
+          } catch (e) {
+            if (!alive) return
+            const detail = e.body?.detail ?? (modeRef.current === 'login' ? 'google_login_failed' : 'google_signup_failed')
+            if (detail === 'email_in_use') {
+              setMode('login')
+              setEmail(e.body?.email ?? '')
+            } else {
+              setError(detail)
+            }
+            setLoading(false)
+          }
+        },
       })
       if (alive) setGoogleReady(true)
     }
@@ -138,10 +126,8 @@ export default function AuthModal({ mode: initialMode, onClose }) {
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   function handleGoogleClick() {
-    if (!googleReady) return
-    const btn = hiddenGoogleRef.current?.querySelector('[role="button"]')
-    if (btn) btn.click()
-    else window.google.accounts.id.prompt()
+    if (!googleReady || !tokenClientRef.current) return
+    tokenClientRef.current.requestAccessToken({ prompt: 'select_account' })
   }
 
   function switchMode(m) {
@@ -235,8 +221,6 @@ export default function AuthModal({ mode: initialMode, onClose }) {
             {ERRORS[error] || error}
           </div>
         )}
-
-        <div ref={hiddenGoogleRef} aria-hidden="true" style={{ position: 'fixed', top: '-9999px', left: '-9999px', opacity: 0, pointerEvents: 'none' }} />
 
         <button
           className="auth-google-btn"
