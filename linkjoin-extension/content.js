@@ -143,37 +143,39 @@ function urlsMatch(a, b) {
 }
 
 async function processEmailBody(bodyEl) {
-    if (!chrome?.storage?.local) return
-    const { ljAutoDetect = true } = await chrome.storage.local.get('ljAutoDetect')
-    if (!ljAutoDetect) return
-    const msgContainer = bodyEl.closest('[data-message-id]')
-    const msgId = msgContainer?.dataset?.messageId
-    if (msgId && seen.has(msgId)) return
+    try {
+        if (!chrome?.storage?.local) return
+        const { ljAutoDetect = true } = await chrome.storage.local.get('ljAutoDetect')
+        if (!ljAutoDetect) return
+        const msgContainer = bodyEl.closest('[data-message-id]')
+        const msgId = msgContainer?.dataset?.messageId
+        if (msgId && seen.has(msgId)) return
 
-    const detectedLink = findMeetingLink(bodyEl)
-    if (!detectedLink) return
+        const detectedLink = findMeetingLink(bodyEl)
+        if (!detectedLink) return
 
-    if (msgId) seen.add(msgId)
+        if (msgId) seen.add(msgId)
 
-    const { ljDismissed = [] } = await chrome.storage.local.get('ljDismissed')
-    if (ljDismissed.some(url => urlsMatch(url, detectedLink))) return
+        const { ljDismissed = [] } = await chrome.storage.local.get('ljDismissed')
+        if (ljDismissed.some(url => urlsMatch(url, detectedLink))) return
 
-    const linksData = await chrome.runtime.sendMessage({ type: 'getLinks' })
-    if (linksData?.links?.some(l => l.link && urlsMatch(l.link, detectedLink))) return
+        const linksData = await chrome.runtime.sendMessage({ type: 'getLinks' })
+        if (linksData?.links?.some(l => l.link && urlsMatch(l.link, detectedLink))) return
 
-    const subject = getEmailSubject()
-    const text = bodyEl.textContent || ''
-    showAnalyzing()
+        const subject = getEmailSubject()
+        const text = bodyEl.textContent || ''
+        showAnalyzing()
 
-    const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone
+        const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone
 
-    chrome.runtime.sendMessage(
-        { type: 'extractMeeting', subject, body: text, timezone },
-        (result) => {
-            removeAnalyzing()
-            showOverlay(result || {}, detectedLink)
-        }
-    )
+        chrome.runtime.sendMessage(
+            { type: 'extractMeeting', subject, body: text, timezone },
+            (result) => {
+                removeAnalyzing()
+                showOverlay(result || {}, detectedLink)
+            }
+        )
+    } catch {}
 }
 
 if (IS_GMAIL) {
@@ -280,15 +282,17 @@ if (IS_OUTLOOK) {
         } catch {}
     }
 
-    // Trailing debounce — fires 200ms after the LAST mutation, not the first
+    // Leading-edge throttle: fire once per 300ms max; ignore extra calls while one is pending.
+    // A trailing debounce breaks in React SPAs because mutations fire constantly and reset
+    // the timer indefinitely — the scan would never run.
     let _scanTimer = null
     function scanOutlook() {
-        clearTimeout(_scanTimer)
+        if (_scanTimer) return
         _scanTimer = setTimeout(() => {
             _scanTimer = null
             const body = findOutlookBody()
             if (body) processOutlookBody(body)
-        }, 200)
+        }, 300)
     }
 
     function scheduleOutlookScan() {
