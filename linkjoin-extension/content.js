@@ -101,7 +101,7 @@ const REMINDER_OPTIONS = [
 ]
 
 const IS_GMAIL = location.hostname === 'mail.google.com'
-const IS_OUTLOOK = /^outlook\.(live|office)\.com$/.test(location.hostname)
+const IS_OUTLOOK = /^outlook\.(live|office|office365)\.com$/.test(location.hostname)
 
 const seen = new Set()
 let overlayEl = null

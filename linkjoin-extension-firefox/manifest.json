@@ -15,7 +15,7 @@
   "permissions": ["alarms", "storage", "windows", "contextMenus", "notifications"],
   "content_scripts": [
     {
-      "matches": ["https://mail.google.com/*", "https://outlook.live.com/*", "https://outlook.office.com/*"],
+      "matches": ["https://mail.google.com/*", "https://outlook.live.com/*", "https://outlook.office.com/*", "https://outlook.office365.com/*"],
       "js": ["content.js"],
       "css": ["content.css"],
       "run_at": "document_idle"
@@ -32,7 +32,7 @@
       "run_at": "document_idle"
     }
   ],
-  "host_permissions": ["https://mail.google.com/*", "https://outlook.live.com/*", "https://outlook.office.com/*", "https://linkjoin.xyz/*", "http://localhost:5173/*", "http://localhost:8000/*"],
+  "host_permissions": ["https://mail.google.com/*", "https://outlook.live.com/*", "https://outlook.office.com/*", "https://outlook.office365.com/*", "https://linkjoin.xyz/*", "http://localhost:5173/*", "http://localhost:8000/*"],
   "action": {
     "default_popup": "popup.html",
     "default_icon": {
