@@ -211,6 +211,8 @@ if (IS_GMAIL) {
 
 // --- Outlook DOM watcher ---
 
+console.log('[LinkJoin] content script on:', location.hostname, '| gmail:', IS_GMAIL, '| outlook:', IS_OUTLOOK)
+
 if (IS_OUTLOOK) {
     const OUTLOOK_SELECTORS = [
         '[aria-label="Message body"]',
@@ -242,18 +244,26 @@ if (IS_OUTLOOK) {
             if (document.getElementById('lj-overlay') || document.getElementById('lj-analyzing')) return
 
             const { ljAutoDetect = true } = await chrome.storage.local.get('ljAutoDetect')
-            if (!ljAutoDetect) return
+            if (!ljAutoDetect) { console.log('[LinkJoin] auto-detect disabled'); return }
 
             if (document.getElementById('lj-overlay') || document.getElementById('lj-analyzing')) return
 
             const detectedLink = findMeetingLink(bodyEl)
             if (!detectedLink) return
 
+            console.log('[LinkJoin] detected link:', detectedLink)
+
             const { ljDismissed = [] } = await chrome.storage.local.get('ljDismissed')
-            if (ljDismissed.some(url => urlsMatch(url, detectedLink))) return
+            if (ljDismissed.some(url => urlsMatch(url, detectedLink))) {
+                console.log('[LinkJoin] link is dismissed, skipping')
+                return
+            }
 
             const linksData = await chrome.runtime.sendMessage({ type: 'getLinks' })
-            if (linksData?.links?.some(l => l.link && urlsMatch(l.link, detectedLink))) return
+            if (linksData?.links?.some(l => l.link && urlsMatch(l.link, detectedLink))) {
+                console.log('[LinkJoin] link already in account, skipping')
+                return
+            }
 
             if (document.getElementById('lj-overlay') || document.getElementById('lj-analyzing')) return
 
@@ -279,7 +289,9 @@ if (IS_OUTLOOK) {
                     }
                 }
             )
-        } catch {}
+        } catch (e) {
+            if (!String(e?.message).includes('Extension context')) console.warn('[LinkJoin]', e)
+        }
     }
 
     // Leading-edge throttle: fire once per 300ms max; ignore extra calls while one is pending.
