@@ -280,3 +280,24 @@ input:focus {
     text-align: center;
     padding: 18px 0;
 }
+
+.footer-actions {
+    padding: 8px 16px 12px;
+    display: flex;
+    justify-content: center;
+}
+
+.text-btn {
+    background: none;
+    border: none;
+    color: var(--muted);
+    font-size: 11px;
+    cursor: pointer;
+    padding: 4px 8px;
+    border-radius: 4px;
+    transition: color 0.15s;
+}
+
+.text-btn:hover {
+    color: var(--lightblue);
+}

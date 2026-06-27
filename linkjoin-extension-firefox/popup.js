@@ -138,11 +138,20 @@ async function renderDashboard() {
             <div class="section-label">Upcoming meetings</div>
             <div id="meetings-list"><p class="muted-msg">Loading...</p></div>
         </div>
+        <div class="footer-actions">
+            <button class="text-btn" id="reset-dismissed-btn">Reset dismissed</button>
+        </div>
     `
     document.getElementById('dashboard-btn').addEventListener('click', () => {
         chrome.tabs.create({ url: `${APP_URL}/links` })
     })
     document.getElementById('logout-btn').addEventListener('click', handleLogout)
+    document.getElementById('reset-dismissed-btn').addEventListener('click', () => {
+        const btn = document.getElementById('reset-dismissed-btn')
+        chrome.runtime.sendMessage({ type: 'resetDismissed' })
+        btn.textContent = 'Done!'
+        setTimeout(() => { if (btn.isConnected) btn.textContent = 'Reset dismissed' }, 1500)
+    })
 
     const data = await apiFetch('/links')
     const list = document.getElementById('meetings-list')

@@ -104,6 +104,7 @@ const IS_GMAIL = location.hostname === 'mail.google.com'
 const IS_OUTLOOK = /^outlook\.(live|office|office365)\.com$/.test(location.hostname)
 
 const seen = new Set()
+const sessionDismissed = new Set()
 let overlayEl = null
 
 // --- Meeting link scanner (shared) ---
@@ -156,8 +157,7 @@ async function processEmailBody(bodyEl) {
 
         if (msgId) seen.add(msgId)
 
-        const { ljDismissed = [] } = await chrome.storage.local.get('ljDismissed')
-        if (ljDismissed.some(url => urlsMatch(url, detectedLink))) return
+        if ([...sessionDismissed].some(url => urlsMatch(url, detectedLink))) return
 
         const linksData = await chrome.runtime.sendMessage({ type: 'getLinks' })
         if (linksData?.links?.some(l => l.link && urlsMatch(l.link, detectedLink))) return
@@ -253,8 +253,7 @@ if (IS_OUTLOOK) {
 
             console.log('[LinkJoin] detected link:', detectedLink)
 
-            const { ljDismissed = [] } = await chrome.storage.local.get('ljDismissed')
-            if (ljDismissed.some(url => urlsMatch(url, detectedLink))) {
+            if ([...sessionDismissed].some(url => urlsMatch(url, detectedLink))) {
                 console.log('[LinkJoin] link is dismissed, skipping')
                 return
             }
@@ -452,16 +451,8 @@ function wireOverlay(el, _data, detectedLink) {
         header.classList.remove('lj-dragging')
     })
 
-    el.querySelector('.lj-close').addEventListener('click', async () => {
-        if (detectedLink) {
-            try {
-                const { ljDismissed = [] } = await chrome.storage.local.get('ljDismissed')
-                if (!ljDismissed.some(url => urlsMatch(url, detectedLink))) {
-                    ljDismissed.push(detectedLink)
-                    await chrome.storage.local.set({ ljDismissed })
-                }
-            } catch {}
-        }
+    el.querySelector('.lj-close').addEventListener('click', () => {
+        if (detectedLink) sessionDismissed.add(detectedLink)
         removeOverlay()
     })
 
@@ -631,3 +622,12 @@ function showError(el, msg) {
 function escAttr(str) {
     return (str || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#x27;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 }
+
+chrome.runtime.onMessage.addListener((msg) => {
+    if (msg.type === 'resetDismissed') {
+        sessionDismissed.clear()
+        seen.clear()
+        removeOverlay()
+        if (IS_OUTLOOK) scanOutlook()
+    }
+})
