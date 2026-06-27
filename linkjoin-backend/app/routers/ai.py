@@ -42,7 +42,7 @@ async def extract_meeting(
         f'"days" (array of Sun/Mon/Tue/Wed/Thu/Fri/Sat — derive from explicit day names OR convert specific dates to day of week|null), '
         f'"time" (24h "H:MM" in the user\'s local timezone — convert from the email\'s timezone if one is specified|null), '
         f'"repeat": ONLY one of: "never" (ONLY for a single one-time event with zero recurrence), "week" (weekly), "month" (use for ALL monthly recurring events — whether the email says "monthly", "every month on the 3rd", "day 1 of each month", "2nd Tuesday", or any other monthly pattern; this is the default for anything monthly), "2 times" (every 2 weeks), "3 times" (every 3 weeks), "4 times" (every 4 weeks) — ignore occurrence counts like "11 times", '
-        f'"date": for "never" or "month", return the next upcoming occurrence as "MM/DD/YYYY" — this is required for "month" so the system can determine which week of the month; for weekly or multi-week repeats with no explicit start date return null.\n'
+        f'"date": return as "MM/DD/YYYY" in any of these cases: (1) a one-time "never" event — use the event date, (2) a "month" repeat — use the first/next occurrence so the system knows which week of the month, (3) ANY repeat type where the email states an explicit start date such as "starting June 29", "beginning July 1", "first meeting on March 5", etc. — always capture that. Return null only when no specific start date is mentioned for a recurring meeting.\n'
         f'Subject: {body.subject[:200]}\n'
         f'Body: {body.body[:800]}'
     )
