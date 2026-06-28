@@ -67,61 +67,17 @@ function formatNext(date) {
 
 // --- Render functions ---
 
-function renderLogin(errorMsg) {
+function renderLogin() {
+    chrome.tabs.create({ url: `${APP_URL}/login` })
     document.getElementById('app').innerHTML = `
         <div class="header">
             <img src="/icons/logo-rounded.png" class="logo-icon" alt="">
             <span class="logo-text">LinkJoin</span>
         </div>
         <div class="login-form">
-            <input type="email" id="login-email" placeholder="Email" autocomplete="email" />
-            <input type="password" id="login-password" placeholder="Password" autocomplete="current-password" />
-            <div id="login-error" class="error" style="display:${errorMsg ? 'block' : 'none'}">${errorMsg || ''}</div>
-            <button id="login-btn">Log in</button>
+            <p class="subtitle">Opening sign-in page&hellip;</p>
         </div>
     `
-
-    const emailEl = document.getElementById('login-email')
-    const passEl = document.getElementById('login-password')
-    const btnEl = document.getElementById('login-btn')
-    const errEl = document.getElementById('login-error')
-
-    const ERROR_LABELS = {
-        email_not_found: 'No account found.',
-        incorrect_password: 'Incorrect password.',
-        no_password: 'Use the website to sign in with Google.',
-        not_confirmed: 'Please confirm your email first.',
-    }
-
-    async function doLogin() {
-        const email = emailEl.value.trim()
-        const password = passEl.value
-        if (!email || !password) return
-        btnEl.disabled = true
-        btnEl.textContent = ''
-        errEl.style.display = 'none'
-        try {
-            const res = await fetch(`${BASE_URL}/auth/login`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email, password }),
-            })
-            const data = await res.json().catch(() => ({}))
-            if (!res.ok) throw new Error(data.detail || 'login_failed')
-            await chrome.storage.local.set({ token: data.access_token, email: data.email })
-            await renderDashboard()
-        } catch (e) {
-            const code = e.message || 'login_failed'
-            errEl.textContent = ERROR_LABELS[code] || 'Login failed. Please try again.'
-            errEl.style.display = 'block'
-            btnEl.textContent = 'Log in'
-            btnEl.disabled = false
-        }
-    }
-
-    btnEl.addEventListener('click', doLogin)
-    emailEl.addEventListener('keydown', e => { if (e.key === 'Enter') passEl.focus() })
-    passEl.addEventListener('keydown', e => { if (e.key === 'Enter') doLogin() })
 }
 
 // --- Settings ---
