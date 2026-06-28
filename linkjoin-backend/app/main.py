@@ -87,6 +87,7 @@ if _settings.frontend_url.startswith("https://"):
 app.add_middleware(
     CORSMiddleware,
     allow_origins=list(set(_origins)),
+    allow_origin_regex=r"^(chrome|moz)-extension://.*$",
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["Content-Type", "Authorization"],
