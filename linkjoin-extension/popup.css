@@ -628,12 +628,6 @@ input:focus {
     background: white;
 }
 
-.footer-actions {
-    padding: 8px 16px 12px;
-    display: flex;
-    justify-content: center;
-}
-
 .text-btn {
     background: none;
     border: none;
