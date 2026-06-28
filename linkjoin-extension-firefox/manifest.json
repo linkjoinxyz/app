@@ -12,7 +12,7 @@
   "background": {
     "scripts": ["background.js"]
   },
-  "permissions": ["alarms", "storage", "windows", "contextMenus", "notifications"],
+  "permissions": ["alarms", "storage", "contextMenus", "notifications"],
   "content_scripts": [
     {
       "matches": ["https://mail.google.com/*", "https://outlook.live.com/*", "https://outlook.office.com/*", "https://outlook.office365.com/*"],
