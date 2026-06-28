@@ -67,17 +67,40 @@ function formatNext(date) {
 
 // --- Render functions ---
 
-function renderLogin() {
-    chrome.tabs.create({ url: `${APP_URL}/login` })
+function renderLogin(errorMsg = '') {
     document.getElementById('app').innerHTML = `
         <div class="header">
             <img src="/icons/logo-rounded.png" class="logo-icon" alt="">
             <span class="logo-text">LinkJoin</span>
         </div>
         <div class="login-form">
-            <p class="subtitle">Opening sign-in page&hellip;</p>
+            <p class="login-title">Sign in to LinkJoin</p>
+            ${errorMsg ? `<p class="login-error">${escHtml(errorMsg)}</p>` : ''}
+            <input id="login-email" type="email" placeholder="Email" class="login-input" autocomplete="email">
+            <input id="login-password" type="password" placeholder="Password" class="login-input" autocomplete="current-password">
+            <button id="login-submit" class="login-btn">Sign in</button>
         </div>
     `
+    const emailEl = document.getElementById('login-email')
+    const passEl = document.getElementById('login-password')
+    const btn = document.getElementById('login-submit')
+
+    async function attemptLogin() {
+        const email = emailEl.value.trim()
+        const password = passEl.value
+        if (!email || !password) return
+        btn.disabled = true
+        btn.textContent = 'Signing in…'
+        const result = await chrome.runtime.sendMessage({ type: 'doLogin', email, password })
+        if (result?.ok) {
+            renderDashboard()
+        } else {
+            renderLogin('Incorrect email or password.')
+        }
+    }
+
+    btn.addEventListener('click', attemptLogin)
+    passEl.addEventListener('keydown', e => { if (e.key === 'Enter') attemptLogin() })
 }
 
 // --- Settings ---

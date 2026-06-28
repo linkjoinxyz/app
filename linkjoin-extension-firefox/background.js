@@ -316,6 +316,21 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
         }
         chrome.alarms.clearAll()
     }
+    if (msg.type === 'doLogin') {
+        fetch(`${BASE_URL}/auth/login`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: msg.email, password: msg.password }),
+        }).then(async res => {
+            if (!res.ok) { sendResponse({ ok: false }); return }
+            const data = await res.json()
+            await chrome.storage.local.set({ token: data.access_token, email: data.email })
+            if (webSocket) webSocket.close()
+            createWebsocket()
+            sendResponse({ ok: true, email: data.email })
+        }).catch(() => sendResponse({ ok: false }))
+        return true
+    }
     if (msg.type === 'getLinks') {
         apiFetch('/links').then(result => sendResponse(result || null))
         return true
