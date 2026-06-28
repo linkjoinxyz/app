@@ -91,11 +91,22 @@ function renderLogin(errorMsg = '') {
         if (!email || !password) return
         btn.disabled = true
         btn.textContent = 'Signing in…'
-        const result = await chrome.runtime.sendMessage({ type: 'doLogin', email, password })
-        if (result?.ok) {
+        try {
+            const res = await fetch(`${BASE_URL}/auth/login`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email, password }),
+            })
+            if (!res.ok) {
+                renderLogin('Incorrect email or password.')
+                return
+            }
+            const data = await res.json()
+            await chrome.storage.local.set({ token: data.access_token, email: data.email })
+            chrome.runtime.sendMessage({ type: 'login' }).catch(() => {})
             renderDashboard()
-        } else {
-            renderLogin('Incorrect email or password.')
+        } catch {
+            renderLogin('Could not connect. Is the app running?')
         }
     }
 
