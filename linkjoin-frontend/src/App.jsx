@@ -8,6 +8,7 @@ import Links from './pages/Links.jsx'
 import Bookmarks from './pages/Bookmarks.jsx'
 import Pricing from './pages/Pricing.jsx'
 import Privacy from './pages/Privacy.jsx'
+import Terms from './pages/Terms.jsx'
 import ForgotPassword from './pages/ForgotPassword.jsx'
 import ResetPassword from './pages/ResetPassword.jsx'
 import AddLink from './pages/AddLink.jsx'
@@ -31,6 +32,7 @@ export default function App() {
       <Route path="/signup" element={<AuthPage2 defaultTab="signup" />} />
       <Route path="/pricing" element={<Pricing />} />
       <Route path="/privacy" element={<Privacy />} />
+      <Route path="/tos" element={<Terms />} />
       <Route path="/forgot-password" element={<ForgotPassword />} />
       <Route path="/reset-password" element={<ResetPassword />} />
       <Route path="/meetings" element={<PrivateRoute><Links /></PrivateRoute>} />
