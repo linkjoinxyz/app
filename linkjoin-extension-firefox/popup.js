@@ -67,62 +67,61 @@ function formatNext(date) {
 
 // --- Render functions ---
 
-function renderLogin(errorMsg) {
+function renderLogin() {
+    chrome.tabs.create({ url: `${APP_URL}/login` })
     document.getElementById('app').innerHTML = `
         <div class="header">
             <img src="/icons/logo-rounded.png" class="logo-icon" alt="">
             <span class="logo-text">LinkJoin</span>
         </div>
         <div class="login-form">
-            <input type="email" id="login-email" placeholder="Email" autocomplete="email" />
-            <input type="password" id="login-password" placeholder="Password" autocomplete="current-password" />
-            <div id="login-error" class="error" style="display:${errorMsg ? 'block' : 'none'}">${errorMsg || ''}</div>
-            <button id="login-btn">Log in</button>
+            <p class="subtitle">Opening sign-in page&hellip;</p>
         </div>
     `
-
-    const emailEl = document.getElementById('login-email')
-    const passEl = document.getElementById('login-password')
-    const btnEl = document.getElementById('login-btn')
-    const errEl = document.getElementById('login-error')
-
-    const ERROR_LABELS = {
-        email_not_found: 'No account found.',
-        incorrect_password: 'Incorrect password.',
-        no_password: 'Use the website to sign in with Google.',
-        not_confirmed: 'Please confirm your email first.',
-    }
-
-    async function doLogin() {
-        const email = emailEl.value.trim()
-        const password = passEl.value
-        if (!email || !password) return
-        btnEl.disabled = true
-        btnEl.textContent = ''
-        errEl.style.display = 'none'
-        try {
-            const res = await fetch(`${BASE_URL}/auth/login`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email, password }),
-            })
-            const data = await res.json().catch(() => ({}))
-            if (!res.ok) throw new Error(data.detail || 'login_failed')
-            await chrome.storage.local.set({ token: data.access_token, email: data.email })
-            await renderDashboard()
-        } catch (e) {
-            const code = e.message || 'login_failed'
-            errEl.textContent = ERROR_LABELS[code] || 'Login failed. Please try again.'
-            errEl.style.display = 'block'
-            btnEl.textContent = 'Log in'
-            btnEl.disabled = false
-        }
-    }
-
-    btnEl.addEventListener('click', doLogin)
-    emailEl.addEventListener('keydown', e => { if (e.key === 'Enter') passEl.focus() })
-    passEl.addEventListener('keydown', e => { if (e.key === 'Enter') doLogin() })
 }
+
+// --- Settings ---
+
+async function renderSettings() {
+    const { ljAutoDetect = true } = await chrome.storage.local.get('ljAutoDetect')
+    document.getElementById('app').innerHTML = `
+        <div class="header">
+            <button class="back-btn" id="back-btn">&#8592;</button>
+            <span class="logo-text">Settings</span>
+        </div>
+        <div class="settings-body">
+            <div class="setting-row">
+                <div class="setting-info">
+                    <div class="setting-label">Auto-detect meetings</div>
+                    <div class="setting-desc">Show overlay when a meeting link is found in Gmail or Outlook</div>
+                </div>
+                <label class="toggle">
+                    <input type="checkbox" id="auto-detect-toggle" ${ljAutoDetect ? 'checked' : ''}>
+                    <span class="toggle-track"></span>
+                </label>
+            </div>
+            <div class="setting-row">
+                <div class="setting-info">
+                    <div class="setting-label">Reset dismissed</div>
+                    <div class="setting-desc">Re-show overlays for meetings dismissed this session</div>
+                </div>
+                <button class="text-btn" id="reset-dismissed-btn">Reset</button>
+            </div>
+        </div>
+    `
+    document.getElementById('back-btn').addEventListener('click', () => renderDashboard())
+    document.getElementById('auto-detect-toggle').addEventListener('change', async e => {
+        await chrome.storage.local.set({ ljAutoDetect: e.target.checked })
+    })
+    document.getElementById('reset-dismissed-btn').addEventListener('click', () => {
+        const btn = document.getElementById('reset-dismissed-btn')
+        chrome.runtime.sendMessage({ type: 'resetDismissed' })
+        btn.textContent = 'Done!'
+        setTimeout(() => { if (btn.isConnected) btn.textContent = 'Reset' }, 1500)
+    })
+}
+
+// --- Dashboard ---
 
 async function renderDashboard() {
     const auth = await getAuth()
@@ -132,6 +131,12 @@ async function renderDashboard() {
             <span class="logo-text">LinkJoin</span>
             <button id="dashboard-btn">Dashboard</button>
             <button id="logout-btn">Log out</button>
+            <button class="gear-btn" id="settings-btn" aria-label="Settings">
+                <svg width="14" height="14" viewBox="0 0 512 512" fill="currentColor">
+                    <path d="M471.46,212.99l-42.07-7.92c-3.63-12.37-8.58-24.3-14.79-35.64l24.16-35.37c4.34-6.35,3.54-14.9-1.9-20.34l-38.58-38.58c-5.44-5.44-13.99-6.24-20.34-1.9L342.57,97.4c-11.34-6.21-23.27-11.16-35.64-14.78l-7.92-42.07c-1.42-7.56-8.03-13.04-15.72-13.04h-54.57c-7.69,0-14.3,5.48-15.72,13.04l-7.92,42.07c-12.37,3.63-24.3,8.58-35.64,14.78l-35.37-24.16c-6.35-4.34-14.9-3.54-20.34,1.9l-38.58,38.58c-5.44,5.44-6.24,13.98-1.9,20.34l24.16,35.37c-6.21,11.34-11.16,23.27-14.79,35.64l-42.07,7.92c-7.56,1.42-13.04,8.03-13.04,15.72v54.57c0,7.69,5.48,14.3,13.04,15.72l42.07,7.92c3.63,12.37,8.58,24.3,14.79,35.64l-24.16,35.37c-4.34,6.35-3.54,14.9,1.9,20.34l38.58,38.58c5.44,5.44,13.99,6.24,20.34,1.9l35.37-24.16c11.34,6.21,23.27,11.16,35.64,14.79l7.92,42.07c1.42,7.56,8.03,13.04,15.72,13.04h54.57c7.69,0,14.3-5.48,15.72-13.04l7.92-42.07c12.37-3.63,24.3-8.58,35.64-14.79l35.37,24.16c6.35,4.34,14.9,3.54,20.34-1.9l38.58-38.58c5.44-5.44,6.24-13.98,1.9-20.34l-24.16-35.37c6.21-11.34,11.16-23.27,14.79-35.64l42.07-7.92c7.56-1.42,13.04-8.03,13.04-15.72v-54.57C484.5,221.02,479.02,214.42,471.46,212.99z M452.5,270.01l-38.98,7.34c-6.25,1.18-11.21,5.94-12.63,12.14c-3.69,16.02-10,31.25-18.77,45.25c-3.37,5.39-3.24,12.26,0.35,17.51l22.39,32.78l-19.82,19.82l-32.78-22.39c-5.25-3.59-12.12-3.73-17.51-0.35c-14.01,8.77-29.24,15.08-45.25,18.77c-6.2,1.43-10.96,6.38-12.14,12.63l-7.34,38.98h-28.03l-7.34-38.98c-1.18-6.25-5.94-11.21-12.14-12.63c-16.02-3.69-31.24-10-45.25-18.77c-5.39-3.37-12.26-3.24-17.51,0.35l-32.78,22.39l-19.82-19.82l22.39-32.78c3.59-5.25,3.72-12.12,0.35-17.51c-8.77-14.01-15.08-29.24-18.77-45.25c-1.43-6.2-6.38-10.96-12.63-12.14l-38.98-7.34v-28.03l38.98-7.34c6.25-1.18,11.21-5.94,12.63-12.14c3.69-16.02,10-31.25,18.77-45.25c3.37-5.39,3.24-12.26-0.35-17.51l-22.39-32.78l19.82-19.82l32.78,22.39c5.25,3.58,12.12,3.72,17.51,0.35c14.01-8.77,29.24-15.08,45.25-18.77c6.2-1.43,10.96-6.38,12.14-12.63l7.34-38.98h28.03l7.34,38.98c1.18,6.25,5.94,11.21,12.14,12.63c16.02,3.69,31.24,10,45.25,18.77c5.39,3.37,12.26,3.24,17.51-0.35l32.78-22.39l19.82,19.82l-22.39,32.78c-3.59,5.25-3.72,12.12-0.35,17.51c8.77,14.01,15.08,29.24,18.77,45.25c1.43,6.2,6.38,10.96,12.63,12.14l38.98,7.34V270.01z"/>
+                    <path d="M256,148.26c-59.41,0-107.74,48.33-107.74,107.74c0,59.41,48.33,107.74,107.74,107.74S363.74,315.41,363.74,256C363.74,196.59,315.41,148.26,256,148.26z M256,331.74c-41.76,0-75.74-33.98-75.74-75.74c0-41.76,33.98-75.74,75.74-75.74s75.74,33.98,75.74,75.74C331.74,297.76,297.76,331.74,256,331.74z"/>
+                </svg>
+            </button>
         </div>
         <div class="user-email">${escHtml(auth.email)}</div>
         <div class="meetings-section">
@@ -143,9 +148,11 @@ async function renderDashboard() {
         chrome.tabs.create({ url: `${APP_URL}/links` })
     })
     document.getElementById('logout-btn').addEventListener('click', handleLogout)
+    document.getElementById('settings-btn').addEventListener('click', renderSettings)
 
     const data = await apiFetch('/links')
     const list = document.getElementById('meetings-list')
+    if (!list) return  // user navigated away while fetch was in-flight
 
     if (!data?.links) {
         list.innerHTML = '<p class="muted-msg">Could not load meetings.</p>'
@@ -167,7 +174,7 @@ async function renderDashboard() {
         <div class="meeting-card">
             <div class="meeting-name">${escHtml(l.name)}</div>
             <div class="meeting-meta">
-                <span class="meeting-days">${l.days.join(', ')}</span>
+                <span class="meeting-days">${l.days.map(escHtml).join(', ')}</span>
                 <span class="meeting-next">${formatNext(l._next)}</span>
             </div>
         </div>

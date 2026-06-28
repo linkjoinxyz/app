@@ -36,6 +36,12 @@
     padding: 11px 14px;
     border-bottom: 1px solid rgba(43, 143, 216, 0.18);
     background: #0d2236;
+    cursor: grab;
+    user-select: none;
+}
+
+.lj-header.lj-dragging {
+    cursor: grabbing;
 }
 
 .lj-title {

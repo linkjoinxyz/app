@@ -640,6 +640,7 @@ export default function NewHomepage() {
           <div className="nh-footer-col">
             <p className="nh-footer-col-title">Company</p>
             <Link to="/privacy">Privacy Policy</Link>
+            <Link to="/tos">Terms of Service</Link>
             <Link to="/contact">Contact</Link>
           </div>
         </div>

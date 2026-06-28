@@ -334,6 +334,11 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
         }).then(result => sendResponse({ ok: result !== null, result }))
         return true
     }
+    if (msg.type === 'resetDismissed') {
+        chrome.tabs.query({ active: true, currentWindow: true }, ([tab]) => {
+            if (tab) chrome.tabs.sendMessage(tab.id, { type: 'resetDismissed' }).catch(() => {})
+        })
+    }
 })
 
 chrome.contextMenus.onClicked.addListener(async (e) => {

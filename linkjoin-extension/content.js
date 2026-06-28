@@ -100,10 +100,14 @@ const REMINDER_OPTIONS = [
     { value: '60',    label: '1 hour before' },
 ]
 
+const IS_GMAIL = location.hostname === 'mail.google.com'
+const IS_OUTLOOK = /^outlook\.(live|office|office365)\.com$/.test(location.hostname)
+
 const seen = new Set()
+const sessionDismissed = new Set()
 let overlayEl = null
 
-// --- Gmail DOM watcher ---
+// --- Meeting link scanner (shared) ---
 
 function findMeetingLink(bodyEl) {
     for (const a of bodyEl.querySelectorAll('a[href]')) {
@@ -122,6 +126,15 @@ function getEmailSubject() {
     return document.querySelector('h2.hP')?.textContent?.trim() || ''
 }
 
+function getOutlookSubject() {
+    const pane = document.querySelector('[role="main"]')
+    return (
+        pane?.querySelector('[aria-label="Message subject"]')?.textContent?.trim() ||
+        pane?.querySelector('h1')?.textContent?.trim() ||
+        ''
+    )
+}
+
 function urlsMatch(a, b) {
     try {
         const norm = u => new URL(/^https?:\/\//.test(u) ? u : 'https://' + u)
@@ -131,66 +144,176 @@ function urlsMatch(a, b) {
 }
 
 async function processEmailBody(bodyEl) {
-    if (!chrome?.storage?.local) return
-    const msgContainer = bodyEl.closest('[data-message-id]')
-    const msgId = msgContainer?.dataset?.messageId
-    if (msgId && seen.has(msgId)) return
-    if (msgId) seen.add(msgId)
+    try {
+        if (!chrome?.storage?.local) return
+        const { ljAutoDetect = true } = await chrome.storage.local.get('ljAutoDetect')
+        if (!ljAutoDetect) return
+        const msgContainer = bodyEl.closest('[data-message-id]')
+        const msgId = msgContainer?.dataset?.messageId
+        if (msgId && seen.has(msgId)) return
 
-    const detectedLink = findMeetingLink(bodyEl)
-    if (!detectedLink) return
+        const detectedLink = findMeetingLink(bodyEl)
+        if (!detectedLink) return
 
-    const { ljDismissed = [] } = await chrome.storage.local.get('ljDismissed')
-    if (ljDismissed.some(url => urlsMatch(url, detectedLink))) return
+        if (msgId) seen.add(msgId)
 
-    const linksData = await chrome.runtime.sendMessage({ type: 'getLinks' })
-    if (linksData?.links?.some(l => l.link && urlsMatch(l.link, detectedLink))) return
+        if ([...sessionDismissed].some(url => urlsMatch(url, detectedLink))) return
 
-    const subject = getEmailSubject()
-    const text = bodyEl.textContent || ''
-    showAnalyzing()
+        const linksData = await chrome.runtime.sendMessage({ type: 'getLinks' })
+        if (linksData?.links?.some(l => l.link && urlsMatch(l.link, detectedLink))) return
 
-    const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone
+        const subject = getEmailSubject()
+        const text = bodyEl.textContent || ''
+        showAnalyzing()
 
-    chrome.runtime.sendMessage(
-        { type: 'extractMeeting', subject, body: text, timezone },
-        (result) => {
-            removeAnalyzing()
-            showOverlay(result || {}, detectedLink)
-        }
-    )
-}
+        const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone
 
-const observer = new MutationObserver((mutations) => {
-    for (const mutation of mutations) {
-        for (const node of mutation.addedNodes) {
-            if (node.nodeType !== 1) continue
-            const bodies = node.matches?.('.a3s.aiL')
-                ? [node]
-                : [...node.querySelectorAll('.a3s.aiL')]
-            for (const body of bodies) {
-                processEmailBody(body)
+        chrome.runtime.sendMessage(
+            { type: 'extractMeeting', subject, body: text, timezone },
+            (result) => {
+                removeAnalyzing()
+                showOverlay(result || {}, detectedLink)
             }
+        )
+    } catch {}
+}
+
+if (IS_GMAIL) {
+    const observer = new MutationObserver((mutations) => {
+        for (const mutation of mutations) {
+            for (const node of mutation.addedNodes) {
+                if (node.nodeType !== 1) continue
+                const bodies = node.matches?.('.a3s.aiL')
+                    ? [node]
+                    : [...node.querySelectorAll('.a3s.aiL')]
+                for (const body of bodies) processEmailBody(body)
+            }
+            const existing = mutation.target.closest?.('.a3s.aiL')
+            if (existing) processEmailBody(existing)
         }
+    })
+    observer.observe(document.body, { childList: true, subtree: true })
+
+    function scanExisting() {
+        document.querySelectorAll('.a3s.aiL').forEach(processEmailBody)
     }
-})
 
-observer.observe(document.body, { childList: true, subtree: true })
+    setTimeout(scanExisting, 1000)
 
-function scanExisting() {
-    document.querySelectorAll('.a3s.aiL').forEach(processEmailBody)
+    const _origPushState = history.pushState.bind(history)
+    history.pushState = function (...args) {
+        _origPushState(...args)
+        setTimeout(scanExisting, 1000)
+    }
+    window.addEventListener('popstate', () => setTimeout(scanExisting, 1000))
+    window.addEventListener('hashchange', () => setTimeout(scanExisting, 1000))
 }
 
-// Catch emails already in the DOM on load
-setTimeout(scanExisting, 1000)
+// --- Outlook DOM watcher ---
 
-// Catch SPA navigation (Gmail uses history.pushState when opening emails)
-const _origPushState = history.pushState.bind(history)
-history.pushState = function (...args) {
-    _origPushState(...args)
-    setTimeout(scanExisting, 800)
+if (IS_OUTLOOK) {
+    const OUTLOOK_SELECTORS = [
+        '[aria-label="Message body"]',
+        'div[role="document"]',
+    ]
+
+    function findOutlookBody() {
+        for (const sel of OUTLOOK_SELECTORS) {
+            const el = document.querySelector(sel)
+            if (el) return el
+        }
+        for (const iframe of document.querySelectorAll('iframe')) {
+            try {
+                const doc = iframe.contentDocument || iframe.contentWindow?.document
+                if (!doc || !doc.body) continue
+                for (const sel of OUTLOOK_SELECTORS) {
+                    const el = doc.querySelector(sel)
+                    if (el) return el
+                }
+                if (doc.body.textContent.trim()) return doc.body
+            } catch {}
+        }
+        return document.querySelector('[role="main"]') || document.body
+    }
+
+    async function processOutlookBody(bodyEl) {
+        try {
+            if (!chrome?.storage?.local) return
+            if (document.getElementById('lj-overlay') || document.getElementById('lj-analyzing')) return
+
+            const { ljAutoDetect = true } = await chrome.storage.local.get('ljAutoDetect')
+            if (!ljAutoDetect) return
+
+            if (document.getElementById('lj-overlay') || document.getElementById('lj-analyzing')) return
+
+            const detectedLink = findMeetingLink(bodyEl)
+            if (!detectedLink) return
+
+            if ([...sessionDismissed].some(url => urlsMatch(url, detectedLink))) return
+
+            const linksData = await chrome.runtime.sendMessage({ type: 'getLinks' })
+            if (linksData?.links?.some(l => l.link && urlsMatch(l.link, detectedLink))) return
+
+            if (document.getElementById('lj-overlay') || document.getElementById('lj-analyzing')) return
+
+            const subject = getOutlookSubject()
+            const text = bodyEl.textContent || ''
+            showAnalyzing()
+
+            const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone
+
+            let done = false
+            const fallback = setTimeout(() => {
+                if (!done) { done = true; removeAnalyzing(); showOverlay({}, detectedLink) }
+            }, 12000)
+
+            chrome.runtime.sendMessage(
+                { type: 'extractMeeting', subject, body: text, timezone },
+                (result) => {
+                    if (!done) {
+                        done = true
+                        clearTimeout(fallback)
+                        removeAnalyzing()
+                        showOverlay(result || {}, detectedLink)
+                    }
+                }
+            )
+        } catch {}
+    }
+
+    // Leading-edge throttle: fire once per 300ms max; ignore extra calls while one is pending.
+    // A trailing debounce breaks in React SPAs because mutations fire constantly and reset
+    // the timer indefinitely — the scan would never run.
+    let _scanTimer = null
+    function scanOutlook() {
+        if (_scanTimer) return
+        _scanTimer = setTimeout(() => {
+            _scanTimer = null
+            const body = findOutlookBody()
+            if (body) processOutlookBody(body)
+        }, 300)
+    }
+
+    function scheduleOutlookScan() {
+        setTimeout(scanOutlook, 700)
+        setTimeout(scanOutlook, 2000)
+        setTimeout(scanOutlook, 4000)
+        setTimeout(scanOutlook, 8000)
+    }
+
+    scheduleOutlookScan()
+
+    const _origPushStateOL = history.pushState.bind(history)
+    history.pushState = function (...args) {
+        _origPushStateOL(...args)
+        removeOverlay()      // clear overlay when navigating to a different email
+        scheduleOutlookScan()
+    }
+    window.addEventListener('popstate', () => { removeOverlay(); scheduleOutlookScan() })
+
+    const outlookObserver = new MutationObserver(scanOutlook)
+    outlookObserver.observe(document.body, { childList: true, subtree: true })
 }
-window.addEventListener('popstate', () => setTimeout(scanExisting, 800))
 
 // --- Analyzing badge ---
 
@@ -289,16 +412,35 @@ function buildOverlayHTML(data, detectedLink) {
 }
 
 function wireOverlay(el, _data, detectedLink) {
-    el.querySelector('.lj-close').addEventListener('click', async () => {
-        if (detectedLink) {
-            try {
-                const { ljDismissed = [] } = await chrome.storage.local.get('ljDismissed')
-                if (!ljDismissed.some(url => urlsMatch(url, detectedLink))) {
-                    ljDismissed.push(detectedLink)
-                    await chrome.storage.local.set({ ljDismissed })
-                }
-            } catch {}
-        }
+    // Drag to move
+    const header = el.querySelector('.lj-header')
+    let dragging = false, startX = 0, startY = 0, startLeft = 0, startTop = 0
+    header.addEventListener('mousedown', e => {
+        if (e.target.closest('.lj-close')) return
+        dragging = true
+        const rect = el.getBoundingClientRect()
+        startX = e.clientX
+        startY = e.clientY
+        startLeft = rect.left
+        startTop = rect.top
+        el.style.right = 'auto'
+        el.style.left = startLeft + 'px'
+        el.style.top = startTop + 'px'
+        header.classList.add('lj-dragging')
+        e.preventDefault()
+    })
+    document.addEventListener('mousemove', e => {
+        if (!dragging) return
+        el.style.left = Math.max(0, Math.min(startLeft + e.clientX - startX, window.innerWidth - el.offsetWidth)) + 'px'
+        el.style.top = Math.max(0, Math.min(startTop + e.clientY - startY, window.innerHeight - el.offsetHeight)) + 'px'
+    })
+    document.addEventListener('mouseup', () => {
+        dragging = false
+        header.classList.remove('lj-dragging')
+    })
+
+    el.querySelector('.lj-close').addEventListener('click', () => {
+        if (detectedLink) sessionDismissed.add(detectedLink)
         removeOverlay()
     })
 
@@ -468,3 +610,12 @@ function showError(el, msg) {
 function escAttr(str) {
     return (str || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#x27;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 }
+
+chrome.runtime.onMessage.addListener((msg) => {
+    if (msg.type === 'resetDismissed') {
+        sessionDismissed.clear()
+        seen.clear()
+        removeOverlay()
+        if (IS_OUTLOOK) scanOutlook()
+    }
+})
