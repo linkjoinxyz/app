@@ -38,7 +38,7 @@ export default function Terms() {
           <section className="pp-section">
             <h2>3. Accounts</h2>
             <p>
-              You are responsible for maintaining the confidentiality of your account credentials and for all activity that occurs under your account. You agree to notify us immediately at support@linkjoin.xyz if you suspect unauthorized access. We are not liable for any loss or damage arising from your failure to protect your credentials.
+              You are responsible for maintaining the confidentiality of your account credentials and for all activity that occurs under your account. You agree to notify us immediately at seth@linkjoin.xyz if you suspect unauthorized access. We are not liable for any loss or damage arising from your failure to protect your credentials.
             </p>
             <p>
               We may suspend or terminate your account at our discretion if we determine you have violated these Terms or if your account poses a security or legal risk.
@@ -122,7 +122,7 @@ export default function Terms() {
           <section className="pp-section">
             <h2>12. Termination</h2>
             <p>
-              You may stop using the Service and delete your account at any time by contacting us at support@linkjoin.xyz. We may suspend or terminate your access to the Service immediately, without prior notice, for conduct that we determine violates these Terms or is harmful to other users, us, or third parties.
+              You may stop using the Service and delete your account at any time by contacting us at seth@linkjoin.xyz. We may suspend or terminate your access to the Service immediately, without prior notice, for conduct that we determine violates these Terms or is harmful to other users, us, or third parties.
             </p>
             <p>
               Upon termination, your right to use the Service ceases immediately. Sections 7, 9, 10, 11, and 13 survive termination.
@@ -153,7 +153,7 @@ export default function Terms() {
             </p>
             <p>
               <strong>LinkJoin</strong><br />
-              Email: <a href="mailto:support@linkjoin.xyz">support@linkjoin.xyz</a>
+              Email: <a href="mailto:seth@linkjoin.xyz">seth@linkjoin.xyz</a>
             </p>
           </section>
         </div>
