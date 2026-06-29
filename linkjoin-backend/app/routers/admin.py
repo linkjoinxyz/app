@@ -3,6 +3,8 @@ from app.auth import get_confirmed_user
 from app.database import motor_db
 from app.utils import configure_data
 from app.websocket_manager import manager
+from app.audit import log_audit
+from app.roles import TEACHER_ROLES
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -24,6 +26,7 @@ async def disable_all(body: dict, user: dict = Depends(get_confirmed_user)):
         )
         await manager.broadcast(await configure_data(org_user["username"]), org_user["username"])
 
+    await log_audit(user["username"], "admin.disable_all", detail={"disable": disable, "org": org})
     return {"message": "Updated"}
 
 
@@ -37,4 +40,37 @@ async def toggle_admin_view(body: dict, user: dict = Depends(get_confirmed_user)
     _require_admin(user)
     value = str(body.get("admin_view", "false")).lower()
     await motor_db.login.update_one({"username": user["username"]}, {"$set": {"admin_view": value}})
+    await log_audit(user["username"], "admin.toggle_view", detail={"admin_view": value})
     return {"message": "Updated"}
+
+
+@router.patch("/users/{user_id}/role")
+async def set_user_role(user_id: str, body: dict, user: dict = Depends(get_confirmed_user)):
+    _require_admin(user)
+    account_type = body.get("account_type")
+    role = body.get("role")
+    org_id = body.get("org_id")
+
+    if account_type not in ("personal", "institutional"):
+        raise HTTPException(status_code=422, detail="account_type must be 'personal' or 'institutional'")
+    if account_type == "institutional":
+        if role not in ("student", "teacher", "school_admin", "district_admin"):
+            raise HTTPException(status_code=422, detail="Invalid role")
+        if not org_id:
+            raise HTTPException(status_code=422, detail="org_id required for institutional users")
+
+    updates: dict = {"account_type": account_type}
+    if account_type == "institutional":
+        updates["role"] = role
+        updates["org_id"] = org_id
+    else:
+        updates["role"] = None
+        updates["org_id"] = None
+
+    target = await motor_db.login.find_one({"user_id": user_id})
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    await motor_db.login.update_one({"user_id": user_id}, {"$set": updates})
+    await log_audit(user["username"], "admin.set_role", detail={"target_user_id": user_id, **updates})
+    return {"message": "Role updated"}

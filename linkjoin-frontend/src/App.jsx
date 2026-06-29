@@ -16,10 +16,24 @@ import ConfirmEmail from './pages/ConfirmEmail.jsx'
 import Contact from './pages/Contact.jsx'
 import AuthPage2 from './pages/AuthPage2.jsx'
 import PreMeet from './pages/PreMeet.jsx'
+import DPA from './pages/DPA.jsx'
+import PrivacySchools from './pages/PrivacySchools.jsx'
+import Subprocessors from './pages/Subprocessors.jsx'
+import BreachPolicy from './pages/BreachPolicy.jsx'
+import AdminDashboard from './pages/AdminDashboard.jsx'
+
+const TEACHER_ROLES = new Set(['teacher', 'school_admin', 'district_admin'])
 
 function PrivateRoute({ children }) {
   const { token } = useAuth()
   if (!token) return <Navigate to="/login" replace />
+  return children
+}
+
+function TeacherRoute({ children }) {
+  const { token, role } = useAuth()
+  if (!token) return <Navigate to="/login" replace />
+  if (!TEACHER_ROLES.has(role)) return <Navigate to="/meetings" replace />
   return children
 }
 
@@ -42,6 +56,11 @@ export default function App() {
       <Route path="/confirm" element={<ConfirmEmail />} />
       <Route path="/premeet" element={<PreMeet />} />
       <Route path="/contact" element={<Contact />} />
+      <Route path="/dpa" element={<DPA />} />
+      <Route path="/privacy-schools" element={<PrivacySchools />} />
+      <Route path="/subprocessors" element={<Subprocessors />} />
+      <Route path="/breach-policy" element={<BreachPolicy />} />
+      <Route path="/admin" element={<TeacherRoute><AdminDashboard /></TeacherRoute>} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   )

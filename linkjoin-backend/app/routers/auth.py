@@ -15,6 +15,7 @@ from app.config import get_settings
 from app.email_service import send_email
 from app.utils import gen_id, analytics
 from app.redis_client import get_redis
+from app.audit import log_audit
 from jose import JWTError
 import re
 
@@ -104,10 +105,12 @@ async def register(request: Request, body: RegisterRequest, background_tasks: Ba
             email,
         )
         await analytics("signups")
+        await log_audit(email, "auth.register", ip=request.client.host if request.client else None)
         access_token = create_token(email)
         return {"access_token": access_token, "token_type": "bearer", "email": email, "confirmed": False}
 
     await analytics("signups")
+    await log_audit(email, "auth.register", ip=request.client.host if request.client else None)
     access_token = create_token(email)
     return {"access_token": access_token, "token_type": "bearer", "email": email, "confirmed": True}
 
@@ -138,8 +141,14 @@ async def confirm_email(token: str):
     await motor_db.login.update_one({"username": email}, {"$set": {"confirmed": "true"}})
     await _blacklist_token(payload)
     await analytics("signups")
+    user = await motor_db.login.find_one({"username": email})
     access_token = create_token(email)
-    return TokenResponse(access_token=access_token, email=email)
+    return {
+        "access_token": access_token, "token_type": "bearer", "email": email,
+        "account_type": user.get("account_type", "personal") if user else "personal",
+        "role": user.get("role") if user else None,
+        "org_id": user.get("org_id") if user else None,
+    }
 
 
 @router.post("/resend-confirmation")
@@ -202,9 +211,15 @@ async def login(request: Request, body: LoginRequest):
         await motor_db.login.update_one({"username": email}, {"$set": {"offset": "0.0"}})
 
     await analytics("logins")
+    await log_audit(email, "auth.login", ip=request.client.host if request.client else None)
     access_token = create_token(email)
     confirmed = user.get("confirmed") == "true"
-    return {"access_token": access_token, "token_type": "bearer", "email": email, "confirmed": confirmed}
+    return {
+        "access_token": access_token, "token_type": "bearer", "email": email, "confirmed": confirmed,
+        "account_type": user.get("account_type", "personal"),
+        "role": user.get("role"),
+        "org_id": user.get("org_id"),
+    }
 
 
 class GoogleCodeRequest(BaseModel):
@@ -268,7 +283,12 @@ async def google_code_exchange(request: Request, body: GoogleCodeRequest):
 
     access_token = create_token(email)
     confirmed = user.get("confirmed") == "true"
-    return {"access_token": access_token, "token_type": "bearer", "email": email, "confirmed": confirmed}
+    return {
+        "access_token": access_token, "token_type": "bearer", "email": email, "confirmed": confirmed,
+        "account_type": user.get("account_type", "personal"),
+        "role": user.get("role"),
+        "org_id": user.get("org_id"),
+    }
 
 
 @router.post("/google-token")
@@ -312,7 +332,12 @@ async def google_token_auth(request: Request, body: dict):
 
     access_token_jwt = create_token(email)
     confirmed = user.get("confirmed") == "true"
-    return {"access_token": access_token_jwt, "token_type": "bearer", "email": email, "confirmed": confirmed}
+    return {
+        "access_token": access_token_jwt, "token_type": "bearer", "email": email, "confirmed": confirmed,
+        "account_type": user.get("account_type", "personal"),
+        "role": user.get("role"),
+        "org_id": user.get("org_id"),
+    }
 
 
 @router.post("/forgot-password")
@@ -408,6 +433,7 @@ async def reset_password_with_token(token: str, body: ResetPasswordRequest):
         raise HTTPException(status_code=404, detail="User not found")
 
     await _blacklist_token(payload)
+    await log_audit(email, "auth.reset_password")
     return {"message": "Password updated"}
 
 
@@ -418,4 +444,5 @@ async def logout(user: dict = Depends(get_confirmed_user)):
     if jti and exp:
         ttl = max(1, int(exp - datetime.now(timezone.utc).timestamp()))
         await get_redis().setex(f"jti:{jti}", ttl, "1")
+    await log_audit(user["username"], "auth.logout")
     return {"message": "Logged out"}

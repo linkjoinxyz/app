@@ -119,7 +119,7 @@ export default function AuthPage2({ defaultTab = 'login' }) {
           setError('')
           try {
             const data = await authApi.googleTokenLogin(response.access_token)
-            login(data.access_token, data.email, data.confirmed ?? true)
+            login(data.access_token, data.email, data.confirmed ?? true, data)
             navigate(redirect, { replace: true })
           } catch (e) {
             if (!alive) return
@@ -165,12 +165,12 @@ export default function AuthPage2({ defaultTab = 'login' }) {
     try {
       if (tab === 'login') {
         const data = await authApi.login({ email, password })
-        login(data.access_token, data.email, data.confirmed ?? false)
+        login(data.access_token, data.email, data.confirmed ?? false, data)
         navigate(redirect, { replace: true })
       } else {
         const data = await authApi.register({ email, password, offset, timezone })
         if (data.access_token) {
-          login(data.access_token, data.email, data.confirmed ?? false)
+          login(data.access_token, data.email, data.confirmed ?? false, data)
           navigate(redirect, { replace: true })
         }
       }

@@ -3,8 +3,11 @@ import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext.jsx'
 import '../styles/header-modern.css'
 
+const TEACHER_ROLES = new Set(['teacher', 'school_admin', 'district_admin'])
+
 export default function HeaderModern({ onSettings, onAdd, page = 'links' }) {
-  const { logout } = useAuth()
+  const { logout, role } = useAuth()
+  const isTeacher = TEACHER_ROLES.has(role)
   const navigate = useNavigate()
   const [menuOpen, setMenuOpen] = useState(false)
 
@@ -26,6 +29,7 @@ export default function HeaderModern({ onSettings, onAdd, page = 'links' }) {
         <Link to={otherPage} className="hm-nav-link">
           {otherLabel}
         </Link>
+        {isTeacher && <Link to="/admin" className="hm-nav-link">Admin</Link>}
         <button className="hm-nav-link" onClick={onSettings}>Settings</button>
         <button className="hm-nav-link" onClick={handleLogout}>Log Out</button>
         {onAdd && (
@@ -40,6 +44,7 @@ export default function HeaderModern({ onSettings, onAdd, page = 'links' }) {
       {menuOpen && (
         <div className="hm-mobile-menu">
           <Link to={otherPage} onClick={() => setMenuOpen(false)}>{otherLabel}</Link>
+          {isTeacher && <Link to="/admin" onClick={() => setMenuOpen(false)}>Admin</Link>}
           <button onClick={() => { setMenuOpen(false); onSettings?.() }}>Settings</button>
           <button onClick={handleLogout}>Log Out</button>
         </div>

@@ -1,8 +1,9 @@
 import html as _html
 import secrets
 from urllib.parse import urlparse
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from app.auth import get_confirmed_user, get_current_user
+from app.audit import log_audit
 from app.database import motor_db
 from app.encryption import encrypt, decrypt
 from app.models.link import (
@@ -51,7 +52,7 @@ async def get_links(user: dict = Depends(get_current_user)):
 
 
 @router.post("", status_code=201)
-async def create_link(body: CreateLinkRequest, user: dict = Depends(get_confirmed_user)):
+async def create_link(request: Request, body: CreateLinkRequest, user: dict = Depends(get_confirmed_user)):
     email = user["username"]
     link_url = _normalize_url(body.link)
     if not _valid_url(link_url):
@@ -82,12 +83,13 @@ async def create_link(body: CreateLinkRequest, user: dict = Depends(get_confirme
     await motor_db.links.insert_one(doc)
     create_text_job(doc)
     await analytics("links_made")
+    await log_audit(email, "link.create", "link", link_id, ip=request.client.host if request.client else None, detail={"name": body.name})
     await manager.broadcast(await configure_data(email), email)
     return {"message": "Created"}
 
 
 @router.put("/{link_id}")
-async def update_link(link_id: int, body: UpdateLinkRequest, user: dict = Depends(get_confirmed_user)):
+async def update_link(link_id: int, request: Request, body: UpdateLinkRequest, user: dict = Depends(get_confirmed_user)):
     email = user["username"]
     existing = await motor_db.links.find_one({"username": email, "id": link_id})
     if not existing:
@@ -135,12 +137,13 @@ async def update_link(link_id: int, body: UpdateLinkRequest, user: dict = Depend
     await motor_db.links.replace_one({"username": email, "id": link_id}, doc)
     create_text_job(doc, update=True)
     await analytics("links_edited")
+    await log_audit(email, "link.update", "link", link_id, ip=request.client.host if request.client else None, detail={"name": body.name})
     await manager.broadcast(await configure_data(email), email)
     return {"message": "Updated"}
 
 
 @router.delete("/{link_id}")
-async def delete_link(link_id: int, permanent: bool = False, type: str = "link", user: dict = Depends(get_confirmed_user)):
+async def delete_link(link_id: int, request: Request, permanent: bool = False, type: str = "link", user: dict = Depends(get_confirmed_user)):
     email = user["username"]
     if type == "bookmark":
         coll, del_coll = motor_db.bookmarks, motor_db.deleted_bookmarks
@@ -163,6 +166,7 @@ async def delete_link(link_id: int, permanent: bool = False, type: str = "link",
             await motor_db.links.delete_many({"share_id": link_id})
 
     await analytics("links_deleted")
+    await log_audit(email, "link.delete", type, link_id, ip=request.client.host if request.client else None)
     await manager.broadcast(await configure_data(email), email)
     return {"message": "Deleted"}
 
@@ -202,6 +206,7 @@ async def toggle_link(link_id: int, body: ToggleLinkRequest, user: dict = Depend
         updated = {**existing, "active": "true"}
         create_text_job(updated, update=True)
     await analytics("links_edited")
+    await log_audit(email, "link.toggle", "link", link_id, detail={"active": active})
     await manager.broadcast(await configure_data(email), email)
     return {"message": "Toggled", "active": active}
 

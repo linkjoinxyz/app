@@ -17,6 +17,10 @@ export default function Footer() {
           <Link to="/meetings">Meetings</Link>
           <Link to="/bookmarks">Bookmarks</Link>
           <Link to="/privacy">Privacy Policy</Link>
+          <Link to="/privacy-schools">School Privacy</Link>
+          <Link to="/dpa">Data Processing Agreement</Link>
+          <Link to="/subprocessors">Subprocessors</Link>
+          <Link to="/breach-policy">Breach Policy</Link>
         </div>
       </div>
       <div className="copyright">

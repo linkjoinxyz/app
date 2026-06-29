@@ -92,7 +92,7 @@ export default function AuthModal({ mode: initialMode, onClose }) {
           setError('')
           try {
             const data = await authApi.googleTokenLogin(response.access_token)
-            login(data.access_token, data.email, data.confirmed ?? true)
+            login(data.access_token, data.email, data.confirmed ?? true, data)
             navigate('/meetings', { replace: true })
           } catch (e) {
             if (!alive) return
@@ -145,7 +145,7 @@ export default function AuthModal({ mode: initialMode, onClose }) {
     setShowReset(false)
     try {
       const data = await authApi.login({ email, password })
-      login(data.access_token, data.email)
+      login(data.access_token, data.email, data.confirmed ?? false, data)
       navigate('/meetings', { replace: true })
     } catch (e) {
       const detail = e.body?.detail || 'login_failed'
@@ -164,7 +164,7 @@ export default function AuthModal({ mode: initialMode, onClose }) {
         countrycode: countryCode, offset, timezone,
       })
       if (data.access_token) {
-        login(data.access_token, data.email)
+        login(data.access_token, data.email, data.confirmed ?? false, data)
         navigate('/meetings', { replace: true })
       } else {
         navigate('/login?error=not_confirmed')

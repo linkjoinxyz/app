@@ -2,6 +2,7 @@ import asyncio
 import logging
 import secrets
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s — %(message)s")
 from pathlib import Path
@@ -20,7 +21,7 @@ from app.utils import configure_data
 from app.websocket_manager import manager
 from app.database import motor_db
 from app.redis_client import get_redis
-from app.routers import auth, links, bookmarks, users, admin, messaging, analytics, ai, contact
+from app.routers import auth, links, bookmarks, users, admin, messaging, analytics, ai, contact, orgs, classes
 
 _DIST = Path(__file__).resolve().parent.parent.parent / "linkjoin-frontend" / "dist"
 
@@ -64,6 +65,20 @@ async def lifespan(app: FastAPI):
     await motor_db.bookmarks.create_index([("username", 1), ("id", 1)])
     await motor_db.pending_links.create_index("username")
     await motor_db.deleted_links.create_index("username")
+    await motor_db.audit_logs.create_index([("user", 1), ("ts", -1)])
+    await motor_db.audit_logs.create_index("ts")
+    await motor_db.login.create_index("user_id", unique=True, sparse=True)
+    await motor_db.classes.create_index("class_id", unique=True)
+    await motor_db.classes.create_index("org_id")
+    await motor_db.classes.create_index("teacher_id")
+    await motor_db.orgs.create_index("org_id", unique=True)
+
+    async for u in motor_db.login.find({"user_id": {"$exists": False}}):
+        await motor_db.login.update_one(
+            {"_id": u["_id"]},
+            {"$set": {"user_id": secrets.token_urlsafe(16), "account_type": "personal"}}
+        )
+
     async def _init_scheduler():
         await asyncio.to_thread(load_all_text_jobs)
         scheduler.start()
@@ -102,6 +117,8 @@ app.include_router(messaging.router)
 app.include_router(analytics.router)
 app.include_router(ai.router)
 app.include_router(contact.router)
+app.include_router(orgs.router)
+app.include_router(classes.router)
 
 
 @app.get("/location")

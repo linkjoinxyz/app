@@ -16,7 +16,7 @@ export default function ConfirmEmail() {
     authApi.confirmEmail(token)
       .then(data => {
         if (data.access_token) {
-          login(data.access_token, data.email, true)
+          login(data.access_token, data.email, true, data)
           setStatus('success')
           setTimeout(() => navigate('/meetings', { replace: true }), 1500)
         } else {

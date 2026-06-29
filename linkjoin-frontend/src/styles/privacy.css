@@ -24,6 +24,9 @@ html::-webkit-scrollbar, body::-webkit-scrollbar { display: none; }
 .pp-body {
   width: 100%;
   max-width: 680px;
+  background: #060F1A;
+  border-radius: 8px;
+  padding: 56px 64px;
 }
 
 .pp-eyebrow {
@@ -93,4 +96,5 @@ html::-webkit-scrollbar, body::-webkit-scrollbar { display: none; }
 @media (max-width: 600px) {
   .pp-title { font-size: 30px; }
   .pp-main { padding-top: 48px; }
+  .pp-body { padding: 36px 28px; }
 }

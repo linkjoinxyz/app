@@ -636,11 +636,16 @@ export default function NewHomepage() {
             <p className="nh-footer-col-title">Account</p>
             <button onClick={() => setAuthModal('login')}>Log In</button>
             <button onClick={() => setAuthModal('signup')}>Sign Up</button>
+            <Link to="/forgot-password">Reset Password</Link>
           </div>
           <div className="nh-footer-col">
             <p className="nh-footer-col-title">Company</p>
             <Link to="/privacy">Privacy Policy</Link>
             <Link to="/tos">Terms of Service</Link>
+            <Link to="/privacy-schools">School Privacy</Link>
+            <Link to="/dpa">Data Processing Agreement</Link>
+            <Link to="/subprocessors">Subprocessors</Link>
+            <Link to="/breach-policy">Breach Policy</Link>
             <Link to="/contact">Contact</Link>
           </div>
         </div>
