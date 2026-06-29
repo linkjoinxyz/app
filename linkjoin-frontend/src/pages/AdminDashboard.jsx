@@ -174,11 +174,7 @@ function ClassDetail({ cls, onBack, teacherLinks, onUpdate }) {
     <div className="detail-root">
       {/* Hero header */}
       <div className="detail-hero">
-        <button className="detail-back-btn" onClick={onBack} title="Back">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-            <path d="M19 12H5M5 12l7 7M5 12l7-7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-          </svg>
-        </button>
+        <button className="detail-back-btn" onClick={onBack} title="Back">&#8592;</button>
         <div className="detail-hero-body">
           <div className="detail-class-name">{cls.name}</div>
           {(cls.time || cls.days?.length > 0) && (
@@ -404,7 +400,7 @@ function SchoolAdminView() {
             <div key={tid} className={`teacher-item${isOpen ? ' is-expanded' : ''}`}>
               <button className="teacher-row-btn" onClick={() => setExpanded(isOpen ? null : tid)}>
                 <div className="teacher-avatar" style={{ background: av.bg, border: `1px solid ${av.border}` }}>
-                  {avatarSeed[0].toUpperCase()}
+                  {(info.name?.trim()?.[0] || avatarSeed[0]).toUpperCase()}
                 </div>
                 <div className="teacher-info">
                   <div className="teacher-email-label">{displayName}</div>

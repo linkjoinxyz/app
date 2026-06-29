@@ -67,6 +67,7 @@ export default function Profile() {
     setSaving(s => ({ ...s, name: true }))
     try {
       await apiFetch('/users/name', { method: 'PATCH', body: JSON.stringify({ name }) })
+      setUser(u => u ? { ...u, name } : u)
       flash('name')
     } catch { flash('name', false) }
     finally { setSaving(s => ({ ...s, name: false })) }
@@ -110,7 +111,9 @@ export default function Profile() {
   const displayAvatar = avatarPreview || avatar
   const seed = user?.username || authEmail || '?'
   const pal = avatarPalette(seed)
-  const initials = (user?.name || seed)[0]?.toUpperCase() || '?'
+  const initials = user
+    ? (user.name?.trim()?.[0] || user.username?.[0] || '?').toUpperCase()
+    : null
 
   return (
     <div className="profile-root">
@@ -128,7 +131,7 @@ export default function Profile() {
             >
               {displayAvatar
                 ? <img src={displayAvatar} alt="Profile" className="profile-avatar-img" />
-                : <span className="profile-avatar-initials">{initials}</span>
+                : initials && <span className="profile-avatar-initials">{initials}</span>
               }
               <div className="profile-avatar-overlay">
                 {saving.avatar ? '…' : ''}

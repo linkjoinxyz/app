@@ -111,15 +111,18 @@
   background: rgba(255,255,255,0.06);
   border: 1px solid rgba(255,255,255,0.1);
   border-radius: 7px;
-  color: rgba(255,255,255,0.65);
+  color: rgba(255,255,255,0.8);
   cursor: pointer;
-  padding: 7px;
+  padding: 6px 10px;
+  font-size: 16px;
+  line-height: 1;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
   transition: background 0.15s, color 0.15s;
   margin-top: 2px;
+  font-family: inherit;
 }
 .detail-back-btn:hover { background: rgba(255,255,255,0.12); color: #fff; }
 
