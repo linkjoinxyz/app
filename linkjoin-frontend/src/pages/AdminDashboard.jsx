@@ -302,14 +302,22 @@ function TeacherView() {
       <div className="class-grid">
         {classes.map(cls => (
           <div key={cls.class_id} className="class-card" onClick={() => setSelected(cls)}>
-            <div className="class-card-name">{cls.name}</div>
-            <div className="class-card-meta">
-              {cls.time && <span>{cls.time}</span>}
-              {cls.days?.map(d => <DayBadge key={d} day={d} />)}
-            </div>
-            <div className="class-card-stats">
-              <div className="class-card-stat"><span>{(cls.student_ids || []).length}</span> students</div>
-              <div className="class-card-stat"><span>{(cls.link_ids || []).length}</span> links</div>
+            {(cls.time || cls.days?.length > 0) && (
+              <div className="class-card-header">
+                {cls.time && <span className="class-card-time">{cls.time}</span>}
+                {cls.days?.length > 0 && (
+                  <div className="class-card-days">
+                    {cls.days.map(d => <DayBadge key={d} day={d} />)}
+                  </div>
+                )}
+              </div>
+            )}
+            <div className="class-card-body">
+              <div className="class-card-name">{cls.name}</div>
+              <div className="class-card-stats">
+                <div className="class-card-stat"><span>{(cls.student_ids || []).length}</span> students</div>
+                <div className="class-card-stat"><span>{(cls.link_ids || []).length}</span> links</div>
+              </div>
             </div>
           </div>
         ))}
@@ -381,13 +389,21 @@ function SchoolAdminView() {
                   <div className="class-grid">
                     {teacherClasses.map(cls => (
                       <div key={cls.class_id} className="class-card class-card--nested" onClick={() => setSelected(cls)}>
-                        <div className="class-card-name">{cls.name}</div>
-                        <div className="class-card-meta">
-                          {cls.time && <span>{cls.time}</span>}
-                          {cls.days?.map(d => <DayBadge key={d} day={d} />)}
-                        </div>
-                        <div className="class-card-stats">
-                          <div className="class-card-stat"><span>{(cls.student_ids || []).length}</span> students</div>
+                        {(cls.time || cls.days?.length > 0) && (
+                          <div className="class-card-header">
+                            {cls.time && <span className="class-card-time">{cls.time}</span>}
+                            {cls.days?.length > 0 && (
+                              <div className="class-card-days">
+                                {cls.days.map(d => <DayBadge key={d} day={d} />)}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                        <div className="class-card-body">
+                          <div className="class-card-name">{cls.name}</div>
+                          <div className="class-card-stats">
+                            <div className="class-card-stat"><span>{(cls.student_ids || []).length}</span> students</div>
+                          </div>
                         </div>
                       </div>
                     ))}

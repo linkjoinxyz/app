@@ -28,44 +28,65 @@
   background: #0C1E30;
   border: 1px solid rgba(43,143,216,0.22);
   border-radius: 10px;
-  padding: 20px;
+  overflow: hidden;
   cursor: pointer;
-  transition: border-color 0.15s, background 0.15s;
+  transition: border-color 0.15s;
 }
 
 .class-card:hover {
   border-color: rgba(43,143,216,0.55);
-  background: #0f2540;
+}
+
+.class-card-header {
+  background: rgba(43,143,216,0.08);
+  border-bottom: 1px solid rgba(43,143,216,0.15);
+  padding: 10px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.class-card-time {
+  font-size: 15px;
+  font-weight: 700;
+  color: rgba(255,255,255,0.9);
+  letter-spacing: -0.01em;
+  flex-shrink: 0;
+}
+
+.class-card-days {
+  display: flex;
+  gap: 3px;
+  flex-wrap: wrap;
+}
+
+.class-card-body {
+  padding: 14px 16px;
 }
 
 .class-card-name {
   font-size: 15px;
   font-weight: 600;
-  margin: 0 0 6px;
-}
-
-.class-card-meta {
-  font-size: 12px;
-  color: rgba(255,255,255,0.5);
-  margin: 0 0 12px;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
+  margin: 0 0 10px;
 }
 
 .class-card-stats {
   display: flex;
   gap: 16px;
+  border-top: 1px solid rgba(255,255,255,0.05);
+  padding-top: 10px;
 }
 
 .class-card-stat {
-  font-size: 12px;
-  color: rgba(255,255,255,0.55);
+  font-size: 11px;
+  color: rgba(255,255,255,0.38);
 }
 
 .class-card-stat span {
+  font-size: 13px;
   font-weight: 700;
-  color: #fff;
+  color: rgba(255,255,255,0.8);
   margin-right: 3px;
 }
 
@@ -199,6 +220,10 @@
 
 .class-card--nested {
   background: rgba(6,15,26,0.55);
+}
+
+.class-card--nested .class-card-header {
+  background: rgba(43,143,216,0.06);
 }
 
 /* Student roster table */
