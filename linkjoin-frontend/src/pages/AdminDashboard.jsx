@@ -440,7 +440,7 @@ export default function AdminDashboard() {
 
   return (
     <div>
-      <HeaderModern />
+      <HeaderModern page="admin" />
       <div className="admin-page">
         {role === 'teacher' && <TeacherView />}
         {role === 'school_admin' && <SchoolAdminView />}

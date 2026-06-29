@@ -102,6 +102,14 @@
   color: white;
   background: rgba(255, 255, 255, 0.06);
 }
+.hm-nav-link--active {
+  color: white;
+  font: 600 13px Montserrat, sans-serif;
+  letter-spacing: 0.04em;
+  padding: 6px 12px;
+  display: inline-flex;
+  align-items: center;
+}
 
 .hm-add-btn {
   margin-left: 8px;

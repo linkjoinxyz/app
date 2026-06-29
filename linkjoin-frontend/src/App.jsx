@@ -32,7 +32,7 @@ function PrivateRoute({ children }) {
 
 function TeacherRoute({ children }) {
   const { token, role } = useAuth()
-  if (!token) return <Navigate to="/login" replace />
+  if (!token) return <Navigate to="/login?redirect=/admin" replace />
   if (!TEACHER_ROLES.has(role)) return <Navigate to="/meetings" replace />
   return children
 }
