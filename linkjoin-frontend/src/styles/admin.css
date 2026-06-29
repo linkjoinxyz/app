@@ -49,8 +49,8 @@
 
 .class-card-time {
   font-size: 15px;
-  font-weight: 700;
-  color: #fff;
+  font-weight: 400;
+  color: rgba(255,255,255,0.75);
   letter-spacing: -0.01em;
   flex-shrink: 0;
 }
@@ -67,8 +67,9 @@
 
 .class-card-name {
   font-size: 15px;
-  font-weight: 600;
+  font-weight: 400;
   margin: 0 0 10px;
+  color: rgba(255,255,255,0.85);
 }
 
 .class-card-stats {
