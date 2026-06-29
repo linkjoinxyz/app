@@ -174,7 +174,9 @@ function ClassDetail({ cls, onBack, teacherLinks, onUpdate }) {
     <div className="detail-root">
       {/* Hero header */}
       <div className="detail-hero">
-        <button className="detail-back-btn" onClick={onBack} title="Back">&#8592;</button>
+        <button className="detail-back-btn" onClick={onBack} title="Back">
+          <img src="/images/arrow-left.svg" alt="back" style={{ width: 18, height: 18, display: 'block' }} />
+        </button>
         <div className="detail-hero-body">
           <div className="detail-class-name">{cls.name}</div>
           {(cls.time || cls.days?.length > 0) && (
