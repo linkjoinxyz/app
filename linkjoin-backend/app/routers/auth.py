@@ -107,12 +107,22 @@ async def register(request: Request, body: RegisterRequest, background_tasks: Ba
         await analytics("signups")
         await log_audit(email, "auth.register", ip=request.client.host if request.client else None)
         access_token = create_token(email)
-        return {"access_token": access_token, "token_type": "bearer", "email": email, "confirmed": False}
+        return {
+            "access_token": access_token, "token_type": "bearer", "email": email, "confirmed": False,
+            "account_type": account.get("account_type", "personal"),
+            "role": account.get("role"),
+            "org_id": account.get("org_id"),
+        }
 
     await analytics("signups")
     await log_audit(email, "auth.register", ip=request.client.host if request.client else None)
     access_token = create_token(email)
-    return {"access_token": access_token, "token_type": "bearer", "email": email, "confirmed": True}
+    return {
+        "access_token": access_token, "token_type": "bearer", "email": email, "confirmed": True,
+        "account_type": account.get("account_type", "personal"),
+        "role": account.get("role"),
+        "org_id": account.get("org_id"),
+    }
 
 
 @router.get("/confirm")
