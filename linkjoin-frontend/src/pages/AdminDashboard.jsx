@@ -8,6 +8,14 @@ import '../styles/admin.css'
 
 const DAYS_SHORT = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
+function formatTime(time24) {
+  if (!time24) return ''
+  const [h, m] = time24.split(':').map(Number)
+  const period = h >= 12 ? 'PM' : 'AM'
+  const hour = h % 12 || 12
+  return `${hour}:${String(m).padStart(2, '0')} ${period}`
+}
+
 const AVATAR_PALETTES = [
   { bg: 'rgba(43,143,216,0.22)', border: 'rgba(43,143,216,0.5)' },
   { bg: 'rgba(72,197,120,0.2)',  border: 'rgba(72,197,120,0.45)' },
@@ -177,7 +185,7 @@ function ClassDetail({ cls, onBack, teacherLinks, onUpdate }) {
         <button className="detail-back-btn" onClick={onBack}>
           <img src="/images/arrow-left.svg" alt="back" style={{ width: 18, height: 18, display: 'block' }} />
         </button>
-        {cls.time && <div className="detail-time-pill">{cls.time}</div>}
+        {cls.time && <div className="detail-time-pill">{formatTime(cls.time)}</div>}
         <div className="detail-class-name">{cls.name}</div>
         {cls.days?.length > 0 && (
           <div className="detail-days-str">
@@ -322,7 +330,7 @@ function TeacherView() {
           <div key={cls.class_id} className="class-card" onClick={() => setSelected(cls)}>
             {(cls.time || cls.days?.length > 0) && (
               <div className="class-card-header">
-                {cls.time && <span className="class-card-time">{cls.time}</span>}
+                {cls.time && <span className="class-card-time">{formatTime(cls.time)}</span>}
                 {cls.days?.length > 0 && (
                   <div className="class-card-days">
                     {cls.days.map(d => <DayBadge key={d} day={d} />)}
@@ -434,7 +442,7 @@ function SchoolAdminView() {
                       <div key={cls.class_id} className="class-card class-card--nested" onClick={() => setSelected(cls)}>
                         {(cls.time || cls.days?.length > 0) && (
                           <div className="class-card-header">
-                            {cls.time && <span className="class-card-time">{cls.time}</span>}
+                            {cls.time && <span className="class-card-time">{formatTime(cls.time)}</span>}
                             {cls.days?.length > 0 && (
                               <div className="class-card-days">
                                 {cls.days.map(d => <DayBadge key={d} day={d} />)}
