@@ -90,12 +90,19 @@ function NewClassModal({ onClose, onCreated }) {
 // ─── Class Detail (teacher view) ─────────────────────────────────────────────
 
 function ClassDetail({ cls, onBack, teacherLinks, onUpdate }) {
-  const [students, setStudents] = useState(cls.students || [])
+  const [students, setStudents] = useState([])
   const [classLinks, setClassLinks] = useState([])
   const [addInput, setAddInput] = useState('')
   const [addErr, setAddErr] = useState('')
   const [addLoading, setAddLoading] = useState(false)
   const [showLinkPicker, setShowLinkPicker] = useState(false)
+
+  useEffect(() => {
+    apiGet(`/classes/${cls.class_id}`).then(fresh => {
+      setStudents(fresh.students || [])
+      onUpdate(fresh)
+    }).catch(() => {})
+  }, [cls.class_id])
 
   useEffect(() => {
     const ids = cls.link_ids || []
