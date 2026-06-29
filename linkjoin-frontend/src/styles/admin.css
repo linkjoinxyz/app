@@ -137,7 +137,7 @@
 .detail-class-name {
   font-size: 16px;
   font-weight: 700;
-  color: var(--lightblue, #2B8FD8);
+  color: #fff;
   flex: 1;
   min-width: 0;
   overflow: hidden;
