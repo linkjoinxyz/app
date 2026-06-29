@@ -174,15 +174,22 @@ function ClassDetail({ cls, onBack, teacherLinks, onUpdate }) {
     <div className="detail-root">
       {/* Hero header */}
       <div className="detail-hero">
-        <button className="detail-back-btn" onClick={onBack} title="Back">
-          <img src="/images/arrow-left.svg" alt="back" style={{ width: 18, height: 18, display: 'block' }} />
-        </button>
-        <div className="detail-hero-body">
+        <div className="detail-hero-nav">
+          <button className="detail-back-btn" onClick={onBack}>
+            <img src="/images/arrow-left.svg" alt="back" style={{ width: 18, height: 18, display: 'block' }} />
+          </button>
+          <span className="detail-breadcrumb">All Classes</span>
+        </div>
+        <div className="detail-hero-main">
           <div className="detail-class-name">{cls.name}</div>
           {(cls.time || cls.days?.length > 0) && (
-            <div className="detail-class-meta">
-              {cls.time && <span className="detail-time">{cls.time}</span>}
-              {cls.days?.map(d => <DayBadge key={d} day={d} />)}
+            <div className="detail-schedule">
+              {cls.time && <div className="detail-time">{cls.time}</div>}
+              {cls.days?.length > 0 && (
+                <div className="detail-days">
+                  {cls.days.map(d => <DayBadge key={d} day={d} />)}
+                </div>
+              )}
             </div>
           )}
         </div>
