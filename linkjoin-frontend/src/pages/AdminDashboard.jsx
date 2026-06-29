@@ -353,6 +353,7 @@ function SchoolAdminView() {
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState(null)
   const [expanded, setExpanded] = useState(null)
+  const [search, setSearch] = useState('')
 
   useEffect(() => {
     apiGet('/classes').then(cls => setClasses(cls)).finally(() => setLoading(false))
@@ -385,11 +386,26 @@ function SchoolAdminView() {
     )
   }
 
+  const q = search.trim().toLowerCase()
+  const filteredTeachers = Object.entries(byTeacher).filter(([tid]) => {
+    if (!q) return true
+    const info = teacherLabels[tid] || {}
+    return (info.name || '').toLowerCase().includes(q) ||
+           (info.email || '').toLowerCase().includes(q)
+  })
+
   return (
     <>
-      <div className="admin-section-title">Teachers</div>
+      <div className="admin-search-row">
+        <input
+          className="admin-input admin-search-input"
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          placeholder="Search teachers…"
+        />
+      </div>
       <div className="teacher-list">
-        {Object.entries(byTeacher).map(([tid, teacherClasses]) => {
+        {filteredTeachers.map(([tid, teacherClasses]) => {
           const info = teacherLabels[tid] || {}
           const displayName = info.name || info.email || 'Unknown teacher'
           const subLabel = info.name ? info.email : null
@@ -440,8 +456,10 @@ function SchoolAdminView() {
             </div>
           )
         })}
-        {Object.keys(byTeacher).length === 0 && (
-          <div className="admin-empty">No classes found in your organization.</div>
+        {filteredTeachers.length === 0 && (
+          <div className="admin-empty">
+            {q ? 'No teachers match your search.' : 'No classes found in your organization.'}
+          </div>
         )}
       </div>
     </>

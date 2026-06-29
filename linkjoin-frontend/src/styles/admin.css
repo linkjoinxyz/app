@@ -260,6 +260,15 @@
 }
 .admin-back-btn:hover { color: #fff; }
 
+/* Teacher search */
+.admin-search-row {
+  margin-bottom: 14px;
+}
+
+.admin-search-input {
+  max-width: 320px;
+}
+
 /* Teacher list — accordion */
 .teacher-list {
   display: flex;
