@@ -1,3 +1,9 @@
+.admin-root .hm-header {
+  background: var(--dark, #060F1A);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
 .admin-page {
   min-height: 100vh;
   background: var(--dark, #060F1A);

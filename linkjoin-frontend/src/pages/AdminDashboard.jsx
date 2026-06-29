@@ -465,7 +465,7 @@ export default function AdminDashboard() {
   const { role } = useAuth()
 
   return (
-    <div>
+    <div className="admin-root">
       <HeaderModern page="admin" />
       <div className="admin-page">
         {role === 'teacher' && <TeacherView />}
