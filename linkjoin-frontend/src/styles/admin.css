@@ -38,8 +38,8 @@
 }
 
 .class-card-header {
-  background: rgba(43,143,216,0.08);
-  border-bottom: 1px solid rgba(43,143,216,0.15);
+  background: rgba(255,255,255,0.04);
+  border-bottom: 1px solid rgba(255,255,255,0.07);
   padding: 10px 16px;
   display: flex;
   align-items: center;
@@ -50,7 +50,7 @@
 .class-card-time {
   font-size: 15px;
   font-weight: 700;
-  color: rgba(255,255,255,0.9);
+  color: #fff;
   letter-spacing: -0.01em;
   flex-shrink: 0;
 }
@@ -223,7 +223,7 @@
 }
 
 .class-card--nested .class-card-header {
-  background: rgba(43,143,216,0.06);
+  background: rgba(255,255,255,0.03);
 }
 
 /* Student roster table */

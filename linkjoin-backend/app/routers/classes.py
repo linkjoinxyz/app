@@ -60,10 +60,13 @@ async def list_classes(user: dict = Depends(get_confirmed_user)):
         teacher_map = {}
         for tid in teacher_ids:
             t = await motor_db.login.find_one({"user_id": tid}, {"username": 1})
+            if not t:
+                # Fallback: teacher_id may be an email (older data) or match username directly
+                t = await motor_db.login.find_one({"username": tid}, {"username": 1})
             if t:
                 teacher_map[tid] = t["username"]
         for c in classes:
-            c["teacher_email"] = teacher_map.get(c["teacher_id"], c["teacher_id"])
+            c["teacher_email"] = teacher_map.get(c["teacher_id"])
     return classes
 
 

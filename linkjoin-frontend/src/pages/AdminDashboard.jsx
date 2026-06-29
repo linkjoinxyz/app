@@ -23,8 +23,8 @@ function avatarPalette(email) {
 function DayBadge({ day }) {
   return (
     <span style={{
-      background: 'rgba(43,143,216,0.18)', border: '1px solid rgba(43,143,216,0.35)',
-      borderRadius: 4, padding: '1px 6px', fontSize: 11, color: 'rgba(255,255,255,0.8)',
+      background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.14)',
+      borderRadius: 4, padding: '1px 6px', fontSize: 11, color: 'rgba(255,255,255,0.65)',
     }}>{day}</span>
   )
 }
@@ -341,7 +341,7 @@ function SchoolAdminView() {
   }, [])
 
   const teacherLabels = {}
-  classes.forEach(cls => { teacherLabels[cls.teacher_id] = cls.teacher_email || cls.teacher_id })
+  classes.forEach(cls => { teacherLabels[cls.teacher_id] = cls.teacher_email || null })
   const byTeacher = classes.reduce((acc, cls) => {
     const tid = cls.teacher_id
     if (!acc[tid]) acc[tid] = []
@@ -367,17 +367,18 @@ function SchoolAdminView() {
       <div className="admin-section-title">Teachers</div>
       <div className="teacher-list">
         {Object.entries(byTeacher).map(([tid, teacherClasses]) => {
-          const email = teacherLabels[tid] || tid
-          const av = avatarPalette(email)
+          const email = teacherLabels[tid]
+          const displayLabel = email || 'Unknown teacher'
+          const av = avatarPalette(email || tid)
           const isOpen = expanded === tid
           return (
             <div key={tid} className={`teacher-item${isOpen ? ' is-expanded' : ''}`}>
               <button className="teacher-row-btn" onClick={() => setExpanded(isOpen ? null : tid)}>
                 <div className="teacher-avatar" style={{ background: av.bg, border: `1px solid ${av.border}` }}>
-                  {email[0].toUpperCase()}
+                  {(email || tid)[0].toUpperCase()}
                 </div>
                 <div className="teacher-info">
-                  <div className="teacher-email-label">{email}</div>
+                  <div className="teacher-email-label">{displayLabel}</div>
                   <div className="teacher-count-chip">
                     {teacherClasses.length} {teacherClasses.length === 1 ? 'class' : 'classes'}
                   </div>
