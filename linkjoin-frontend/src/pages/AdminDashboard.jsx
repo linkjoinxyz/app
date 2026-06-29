@@ -172,27 +172,18 @@ function ClassDetail({ cls, onBack, teacherLinks, onUpdate }) {
 
   return (
     <div className="detail-root">
-      {/* Hero header */}
+      {/* Hero header — mirrors link card layout */}
       <div className="detail-hero">
-        <div className="detail-hero-nav">
-          <button className="detail-back-btn" onClick={onBack}>
-            <img src="/images/arrow-left.svg" alt="back" style={{ width: 18, height: 18, display: 'block' }} />
-          </button>
-          <span className="detail-breadcrumb">All Classes</span>
-        </div>
-        <div className="detail-hero-main">
-          <div className="detail-class-name">{cls.name}</div>
-          {(cls.time || cls.days?.length > 0) && (
-            <div className="detail-schedule">
-              {cls.time && <div className="detail-time">{cls.time}</div>}
-              {cls.days?.length > 0 && (
-                <div className="detail-days">
-                  {cls.days.map(d => <DayBadge key={d} day={d} />)}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
+        <button className="detail-back-btn" onClick={onBack}>
+          <img src="/images/arrow-left.svg" alt="back" style={{ width: 18, height: 18, display: 'block' }} />
+        </button>
+        {cls.time && <div className="detail-time-pill">{cls.time}</div>}
+        <div className="detail-class-name">{cls.name}</div>
+        {cls.days?.length > 0 && (
+          <div className="detail-days-str">
+            {cls.days.join(' · ')}
+          </div>
+        )}
       </div>
 
       {/* Section grid */}
