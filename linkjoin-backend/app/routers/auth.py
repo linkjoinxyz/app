@@ -70,6 +70,8 @@ async def register(request: Request, body: RegisterRequest, background_tasks: Ba
 
     account: dict = {
         "username": email,
+        "user_id": secrets.token_urlsafe(16),
+        "account_type": "personal",
         "premium": "false",
         "refer": gen_id(),
         "tutorial": -1,
@@ -277,6 +279,8 @@ async def google_code_exchange(request: Request, body: GoogleCodeRequest):
     if not user:
         account = {
             "username": email,
+            "user_id": secrets.token_urlsafe(16),
+            "account_type": "personal",
             "premium": "false",
             "refer": gen_id(),
             "tutorial": -1,
@@ -326,6 +330,8 @@ async def google_token_auth(request: Request, body: dict):
     if not user:
         account = {
             "username": email,
+            "user_id": secrets.token_urlsafe(16),
+            "account_type": "personal",
             "premium": "false",
             "refer": gen_id(),
             "tutorial": -1,
