@@ -31,8 +31,13 @@ function parseMDY(str) {
   return new Date(yr, mo - 1, dy)
 }
 
+function parseTimeParts(t) {
+  const parts = (t || '0:0').split(':')
+  return [parseInt(parts[0]) || 0, parseInt(parts[1]) || 0]
+}
+
 function getLinkMins(link) {
-  const [h, m] = (link.time || '0:0').split(':').map(Number)
+  const [h, m] = parseTimeParts(link.time)
   return h * 60 + m
 }
 
@@ -57,7 +62,7 @@ function effectiveDomDate(year, month, dayNum) {
 function minutesUntilNext(link, now) {
   const todayIdx = now.getDay()
   const currentMins = now.getHours() * 60 + now.getMinutes()
-  const [h, m] = (link.time || '0:0').split(':').map(Number)
+  const [h, m] = parseTimeParts(link.time)
   const linkMins = h * 60 + m
 
   if (link.repeat === 'never') {
