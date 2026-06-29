@@ -261,15 +261,15 @@
 }
 
 .teacher-item {
-  background: #0C1E30;
-  border: 1px solid rgba(43,143,216,0.18);
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.1);
   border-radius: 8px;
   overflow: hidden;
   transition: border-color 0.15s;
 }
 
-.teacher-item:hover { border-color: rgba(43,143,216,0.42); }
-.teacher-item.is-expanded { border-color: rgba(43,143,216,0.4); }
+.teacher-item:hover { border-color: rgba(255,255,255,0.22); }
+.teacher-item.is-expanded { border-color: rgba(255,255,255,0.18); }
 
 .teacher-row-btn {
   width: 100%;
@@ -336,12 +336,12 @@
 
 .teacher-item.is-expanded .teacher-chevron {
   transform: rotate(90deg);
-  color: rgba(43,143,216,0.8);
+  color: rgba(255,255,255,0.6);
 }
 
 .teacher-classes {
   padding: 0 14px 14px;
-  border-top: 1px solid rgba(43,143,216,0.12);
+  border-top: 1px solid rgba(255,255,255,0.07);
 }
 
 .teacher-classes .class-grid {
