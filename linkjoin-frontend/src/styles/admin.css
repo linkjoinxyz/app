@@ -6,18 +6,6 @@
   font-family: 'Montserrat', sans-serif;
 }
 
-.admin-page h1 {
-  font-size: 22px;
-  font-weight: 700;
-  margin: 0 0 8px;
-  letter-spacing: 0.02em;
-}
-
-.admin-subtitle {
-  font-size: 13px;
-  color: rgba(255,255,255,0.5);
-  margin: 0 0 32px;
-}
 
 .admin-section-title {
   font-size: 13px;
@@ -122,35 +110,95 @@
   margin: -16px 0 20px;
 }
 
-/* Teacher list */
+/* Teacher list — accordion */
 .teacher-list {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 2px;
 }
 
-.teacher-row {
+.teacher-item {
   background: #0C1E30;
   border: 1px solid rgba(43,143,216,0.18);
   border-radius: 8px;
-  padding: 14px 18px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  cursor: pointer;
+  overflow: hidden;
   transition: border-color 0.15s;
 }
 
-.teacher-row:hover { border-color: rgba(43,143,216,0.5); }
+.teacher-item:hover { border-color: rgba(43,143,216,0.42); }
+.teacher-item.is-expanded { border-color: rgba(43,143,216,0.4); }
 
-.teacher-email {
-  font-size: 14px;
-  font-weight: 500;
+.teacher-row-btn {
+  width: 100%;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 13px 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-family: inherit;
+  text-align: left;
 }
 
-.teacher-class-count {
+.teacher-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   font-size: 12px;
-  color: rgba(255,255,255,0.45);
+  font-weight: 700;
+  color: #fff;
+  flex-shrink: 0;
+}
+
+.teacher-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.teacher-email-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.teacher-count-chip {
+  font-size: 11px;
+  color: rgba(255,255,255,0.38);
+  margin-top: 2px;
+}
+
+.teacher-chevron {
+  font-size: 14px;
+  color: rgba(255,255,255,0.28);
+  transition: transform 0.2s, color 0.15s;
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+.teacher-item.is-expanded .teacher-chevron {
+  transform: rotate(90deg);
+  color: rgba(43,143,216,0.8);
+}
+
+.teacher-classes {
+  padding: 0 14px 14px;
+  border-top: 1px solid rgba(43,143,216,0.12);
+}
+
+.teacher-classes .class-grid {
+  padding-top: 14px;
+  margin-bottom: 0;
+}
+
+.class-card--nested {
+  background: rgba(6,15,26,0.55);
 }
 
 /* Student roster table */

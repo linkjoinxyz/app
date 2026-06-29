@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext.jsx'
 import { apiGet, apiPost, apiPut, apiDelete } from '../api/client.js'
 import HeaderModern from '../components/HeaderModern.jsx'
@@ -8,6 +7,18 @@ import '../styles/admin.css'
 // ─── helpers ────────────────────────────────────────────────────────────────
 
 const DAYS_SHORT = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+
+const AVATAR_PALETTES = [
+  { bg: 'rgba(43,143,216,0.22)', border: 'rgba(43,143,216,0.5)' },
+  { bg: 'rgba(72,197,120,0.2)',  border: 'rgba(72,197,120,0.45)' },
+  { bg: 'rgba(255,160,50,0.2)',  border: 'rgba(255,160,50,0.45)' },
+  { bg: 'rgba(180,100,220,0.2)', border: 'rgba(180,100,220,0.45)' },
+  { bg: 'rgba(50,180,180,0.2)',  border: 'rgba(50,180,180,0.45)' },
+]
+
+function avatarPalette(email) {
+  return AVATAR_PALETTES[(email || '?').charCodeAt(0) % AVATAR_PALETTES.length]
+}
 
 function DayBadge({ day }) {
   return (
@@ -315,12 +326,12 @@ function SchoolAdminView() {
   const [classes, setClasses] = useState([])
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState(null)
+  const [expanded, setExpanded] = useState(null)
 
   useEffect(() => {
     apiGet('/classes').then(cls => setClasses(cls)).finally(() => setLoading(false))
   }, [])
 
-  // Group by teacher_id; keep teacher_email for display
   const teacherLabels = {}
   classes.forEach(cls => { teacherLabels[cls.teacher_id] = cls.teacher_email || cls.teacher_id })
   const byTeacher = classes.reduce((acc, cls) => {
@@ -345,34 +356,47 @@ function SchoolAdminView() {
 
   return (
     <>
-      <div className="admin-section-title">Teachers & Classes</div>
+      <div className="admin-section-title">Teachers</div>
       <div className="teacher-list">
-        {Object.entries(byTeacher).map(([tid, teacherClasses]) => (
-          <div key={tid}>
-            <div className="teacher-row" style={{ cursor: 'default' }}>
-              <div>
-                <div className="teacher-email">{teacherLabels[tid] || tid}</div>
-              </div>
-              <div className="teacher-class-count">{teacherClasses.length} class{teacherClasses.length !== 1 ? 'es' : ''}</div>
-            </div>
-            <div style={{ paddingLeft: 16, marginTop: 6, marginBottom: 10 }}>
-              <div className="class-grid" style={{ marginBottom: 0 }}>
-                {teacherClasses.map(cls => (
-                  <div key={cls.class_id} className="class-card" onClick={() => setSelected(cls)}>
-                    <div className="class-card-name">{cls.name}</div>
-                    <div className="class-card-meta">
-                      {cls.time && <span>{cls.time}</span>}
-                      {cls.days?.map(d => <DayBadge key={d} day={d} />)}
-                    </div>
-                    <div className="class-card-stats">
-                      <div className="class-card-stat"><span>{(cls.student_ids || []).length}</span> students</div>
-                    </div>
+        {Object.entries(byTeacher).map(([tid, teacherClasses]) => {
+          const email = teacherLabels[tid] || tid
+          const av = avatarPalette(email)
+          const isOpen = expanded === tid
+          return (
+            <div key={tid} className={`teacher-item${isOpen ? ' is-expanded' : ''}`}>
+              <button className="teacher-row-btn" onClick={() => setExpanded(isOpen ? null : tid)}>
+                <div className="teacher-avatar" style={{ background: av.bg, border: `1px solid ${av.border}` }}>
+                  {email[0].toUpperCase()}
+                </div>
+                <div className="teacher-info">
+                  <div className="teacher-email-label">{email}</div>
+                  <div className="teacher-count-chip">
+                    {teacherClasses.length} {teacherClasses.length === 1 ? 'class' : 'classes'}
                   </div>
-                ))}
-              </div>
+                </div>
+                <span className="teacher-chevron">›</span>
+              </button>
+              {isOpen && (
+                <div className="teacher-classes">
+                  <div className="class-grid">
+                    {teacherClasses.map(cls => (
+                      <div key={cls.class_id} className="class-card class-card--nested" onClick={() => setSelected(cls)}>
+                        <div className="class-card-name">{cls.name}</div>
+                        <div className="class-card-meta">
+                          {cls.time && <span>{cls.time}</span>}
+                          {cls.days?.map(d => <DayBadge key={d} day={d} />)}
+                        </div>
+                        <div className="class-card-stats">
+                          <div className="class-card-stat"><span>{(cls.student_ids || []).length}</span> students</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
-          </div>
-        ))}
+          )
+        })}
         {Object.keys(byTeacher).length === 0 && (
           <div className="admin-empty">No classes found in your organization.</div>
         )}
@@ -396,21 +420,11 @@ function DistrictAdminView() {
 
 export default function AdminDashboard() {
   const { role } = useAuth()
-  const navigate = useNavigate()
-
-  const roleLabel = {
-    teacher: 'Teacher Dashboard',
-    school_admin: 'School Admin Dashboard',
-    district_admin: 'District Admin Dashboard',
-  }[role] || 'Admin Dashboard'
 
   return (
     <div>
       <HeaderModern />
       <div className="admin-page">
-        <h1>{roleLabel}</h1>
-        <div className="admin-subtitle">Manage your classes, rosters, and shared links.</div>
-
         {role === 'teacher' && <TeacherView />}
         {role === 'school_admin' && <SchoolAdminView />}
         {role === 'district_admin' && <DistrictAdminView />}
