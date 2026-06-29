@@ -189,6 +189,15 @@
   text-overflow: ellipsis;
 }
 
+.teacher-sub-label {
+  font-size: 11px;
+  color: rgba(255,255,255,0.35);
+  margin-top: 1px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .teacher-count-chip {
   font-size: 11px;
   color: rgba(255,255,255,0.38);

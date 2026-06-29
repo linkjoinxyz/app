@@ -25,6 +25,13 @@ async def get_me(user: dict = Depends(get_current_user)):
     return user
 
 
+@router.patch("/name")
+async def update_name(body: dict, user: dict = Depends(get_confirmed_user)):
+    name = (body.get("name") or "").strip()[:100]
+    await motor_db.login.update_one({"username": user["username"]}, {"$set": {"name": name}})
+    return {"name": name}
+
+
 @router.patch("/timezone")
 async def update_timezone(body: UpdateTimezoneRequest, user: dict = Depends(get_confirmed_user)):
     update: dict = {"timezone": body.timezone}
