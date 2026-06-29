@@ -49,11 +49,21 @@ async def _resolve_students(student_ids: list[str]) -> list[dict]:
 @router.get("")
 async def list_classes(user: dict = Depends(get_confirmed_user)):
     require_teacher(user)
-    if user.get("role") in ("school_admin", "district_admin"):
+    is_admin = user.get("role") in ("school_admin", "district_admin")
+    if is_admin:
         query = {"org_id": user.get("org_id")}
     else:
         query = {"teacher_id": user["user_id"]}
     classes = await motor_db.classes.find(query, {"_id": 0}).to_list(None)
+    if is_admin:
+        teacher_ids = {c["teacher_id"] for c in classes}
+        teacher_map = {}
+        for tid in teacher_ids:
+            t = await motor_db.login.find_one({"user_id": tid}, {"username": 1})
+            if t:
+                teacher_map[tid] = t["username"]
+        for c in classes:
+            c["teacher_email"] = teacher_map.get(c["teacher_id"], c["teacher_id"])
     return classes
 
 

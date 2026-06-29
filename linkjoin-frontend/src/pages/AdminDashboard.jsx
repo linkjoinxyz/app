@@ -313,6 +313,9 @@ function SchoolAdminView() {
     apiGet('/classes').then(cls => setClasses(cls)).finally(() => setLoading(false))
   }, [])
 
+  // Group by teacher_id; keep teacher_email for display
+  const teacherLabels = {}
+  classes.forEach(cls => { teacherLabels[cls.teacher_id] = cls.teacher_email || cls.teacher_id })
   const byTeacher = classes.reduce((acc, cls) => {
     const tid = cls.teacher_id
     if (!acc[tid]) acc[tid] = []
@@ -341,7 +344,7 @@ function SchoolAdminView() {
           <div key={tid}>
             <div className="teacher-row" style={{ cursor: 'default' }}>
               <div>
-                <div className="teacher-email">{tid}</div>
+                <div className="teacher-email">{teacherLabels[tid] || tid}</div>
               </div>
               <div className="teacher-class-count">{teacherClasses.length} class{teacherClasses.length !== 1 ? 'es' : ''}</div>
             </div>
