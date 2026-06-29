@@ -1,5 +1,5 @@
-const BASE_URL = 'http://localhost:8000'
-const APP_URL = 'http://localhost:5173'
+const BASE_URL = 'https://linkjoin.azurewebsites.net'
+const APP_URL = 'https://linkjoin.xyz'
 
 const MEETING_RE = /https?:\/\/(?:[a-z0-9-]+\.)?(?:zoom\.us\/j\/|meet\.google\.com\/[a-z-]{3,}|teams\.microsoft\.com\/l\/meetup-join\/|webex\.com\/meet\/|gotomeeting\.com\/join\/)[^\s"'<>]*/i
 

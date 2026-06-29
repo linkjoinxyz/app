@@ -1,5 +1,5 @@
-const BASE_URL = 'http://localhost:8000'
-const BASE_WS_URL = 'ws://localhost:8000'
+const BASE_URL = 'https://linkjoin.azurewebsites.net'
+const BASE_WS_URL = 'wss://linkjoin.azurewebsites.net'
 const PRE_MEET_MS = 5000
 
 let webSocket = null

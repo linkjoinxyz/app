@@ -16,18 +16,18 @@
       "run_at": "document_idle"
     },
     {
-      "matches": ["https://linkjoin.xyz/*", "http://localhost:5173/*"],
+      "matches": ["https://linkjoin.xyz/*"],
       "js": ["lj-detect.js"],
       "run_at": "document_start",
       "world": "MAIN"
     },
     {
-      "matches": ["https://linkjoin.xyz/*", "http://localhost:5173/*"],
+      "matches": ["https://linkjoin.xyz/*"],
       "js": ["lj-auth-sync.js"],
       "run_at": "document_idle"
     }
   ],
-  "host_permissions": ["https://mail.google.com/*", "https://outlook.live.com/*", "https://outlook.office.com/*", "https://outlook.office365.com/*", "https://linkjoin.xyz/*", "http://localhost:5173/*", "http://localhost:8000/*"],
+  "host_permissions": ["https://mail.google.com/*", "https://outlook.live.com/*", "https://outlook.office.com/*", "https://outlook.office365.com/*", "https://linkjoin.xyz/*", "https://linkjoin.azurewebsites.net/*"],
   "action": {
     "default_popup": "popup.html",
     "default_icon": {
