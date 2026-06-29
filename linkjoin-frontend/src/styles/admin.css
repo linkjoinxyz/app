@@ -136,8 +136,8 @@
   font-size: 18px;
   font-weight: 700;
   white-space: nowrap;
-  border: 2px solid rgba(43,143,216,0.55);
-  color: var(--lightblue, #2B8FD8);
+  border: 1px solid rgba(43,143,216,0.3);
+  color: rgba(130,185,230,0.8);
   flex-shrink: 0;
 }
 
@@ -169,7 +169,7 @@
 
 .detail-section-card {
   background: #0C1E30;
-  border: 1px solid rgba(43,143,216,0.18);
+  border: 1px solid rgba(255,255,255,0.09);
   border-radius: 10px;
   overflow: hidden;
 }
