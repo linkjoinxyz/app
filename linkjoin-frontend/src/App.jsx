@@ -21,6 +21,7 @@ import PrivacySchools from './pages/PrivacySchools.jsx'
 import Subprocessors from './pages/Subprocessors.jsx'
 import BreachPolicy from './pages/BreachPolicy.jsx'
 import AdminDashboard from './pages/AdminDashboard.jsx'
+import Profile from './pages/Profile.jsx'
 
 const TEACHER_ROLES = new Set(['teacher', 'school_admin', 'district_admin'])
 
@@ -61,6 +62,7 @@ export default function App() {
       <Route path="/subprocessors" element={<Subprocessors />} />
       <Route path="/breach-policy" element={<BreachPolicy />} />
       <Route path="/admin" element={<TeacherRoute><AdminDashboard /></TeacherRoute>} />
+      <Route path="/profile" element={<TeacherRoute><Profile /></TeacherRoute>} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   )

@@ -17,6 +17,7 @@ export default function HeaderModern({ onSettings, onAdd, page = 'links' }) {
   }
 
   const isAdmin = page === 'admin'
+  const isProfile = page === 'profile'
   const otherPage = page === 'links' ? '/bookmarks' : '/meetings'
   const otherLabel = page === 'links' ? 'Bookmarks' : 'Meetings'
 
@@ -35,7 +36,12 @@ export default function HeaderModern({ onSettings, onAdd, page = 'links' }) {
             ? <span className="hm-nav-link hm-nav-link--active">Admin</span>
             : <Link to="/admin" className="hm-nav-link">Admin</Link>
         )}
-        {!isAdmin && <button className="hm-nav-link" onClick={onSettings}>Settings</button>}
+        {isTeacher && (
+          isProfile
+            ? <span className="hm-nav-link hm-nav-link--active">Profile</span>
+            : <Link to="/profile" className="hm-nav-link">Profile</Link>
+        )}
+        {!isAdmin && !isProfile && <button className="hm-nav-link" onClick={onSettings}>Settings</button>}
         <button className="hm-nav-link" onClick={handleLogout}>Log Out</button>
         {onAdd && (
           <button className="hm-add-btn" onClick={onAdd} aria-label="Add meeting">+</button>
@@ -54,7 +60,12 @@ export default function HeaderModern({ onSettings, onAdd, page = 'links' }) {
               ? <span className="hm-nav-link--active">Admin</span>
               : <Link to="/admin" onClick={() => setMenuOpen(false)}>Admin</Link>
           )}
-          {!isAdmin && <button onClick={() => { setMenuOpen(false); onSettings?.() }}>Settings</button>}
+          {isTeacher && (
+            isProfile
+              ? <span className="hm-nav-link--active">Profile</span>
+              : <Link to="/profile" onClick={() => setMenuOpen(false)}>Profile</Link>
+          )}
+          {!isAdmin && !isProfile && <button onClick={() => { setMenuOpen(false); onSettings?.() }}>Settings</button>}
           <button onClick={handleLogout}>Log Out</button>
         </div>
       )}

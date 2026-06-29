@@ -32,6 +32,17 @@ async def update_name(body: dict, user: dict = Depends(get_confirmed_user)):
     return {"name": name}
 
 
+@router.patch("/avatar")
+async def update_avatar(body: dict, user: dict = Depends(get_confirmed_user)):
+    avatar = body.get("avatar") or ""
+    if avatar and not avatar.startswith("data:image/"):
+        raise HTTPException(status_code=422, detail="Invalid avatar format")
+    if len(avatar) > 300_000:
+        raise HTTPException(status_code=422, detail="Avatar too large (max ~200KB)")
+    await motor_db.login.update_one({"username": user["username"]}, {"$set": {"avatar": avatar}})
+    return {"avatar": avatar}
+
+
 @router.patch("/timezone")
 async def update_timezone(body: UpdateTimezoneRequest, user: dict = Depends(get_confirmed_user)):
     update: dict = {"timezone": body.timezone}
