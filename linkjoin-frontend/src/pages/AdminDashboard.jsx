@@ -389,7 +389,11 @@ function SchoolAdminView() {
         cls={selected}
         teacherLinks={[]}
         onBack={() => setSelected(null)}
-        onUpdate={fresh => setClasses(prev => prev.map(c => c.class_id === fresh.class_id ? fresh : c))}
+        onUpdate={fresh => setClasses(prev => prev.map(c =>
+          c.class_id === fresh.class_id
+            ? { ...fresh, teacher_email: c.teacher_email, teacher_name: c.teacher_name }
+            : c
+        ))}
       />
     )
   }
