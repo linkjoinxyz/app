@@ -144,9 +144,15 @@ async def add_students(class_id: str, body: AddStudentsRequest, user: dict = Dep
         raise HTTPException(status_code=403, detail="Access denied")
 
     existing_ids = set(cls.get("student_ids", []))
-    new_ids = [sid for sid in body.student_ids if sid not in existing_ids]
+    new_ids = []
+    for entry in body.student_ids:
+        u = await motor_db.login.find_one({"user_id": entry}, {"user_id": 1})
+        if not u:
+            u = await motor_db.login.find_one({"username": entry.lower().strip()}, {"user_id": 1})
+        if u and u["user_id"] not in existing_ids:
+            new_ids.append(u["user_id"])
     if not new_ids:
-        return {"message": "No new students to add"}
+        raise HTTPException(status_code=404, detail="No matching students found")
 
     await motor_db.classes.update_one({"class_id": class_id}, {"$push": {"student_ids": {"$each": new_ids}}})
 

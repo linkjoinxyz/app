@@ -171,86 +171,108 @@ function ClassDetail({ cls, onBack, teacherLinks, onUpdate }) {
   const availableLinks = teacherLinks.filter(l => !(cls.link_ids || []).includes(l.id))
 
   return (
-    <div className="admin-detail">
-      <div className="admin-detail-header">
-        <button className="admin-back-btn" onClick={onBack}>&#8592;</button>
-        <h2>{cls.name}</h2>
-      </div>
-      <div className="admin-detail-meta">
-        {cls.time && <span>{cls.time}</span>}
-        {cls.days?.length > 0 && (
-          <span style={{ display: 'inline-flex', gap: 4, marginLeft: 8 }}>
-            {cls.days.map(d => <DayBadge key={d} day={d} />)}
-          </span>
-        )}
-      </div>
-
-      <div className="admin-section-title">Class Links</div>
-      {classLinks.length > 0 ? (
-        <div className="class-links-list">
-          {classLinks.map(l => (
-            <div key={l.id} className="class-link-pill">
-              <span>{l.name}</span>
-              <button onClick={() => handleRemoveLink(l.id)}>&#x2715;</button>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <div className="admin-empty">No class links yet.</div>
-      )}
-
-      {availableLinks.length > 0 && (
-        <>
-          <button className="admin-btn" style={{ marginTop: 10, marginBottom: 24 }}
-            onClick={() => setShowLinkPicker(p => !p)}>
-            + Add Link
-          </button>
-          {showLinkPicker && (
-            <div style={{ background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, marginBottom: 20 }}>
-              {availableLinks.map(l => (
-                <button key={l.id} onClick={() => handleAddLink(l.id)} style={{
-                  display: 'block', width: '100%', background: 'none', border: 'none',
-                  borderBottom: '1px solid rgba(255,255,255,0.06)', padding: '10px 14px',
-                  color: '#fff', fontSize: 13, textAlign: 'left', cursor: 'pointer', fontFamily: 'inherit',
-                }}>{l.name}</button>
-              ))}
+    <div className="detail-root">
+      {/* Hero header */}
+      <div className="detail-hero">
+        <button className="detail-back-btn" onClick={onBack} title="Back">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+            <path d="M19 12H5M5 12l7 7M5 12l7-7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+        </button>
+        <div className="detail-hero-body">
+          <div className="detail-class-name">{cls.name}</div>
+          {(cls.time || cls.days?.length > 0) && (
+            <div className="detail-class-meta">
+              {cls.time && <span className="detail-time">{cls.time}</span>}
+              {cls.days?.map(d => <DayBadge key={d} day={d} />)}
             </div>
           )}
-        </>
-      )}
-
-      <div className="admin-section-title">Students ({students.length})</div>
-      <div className="admin-add-row">
-        <input className="admin-input" value={addInput} onChange={e => setAddInput(e.target.value)}
-          placeholder="Student user ID" onKeyDown={e => e.key === 'Enter' && handleAddStudent()} />
-        <button className="admin-btn" onClick={handleAddStudent} disabled={addLoading || !addInput.trim()}>
-          Add
-        </button>
+        </div>
       </div>
-      {addErr && <div className="admin-error">{addErr}</div>}
 
-      {students.length > 0 ? (
-        <table className="roster-table">
-          <thead>
-            <tr><th>Email</th><th>User ID</th><th></th></tr>
-          </thead>
-          <tbody>
-            {students.map(s => (
-              <tr key={s.user_id}>
-                <td>{s.username}</td>
-                <td style={{ fontFamily: 'monospace', fontSize: 11, color: 'rgba(255,255,255,0.4)' }}>{s.user_id}</td>
-                <td>
-                  <button className="roster-remove-btn" onClick={() => handleRemoveStudent(s.user_id)}>
-                    Remove
+      {/* Section grid */}
+      <div className="detail-sections">
+
+        {/* Links section */}
+        <div className="detail-section-card">
+          <div className="detail-section-header">
+            <span className="detail-section-label">Links</span>
+            <span className="detail-section-count">{classLinks.length}</span>
+            {availableLinks.length > 0 && (
+              <button className="detail-section-add-btn"
+                onClick={() => setShowLinkPicker(p => !p)}>
+                {showLinkPicker ? 'Cancel' : '+ Add'}
+              </button>
+            )}
+          </div>
+          <div className="detail-section-body">
+            {showLinkPicker && (
+              <div className="detail-link-picker">
+                {availableLinks.map(l => (
+                  <button key={l.id} className="detail-link-picker-row" onClick={() => handleAddLink(l.id)}>
+                    {l.name}
                   </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      ) : (
-        <div className="admin-empty">No students enrolled yet.</div>
-      )}
+                ))}
+              </div>
+            )}
+            {classLinks.length > 0 ? (
+              <div className="class-links-list">
+                {classLinks.map(l => (
+                  <div key={l.id} className="class-link-pill">
+                    <span>{l.name}</span>
+                    <button onClick={() => handleRemoveLink(l.id)}>&#x2715;</button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              !showLinkPicker && <div className="admin-empty">No links assigned yet.</div>
+            )}
+          </div>
+        </div>
+
+        {/* Students section */}
+        <div className="detail-section-card">
+          <div className="detail-section-header">
+            <span className="detail-section-label">Students</span>
+            <span className="detail-section-count">{students.length}</span>
+          </div>
+          <div className="detail-section-body">
+            <div className="admin-add-row">
+              <input className="admin-input" value={addInput}
+                onChange={e => setAddInput(e.target.value)}
+                placeholder="Student email"
+                onKeyDown={e => e.key === 'Enter' && handleAddStudent()} />
+              <button className="admin-btn" onClick={handleAddStudent}
+                disabled={addLoading || !addInput.trim()}>
+                {addLoading ? '...' : 'Add'}
+              </button>
+            </div>
+            {addErr && <div className="admin-error">{addErr}</div>}
+            {students.length > 0 ? (
+              <table className="roster-table">
+                <thead>
+                  <tr><th>Email</th><th></th></tr>
+                </thead>
+                <tbody>
+                  {students.map(s => (
+                    <tr key={s.user_id}>
+                      <td>{s.username}</td>
+                      <td>
+                        <button className="roster-remove-btn" onClick={() => handleRemoveStudent(s.user_id)}>
+                          Remove
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : (
+              <div className="admin-empty">No students enrolled yet.</div>
+            )}
+          </div>
+        </div>
+
+      </div>
     </div>
   )
 }
