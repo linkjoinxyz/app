@@ -8,9 +8,11 @@ import '../styles/admin.css'
 
 const DAYS_SHORT = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
-function formatTime(time24) {
-  if (!time24) return ''
-  const [h, m] = time24.split(':').map(Number)
+function formatTime(t) {
+  if (!t) return ''
+  if (/[AP]M/i.test(t)) return t
+  const [h, m] = t.split(':').map(Number)
+  if (isNaN(h) || isNaN(m)) return t
   const period = h >= 12 ? 'PM' : 'AM'
   const hour = h % 12 || 12
   return `${hour}:${String(m).padStart(2, '0')} ${period}`
