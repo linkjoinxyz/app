@@ -29,6 +29,7 @@ class CreateLinkRequest(BaseModel):
     end_date: Optional[str] = None
     text: Optional[str] = "false"
     password: Optional[str] = None
+    active: Optional[str] = "true"
 
     @field_validator("name")
     @classmethod

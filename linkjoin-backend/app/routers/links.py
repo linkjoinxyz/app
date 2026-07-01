@@ -67,7 +67,7 @@ async def create_link(request: Request, body: CreateLinkRequest, user: dict = De
         "time": body.time,
         "link": encrypt(link_url),
         "name": body.name,
-        "active": "true",
+        "active": body.active if body.active in ("true", "false") else "true",
         "share": encrypt(share_url),
         "share_token": sid,
         "repeat": body.repeats,
@@ -85,7 +85,7 @@ async def create_link(request: Request, body: CreateLinkRequest, user: dict = De
     await analytics("links_made")
     await log_audit(email, "link.create", "link", link_id, ip=request.client.host if request.client else None, detail={"name": body.name})
     await manager.broadcast(await configure_data(email), email)
-    return {"message": "Created"}
+    return {"message": "Created", "id": link_id}
 
 
 @router.put("/{link_id}")

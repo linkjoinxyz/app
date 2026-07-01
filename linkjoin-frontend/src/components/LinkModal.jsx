@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { linksApi } from '../api/links.js'
 import { useModalClose } from '../hooks/useModalClose.js'
 import '../styles/modal.css'
+import '../styles/link.css'
 
 const ALL_DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 const DAY_LABELS = { Sun: 'Su', Mon: 'M', Tue: 'Tu', Wed: 'W', Thu: 'Th', Fri: 'F', Sat: 'Sa' }
@@ -78,7 +79,7 @@ function fromUTC(time24) {
   return { hour: String(hour), minute: String(m).padStart(2, '0'), period }
 }
 
-export default function LinkModal({ visible, editLink, onClose, onSuccess, prefillDays, prefillDate }) {
+export default function LinkModal({ visible, editLink, onClose, onSuccess, prefillDays, prefillDate, defaultAutoOpen = true }) {
   const isEdit = Boolean(editLink)
   const { closing, handleClose } = useModalClose(onClose)
 
@@ -94,6 +95,7 @@ export default function LinkModal({ visible, editLink, onClose, onSuccess, prefi
   const [endDate, setEndDate] = useState('')
   const [text, setText] = useState('false')
   const [password, setPassword] = useState('')
+  const [autoOpen, setAutoOpen] = useState(true)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const minuteRef = useRef(null)
@@ -120,13 +122,14 @@ export default function LinkModal({ visible, editLink, onClose, onSuccess, prefi
       }
       setText(editLink.text || 'false')
       setPassword(editLink.password || '')
+      setAutoOpen(editLink.active !== 'false')
       setCustomDate(editLink.date || '')
       setEndDate(editLink.end_date || '')
     } else {
       const initialDays = prefillDays || [ALL_DAYS[new Date().getDay()]]
       setName(''); setUrl(''); setHour(''); setMinute('00'); setPeriod('AM')
       setDays(initialDays); setRepeats(prefillDate ? 'never' : 'week')
-      setText('false'); setPassword(''); setMinute('')
+      setText('false'); setPassword(''); setMinute(''); setAutoOpen(defaultAutoOpen)
       setCustomDate(prefillDate || nextDateForDays(initialDays))
       setEndDate('')
     }
@@ -166,14 +169,15 @@ export default function LinkModal({ visible, editLink, onClose, onSuccess, prefi
       const d = new Date(parseInt(yr), parseInt(mo) - 1, parseInt(dy))
       finalDays = isNaN(d.getDay()) ? days : [ALL_DAYS[d.getDay()]]
     }
-    const payload = { name, link: url, time, days: finalDays, repeats: finalRepeats, date: customDate, end_date: endDate || undefined, text, password: password || undefined }
+    const payload = { name, link: url, time, days: finalDays, repeats: finalRepeats, date: customDate, end_date: endDate || undefined, text, password: password || undefined, active: autoOpen ? 'true' : 'false' }
     try {
       if (isEdit) {
         await linksApi.update(editLink.id, { id: editLink.id, ...payload })
+        onSuccess()
       } else {
-        await linksApi.create(payload)
+        const res = await linksApi.create(payload)
+        onSuccess(res?.id)
       }
-      onSuccess()
       handleClose()
     } catch (e) {
       setError(e.message || 'Something went wrong')
@@ -350,6 +354,18 @@ export default function LinkModal({ visible, editLink, onClose, onSuccess, prefi
             </div>
           </div>
         )}
+
+        <div className="modal-toggle-row">
+          <span className="modal-field-label">Auto open</span>
+          <input
+            type="checkbox"
+            className="switch-checkbox"
+            id="modal-auto-open"
+            checked={autoOpen}
+            onChange={e => setAutoOpen(e.target.checked)}
+          />
+          <label className="switch" htmlFor="modal-auto-open" />
+        </div>
 
         {error && <div className="modal-error">{error}</div>}
 

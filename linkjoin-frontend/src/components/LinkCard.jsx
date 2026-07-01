@@ -110,7 +110,12 @@ export default function LinkCard({ link, isPending, onEdit, onShare, onDelete, o
         <div className="name">{link.name}</div>
         <div className="description">Click to open</div>
       </div>
-      {platform && <span className={`lk-badge lk-badge-${platform.toLowerCase()}`}>{platform}</span>}
+      {(link.class_name || platform) && (
+        <div style={{ display: 'flex', gap: 6 }}>
+          {link.class_name && <span className="lk-badge lk-badge-class">{link.class_name}</span>}
+          {platform && <span className={`lk-badge lk-badge-${platform.toLowerCase()}`}>{platform}</span>}
+        </div>
+      )}
       <div className="days-dots">{formatDays(days)}</div>
       <div onClick={e => e.stopPropagation()}>
         <input

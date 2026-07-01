@@ -1,7 +1,16 @@
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
+import { useAuth } from '../context/AuthContext.jsx'
 import '../styles/pricing.css'
 
 export default function PublicFooter() {
+  const { token, logout } = useAuth()
+  const navigate = useNavigate()
+
+  async function handleLogout() {
+    await logout()
+    navigate('/login')
+  }
+
   return (
     <footer className="pricing-footer">
       <div className="pf-brand">
@@ -17,9 +26,18 @@ export default function PublicFooter() {
         </div>
         <div className="pf-col">
           <p className="pf-col-title">Account</p>
-          <Link to="/login">Log In</Link>
-          <Link to="/signup">Sign Up</Link>
-          <Link to="/forgot-password">Reset Password</Link>
+          {token ? (
+            <>
+              <Link to="/meetings">My Meetings</Link>
+              <button onClick={handleLogout} className="pf-logout-btn">Log Out</button>
+            </>
+          ) : (
+            <>
+              <Link to="/login">Log In</Link>
+              <Link to="/signup">Sign Up</Link>
+              <Link to="/forgot-password">Reset Password</Link>
+            </>
+          )}
         </div>
         <div className="pf-col">
           <p className="pf-col-title">Company</p>

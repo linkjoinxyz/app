@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext.jsx'
 import { useWebSocket } from '../hooks/useWebSocket.js'
 import { useAutoOpen } from '../hooks/useAutoOpen.js'
@@ -10,7 +11,6 @@ import LinkCard from '../components/LinkCard.jsx'
 import LinkModal from '../components/LinkModal.jsx'
 import ShareModal from '../components/ShareModal.jsx'
 import DeleteModal from '../components/DeleteModal.jsx'
-import SettingsModal from '../components/SettingsModal.jsx'
 import NotesModal from '../components/NotesModal.jsx'
 import CalendarPanel from '../components/CalendarPanel.jsx'
 import CalendarImportModal from '../components/CalendarImportModal.jsx'
@@ -74,7 +74,7 @@ function minutesUntilNext(link, now) {
 
   const days = Array.isArray(link.days) ? link.days : []
 
-  if (!link.repeat || link.repeat === 'week') {
+  if (!link.repeat || link.repeat === 'week' || link.repeat === 'weekly') {
     for (let d = 0; d < 8; d++) {
       if (!days.includes(DAY_NAMES[(todayIdx + d) % 7])) continue
       const minsAway = d * 1440 + linkMins - currentMins
@@ -179,6 +179,7 @@ function findNextLinkId(links) {
 
 export default function Links() {
   const { token, email, confirmed } = useAuth()
+  const location = useLocation()
   const [user, setUser] = useState(null)
   const [links, setLinks] = useState([])
   const [pendingLinks, setPendingLinks] = useState([])
@@ -193,8 +194,7 @@ export default function Links() {
   const [calPrefillDate, setCalPrefillDate] = useState(null)
   const [shareLink, setShareLink] = useState(null)
   const [deleteLink, setDeleteLink] = useState(null)
-  const [showSettings, setShowSettings] = useState(false)
-  const [showDeleted, setShowDeleted] = useState(false)
+const [showDeleted, setShowDeleted] = useState(false)
   const [notesLink, setNotesLink] = useState(null)
   const [calImportProvider, setCalImportProvider] = useState(null)
   const [verifyWarning, setVerifyWarning] = useState(false)
@@ -208,6 +208,12 @@ export default function Links() {
     document.documentElement.id = 'links_html'
     return () => { document.documentElement.id = '' }
   }, [])
+
+  useEffect(() => {
+    if (!location.state) return
+    if (location.state.showDeleted) setShowDeleted(true)
+    if (location.state.triggerImport) setCalImportProvider(location.state.triggerImport)
+  }, [location.state])
 
   useEffect(() => {
     usersApi.me().then(u => {
@@ -252,9 +258,18 @@ export default function Links() {
         setTzMismatch({ from: saved.timezone, to: tz, newOffset: parseFloat(offset) })
         return
       }
-      // Same IANA timezone, DST offset shift — update silently
-      if (String(saved.offset) !== offset) {
-        await usersApi.daylightSavings(parseFloat(offset) - parseFloat(saved.offset || 0))
+      if (saved.offset == null) {
+        // No prior offset recorded — save both timezone and offset, don't touch link times
+        await usersApi.updateTimezone(tz, parseFloat(offset))
+        return
+      }
+      // Only apply DST correction when IANA timezone is confirmed to match
+      if (!saved.timezone || saved.timezone !== tz) return
+      const savedNum = parseFloat(saved.offset)
+      const currentNum = parseFloat(offset)
+      if (!isNaN(savedNum) && savedNum !== currentNum) {
+        await usersApi.daylightSavings(currentNum - savedNum)
+        await usersApi.setOffset(currentNum)
       }
     } catch {}
   }
@@ -366,7 +381,7 @@ export default function Links() {
 
   return (
     <div id="links-page" className={calendarEnabled ? 'lp-cal-mode' : ''}>
-      <div id="blur" style={{ width: '100%', zIndex: showLinkModal || shareLink || deleteLink || showSettings || notesLink || calImportProvider ? 101 : -3, background: 'rgba(0,0,0,0.4)', opacity: showLinkModal || shareLink || deleteLink || showSettings || notesLink || calImportProvider ? 0.4 : 0, height: 'calc(100% + 100px)', position: 'fixed', top: 0, left: 0, transition: '0.25s', pointerEvents: showLinkModal || shareLink || deleteLink || showSettings || notesLink || calImportProvider ? 'auto' : 'none' }} />
+      <div id="blur" style={{ width: '100%', zIndex: showLinkModal || shareLink || deleteLink || notesLink || calImportProvider ? 101 : -3, background: 'rgba(0,0,0,0.4)', opacity: showLinkModal || shareLink || deleteLink || notesLink || calImportProvider ? 0.4 : 0, height: 'calc(100% + 100px)', position: 'fixed', top: 0, left: 0, transition: '0.25s', pointerEvents: showLinkModal || shareLink || deleteLink || notesLink || calImportProvider ? 'auto' : 'none' }} />
       {tzMismatch && (
         <div className="verify-banner tz-banner">
           <span>
@@ -401,7 +416,6 @@ export default function Links() {
         </div>
       )}
       <Header
-        onSettings={() => setShowSettings(true)}
         onAdd={() => tryAdd(() => { setEditLink(null); setShowLinkModal(true) })}
         page="links"
       />
@@ -569,19 +583,7 @@ export default function Links() {
         />
       )}
 
-      {showSettings && (
-        <SettingsModal
-          user={user}
-          visible={showSettings}
-          onClose={() => { setShowSettings(false); usersApi.me().then(setUser).catch(() => {}) }}
-          onShowDeleted={() => setShowDeleted(true)}
-          onCalendarImport={() => { setShowSettings(false); setCalImportProvider('google') }}
-          onOutlookImport={() => { setShowSettings(false); setCalImportProvider('microsoft') }}
-          onUserRefresh={() => usersApi.me().then(setUser).catch(() => {})}
-        />
-      )}
-
-      {showWhatsNew && !loading && (
+{showWhatsNew && !loading && (
         <WhatsNewModal onClose={() => setShowWhatsNew(false)} />
       )}
 

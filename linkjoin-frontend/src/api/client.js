@@ -50,3 +50,18 @@ export function apiPatch(path, data) {
 export function apiDelete(path) {
   return apiFetch(path, { method: 'DELETE' })
 }
+
+export async function apiDownload(path, filename) {
+  const token = getToken()
+  const res = await fetch(`${BASE}${path}`, {
+    headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+  })
+  if (!res.ok) throw new Error('Download failed')
+  const blob = await res.blob()
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  a.click()
+  URL.revokeObjectURL(url)
+}

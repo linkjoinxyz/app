@@ -208,7 +208,13 @@ async def add_class_link(class_id: str, link_id: int, user: dict = Depends(get_c
         return {"message": "Link already in class"}
 
     await motor_db.classes.update_one({"class_id": class_id}, {"$push": {"link_ids": link_id}})
-    await motor_db.links.update_one({"id": link_id, "username": user["username"]}, {"$set": {"class_id": class_id}})
+    await motor_db.links.update_one(
+        {"id": link_id, "username": user["username"]},
+        {"$set": {"class_id": class_id, "class_name": cls["name"], "link_type": "supplemental"}},
+    )
+    link["class_id"] = class_id
+    link["class_name"] = cls["name"]
+    link["link_type"] = "supplemental"
 
     students = await _resolve_students(cls.get("student_ids", []))
     for s in students:

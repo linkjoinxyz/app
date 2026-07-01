@@ -267,6 +267,18 @@
 }
 .pf-col a:hover { color: white; }
 
+.pf-logout-btn {
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    font: 400 13px Montserrat, sans-serif;
+    color: rgba(255, 255, 255, 0.55);
+    transition: color 0.2s;
+    text-align: left;
+}
+.pf-logout-btn:hover { color: white; }
+
 .pf-bottom {
     grid-column: 1 / -1;
     padding-top: 24px;

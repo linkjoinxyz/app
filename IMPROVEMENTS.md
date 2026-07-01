@@ -39,7 +39,7 @@
   - Real-time attendance data: LinkJoin can tell teachers which students joined and when.
 - Family engagement: parents should be able to receive text reminders and email updates about their children's classes
 - Security: FERPA/COPPA posture, security documentation, data retention/deletion policy, subprocessors, SSO support, admin controls, audit logs, and accessibility compliance.
-- Importing links: schedules should be taken from Google Calendar, Canvas, Schoology, Google Classroom, Clever/ClassLink, or OneRoster files.
+- Importing links: schedules should be taken fsrom Google Calendar, Canvas, Schoology, Google Classroom, Clever/ClassLink, or OneRoster files.
 - Could add optional rewards for on-time streaks, badges or something similar.
 - LMS integration: integration with systems like Google Classroom, Canvas, Schoology, PowerSchool, Infinite Campus, Clever/ClassLink, Google Workspace for Education (Admin SDK for automatic rostering), or at minimum OneRoster-compatible roster and schedule import.
 - Intervention workflows: automatic flags based on attendance, counselor/admin follow-up, parent outreach history, notes, escalation rules.

@@ -472,6 +472,12 @@
   padding: 4px 10px 4px 12px;
   font-size: 12px;
   color: rgba(255,255,255,0.8);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.class-link-pill:hover {
+  background: rgba(43,143,216,0.22);
+  border-color: rgba(43,143,216,0.5);
 }
 
 .class-link-pill button {
@@ -584,7 +590,315 @@
 
 .admin-btn-ghost:hover { border-color: rgba(255,255,255,0.35); }
 
+/* Attendance section */
+.detail-section-card--full {
+  grid-column: 1 / -1;
+}
+
+.attendance-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.attendance-table th {
+  text-align: left;
+  padding: 8px 12px;
+  color: rgba(255,255,255,0.4);
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+
+.attendance-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  color: rgba(255,255,255,0.8);
+}
+
+.att-email {
+  color: rgba(255,255,255,0.65);
+  font-size: 12px;
+}
+
+.att-time {
+  color: rgba(255,255,255,0.45);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.att-badge {
+  display: inline-block;
+  border-radius: 20px;
+  padding: 2px 9px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.att-on-time {
+  background: rgba(72,197,120,0.14);
+  color: #48c578;
+  border: 1px solid rgba(72,197,120,0.3);
+}
+
+.att-slightly-late {
+  background: rgba(255,190,50,0.13);
+  color: #f0c040;
+  border: 1px solid rgba(255,190,50,0.3);
+}
+
+.att-late {
+  background: rgba(255,80,80,0.12);
+  color: #ff6b6b;
+  border: 1px solid rgba(255,80,80,0.25);
+}
+
+/* Patterns section */
+.detail-section-meta {
+  margin-left: auto;
+  font-size: 11px;
+  color: rgba(255,255,255,0.3);
+  font-weight: 500;
+}
+
+.att-flag-count {
+  background: rgba(255,80,80,0.15);
+  color: #ff6b6b;
+  border: 1px solid rgba(255,80,80,0.25);
+  border-radius: 20px;
+  padding: 1px 8px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.pattern-row--flagged td {
+  background: rgba(255,80,80,0.04);
+}
+
+.att-rate-bar {
+  width: 80px;
+  height: 5px;
+  background: rgba(255,255,255,0.08);
+  border-radius: 3px;
+  overflow: hidden;
+  display: inline-block;
+  vertical-align: middle;
+  margin-right: 8px;
+}
+
+.att-rate-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.3s;
+}
+
+.att-rate-label {
+  font-size: 12px;
+  color: rgba(255,255,255,0.5);
+  vertical-align: middle;
+}
+
+.att-stat-cell {
+  font-size: 13px;
+  color: rgba(255,255,255,0.65);
+  text-align: center;
+}
+
+.alert-settings-card {
+  background: #0C1E30;
+  border: 1px solid rgba(43,143,216,0.22);
+  border-radius: 10px;
+  margin-bottom: 16px;
+  overflow: hidden;
+}
+
+.alert-settings-toggle {
+  width: 100%;
+  background: none;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 18px;
+  color: rgba(255,255,255,0.75);
+  font-family: 'Montserrat', sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.alert-settings-toggle:hover {
+  color: #fff;
+}
+
+.alert-settings-chevron {
+  font-size: 10px;
+  opacity: 0.5;
+}
+
+.alert-settings-body {
+  padding: 4px 18px 18px;
+  border-top: 1px solid rgba(43,143,216,0.12);
+}
+
+.alert-settings-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px 24px;
+  margin-top: 14px;
+}
+
+.alert-settings-label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12px;
+  color: rgba(255,255,255,0.5);
+  font-family: 'Montserrat', sans-serif;
+  letter-spacing: 0.02em;
+}
+
+.alert-settings-input {
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(43,143,216,0.25);
+  border-radius: 6px;
+  color: #fff;
+  font-family: 'Montserrat', sans-serif;
+  font-size: 14px;
+  padding: 7px 10px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.alert-settings-input:focus {
+  outline: none;
+  border-color: rgba(43,143,216,0.6);
+}
+
+.alert-settings-footer {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.alert-settings-saved {
+  font-size: 12px;
+  color: #4ade80;
+  font-family: 'Montserrat', sans-serif;
+}
+
+.alert-settings-error {
+  font-size: 12px;
+  color: #f87171;
+  font-family: 'Montserrat', sans-serif;
+  flex: 1;
+}
+
+/* ── Academic Calendar Card ── */
+.cal-badge {
+  font-size: 11px;
+  color: rgba(43,143,216,0.9);
+  background: rgba(43,143,216,0.12);
+  border: 1px solid rgba(43,143,216,0.25);
+  border-radius: 4px;
+  padding: 1px 7px;
+  margin-left: 8px;
+  font-family: 'Montserrat', sans-serif;
+}
+
+.cal-desc {
+  font-size: 12px;
+  color: rgba(255,255,255,0.45);
+  font-family: 'Montserrat', sans-serif;
+  line-height: 1.55;
+  margin-bottom: 14px;
+}
+
+.cal-add-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.cal-date-input {
+  flex: 0 0 auto;
+  width: auto;
+  color-scheme: dark;
+}
+
+.cal-date-list {
+  margin-top: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.cal-month-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.cal-month-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: rgba(255,255,255,0.3);
+  font-family: 'Montserrat', sans-serif;
+  margin-bottom: 4px;
+}
+
+.cal-date-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 10px;
+  background: rgba(255,255,255,0.04);
+  border-radius: 6px;
+  font-size: 13px;
+  font-family: 'Montserrat', sans-serif;
+  color: rgba(255,255,255,0.75);
+}
+
+.cal-remove-btn {
+  background: none;
+  border: none;
+  color: rgba(255,80,80,0.55);
+  font-size: 16px;
+  cursor: pointer;
+  padding: 0 2px;
+  line-height: 1;
+  transition: color 0.15s;
+}
+.cal-remove-btn:hover { color: #ff5050; }
+
+/* ── Export button ── */
+.detail-export-btn {
+  margin-left: auto;
+  background: rgba(43,143,216,0.12);
+  border: 1px solid rgba(43,143,216,0.3);
+  color: rgba(255,255,255,0.7);
+  border-radius: 6px;
+  padding: 4px 12px;
+  font: 600 11px Montserrat, sans-serif;
+  cursor: pointer;
+  transition: background 0.15s;
+  white-space: nowrap;
+}
+.detail-export-btn:hover { background: rgba(43,143,216,0.22); color: #fff; }
+.detail-export-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
 @media (max-width: 600px) {
   .admin-page { padding: 20px 14px 60px; }
   .class-grid { grid-template-columns: 1fr; }
+  .detail-sections { grid-template-columns: 1fr; }
+  .alert-settings-grid { grid-template-columns: 1fr; }
 }

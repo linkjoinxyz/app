@@ -67,7 +67,7 @@ async def daylight_savings(body: dict, user: dict = Depends(get_confirmed_user))
     days_to_nums = {"Sun": 0, "Mon": 1, "Tue": 2, "Wed": 3, "Thu": 4, "Fri": 5, "Sat": 6}
     nums_to_days = {v: k for k, v in days_to_nums.items()}
 
-    async for link in motor_db.links.find({"username": user["username"]}):
+    async for link in motor_db.links.find({"username": user["username"], "share_id": {"$exists": False}}):
         try:
             parts = link["time"].split(":")
             hour = int(parts[0]) - shift
