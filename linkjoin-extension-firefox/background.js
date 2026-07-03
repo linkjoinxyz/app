@@ -9,7 +9,7 @@ let reconnectTimer = null
 
 async function getAuth() {
     const { token, email } = await chrome.storage.local.get(['token', 'email'])
-    return token && email ? { token, email } : null
+    return token ? { token, email: email || '' } : null
 }
 
 async function apiFetch(path, options = {}) {

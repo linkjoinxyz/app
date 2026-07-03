@@ -83,6 +83,7 @@ export default function AuthPage2({ defaultTab = 'login' }) {
   const redirect = safeRedirect(params.get('redirect'))
 
   const [tab, setTab] = useState(defaultTab)
+  useEffect(() => { setTab(defaultTab) }, [defaultTab])
   const [headingDir, setHeadingDir] = useState(null)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')

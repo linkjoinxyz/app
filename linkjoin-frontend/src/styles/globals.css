@@ -26,7 +26,7 @@ button:focus {outline: none}
 
 input:focus {outline: none}
 
-html {background-color: var(--blue)}
+html { background-color: var(--blue); scrollbar-gutter: stable; }
 
 button:hover {cursor: pointer}
 

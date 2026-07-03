@@ -8,7 +8,7 @@ from app.config import get_settings
 _settings = get_settings()
 
 
-def send_email(html_content: str, subject: str, to: str, images: list[dict] | None = None) -> None:
+def send_email(html_content: str, subject: str, to: str, images: list[dict] | None = None, from_name: str | None = None) -> None:
     msg = MIMEMultipart("related")
     alternative = MIMEMultipart("alternative")
     msg.attach(alternative)
@@ -23,7 +23,7 @@ def send_email(html_content: str, subject: str, to: str, images: list[dict] | No
             msg.attach(img)
 
     msg["Subject"] = subject
-    msg["From"] = _settings.gmail_from
+    msg["From"] = f'"{from_name}" <{_settings.gmail_from}>' if from_name else _settings.gmail_from
     msg["To"] = to
 
     with smtplib.SMTP_SSL("smtp.gmail.com", 465, context=ssl.create_default_context()) as server:

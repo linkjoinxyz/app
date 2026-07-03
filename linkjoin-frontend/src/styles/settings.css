@@ -19,11 +19,23 @@
   gap: 20px;
 }
 
+/* ── Group labels ── */
+.settings-group-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.35);
+  padding-bottom: 4px;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+
 /* ── Toast ── */
 .settings-toast {
   position: fixed;
-  top: 72px;
-  right: 20px;
+  top: 122px;
+  left: 50%;
+  transform: translateX(-50%);
   z-index: 300;
   display: flex;
   align-items: center;
@@ -33,11 +45,13 @@
   font: 600 12px Montserrat, sans-serif;
   pointer-events: none;
   animation: toast-in 0.18s ease-out;
+  white-space: nowrap;
 }
 .settings-toast.saved {
   background: rgba(72, 197, 120, 0.18);
   border: 1px solid rgba(72, 197, 120, 0.4);
   color: #4bc578;
+  animation: none;
 }
 .settings-toast.error {
   background: rgba(255, 80, 80, 0.18);
@@ -370,4 +384,89 @@
   .settings-row-desc { max-width: 180px; }
   .settings-avatar-row { gap: 14px; }
   .settings-country-select { max-width: 90px; }
+}
+
+/* ── Student Profile: stats + awards ─────────────────────────────────────── */
+
+.sp-stats-row {
+  display: flex;
+  gap: 0;
+  background: rgba(255,255,255,0.05);
+  border-radius: 10px;
+  margin: 0 20px 20px;
+  overflow: hidden;
+}
+
+.sp-stat-cell {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 16px 8px;
+  border-right: 1px solid rgba(255,255,255,0.07);
+}
+.sp-stat-cell:last-child { border-right: none; }
+
+.sp-stat-num {
+  font: 800 24px Montserrat, sans-serif;
+  color: #fff;
+  line-height: 1;
+}
+.sp-stat-cell--accent .sp-stat-num { color: #5AABEE; }
+
+.sp-stat-lbl {
+  font: 500 10px Montserrat, sans-serif;
+  color: rgba(255,255,255,0.4);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  text-align: center;
+}
+
+.sp-awards-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 0 20px 20px;
+}
+
+.sp-award-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 11px 12px;
+  border-radius: 9px;
+  border: 1px solid rgba(255,255,255,0.07);
+  transition: background 0.15s;
+}
+.sp-award-row--earned { background: rgba(255,255,255,0.06); }
+.sp-award-row--locked { opacity: 0.38; }
+
+.sp-award-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 9px;
+  background: #374151;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.sp-award-icon-img {
+  width: 18px;
+  height: 18px;
+  filter: brightness(0) invert(1);
+  opacity: 0.9;
+}
+
+.sp-award-name {
+  font: 600 13px Montserrat, sans-serif;
+  color: #fff;
+  margin-bottom: 1px;
+}
+
+.sp-award-desc {
+  font: 400 11px Montserrat, sans-serif;
+  color: rgba(255,255,255,0.4);
 }

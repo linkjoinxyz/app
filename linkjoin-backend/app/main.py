@@ -21,7 +21,7 @@ from app.utils import configure_data
 from app.websocket_manager import manager
 from app.database import motor_db
 from app.redis_client import get_redis
-from app.routers import auth, links, bookmarks, users, admin, messaging, analytics, ai, contact, orgs, classes, attendance
+from app.routers import auth, links, bookmarks, users, admin, messaging, analytics, ai, contact, orgs, classes, attendance, interventions, integrations
 
 _DIST = Path(__file__).resolve().parent.parent.parent / "linkjoin-frontend" / "dist"
 
@@ -74,6 +74,12 @@ async def lifespan(app: FastAPI):
     await motor_db.orgs.create_index("org_id", unique=True)
     await motor_db.attendance.create_index([("class_id", 1), ("opened_at", -1)])
     await motor_db.attendance.create_index("student_email")
+    await motor_db.interventions.create_index("intervention_id", unique=True)
+    await motor_db.interventions.create_index([("org_id", 1), ("status", 1)])
+    await motor_db.interventions.create_index([("class_id", 1), ("status", 1)])
+    await motor_db.absence_alerts.create_index(
+        [("class_id", 1), ("student_email", 1), ("date", 1)], unique=True
+    )
 
     async for u in motor_db.login.find({"user_id": {"$exists": False}}):
         await motor_db.login.update_one(
@@ -122,6 +128,8 @@ app.include_router(contact.router)
 app.include_router(orgs.router)
 app.include_router(classes.router)
 app.include_router(attendance.router)
+app.include_router(interventions.router)
+app.include_router(integrations.router)
 
 
 @app.get("/location")

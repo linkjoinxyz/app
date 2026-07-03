@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext.jsx'
-import { apiGet, apiPost, apiDelete, apiPatch, apiDownload } from '../api/client.js'
+import { apiGet, apiPost, apiDelete, apiPatch, apiPut, apiDownload } from '../api/client.js'
 import HeaderModern from '../components/HeaderModern.jsx'
 import LinkModal from '../components/LinkModal.jsx'
 import '../styles/admin.css'
@@ -47,6 +47,9 @@ function ClassDetail({ cls, onBack, onUpdate }) {
   const [classLinks, setClassLinks] = useState([])
   const [attendance, setAttendance] = useState([])
   const [patterns, setPatterns] = useState(null)
+  const [interventions, setInterventions] = useState([])
+  const [expandedCase, setExpandedCase] = useState(null)
+  const [noteInputs, setNoteInputs] = useState({})
   const [addInput, setAddInput] = useState('')
   const [addErr, setAddErr] = useState('')
   const [addLoading, setAddLoading] = useState(false)
@@ -54,22 +57,234 @@ function ClassDetail({ cls, onBack, onUpdate }) {
   const [editingLink, setEditingLink] = useState(null)
   const [exporting, setExporting] = useState(false)
 
+  // Family alerts
+  const [familyAlerts, setFamilyAlerts] = useState(cls.family_alerts || false)
+  const [parentContacts, setParentContacts] = useState({})
+  const [expandedContact, setExpandedContact] = useState(null)
+  const [contactSaved, setContactSaved] = useState({})
+
+  async function toggleFamilyAlerts() {
+    const next = !familyAlerts
+    setFamilyAlerts(next)
+    try {
+      await apiPut(`/classes/${cls.class_id}`, { family_alerts: next })
+    } catch { setFamilyAlerts(!next) }
+  }
+
+  async function loadParentContact(userId) {
+    if (parentContacts[userId] !== undefined) return
+    try {
+      const data = await apiGet(`/users/parent-contact/${userId}`)
+      setParentContacts(p => ({ ...p, [userId]: data }))
+    } catch {
+      setParentContacts(p => ({ ...p, [userId]: {} }))
+    }
+  }
+
+  function updateContactField(userId, field, value) {
+    setParentContacts(p => ({ ...p, [userId]: { ...(p[userId] || {}), [field]: value } }))
+  }
+
+  async function saveParentContact(userId) {
+    const c = parentContacts[userId] || {}
+    try {
+      await apiPatch('/users/parent-contact', {
+        student_user_id: userId,
+        parent_name: c.parent_name || '',
+        parent_phone: c.parent_phone || '',
+        parent_phone_country: c.parent_phone_country || '1',
+        parent_email: c.parent_email || '',
+      })
+      setContactSaved(p => ({ ...p, [userId]: true }))
+      setTimeout(() => setContactSaved(p => ({ ...p, [userId]: false })), 2000)
+    } catch { /* ignore */ }
+  }
+
+  // Google Classroom integration
+  const [gcConnected, setGcConnected] = useState(false)
+  const [gcCourses, setGcCourses] = useState([])
+  const [gcSyncing, setSyncing] = useState(false)
+  const [gcSyncResult, setGcSyncResult] = useState(null)
+  const [gcConnecting, setGcConnecting] = useState(false)
+
   useEffect(() => {
     Promise.all([
       apiGet(`/classes/${cls.class_id}`),
       apiGet('/links'),
       apiGet(`/attendance/class/${cls.class_id}`).catch(() => ({ records: [] })),
       apiGet(`/attendance/class/${cls.class_id}/patterns`).catch(() => null),
-    ]).then(([fresh, linksRes, attRes, patternsRes]) => {
+      apiGet(`/interventions?class_id=${cls.class_id}`).catch(() => []),
+      apiGet('/integrations/google/status').catch(() => ({ connected: false })),
+    ]).then(([fresh, linksRes, attRes, patternsRes, ivs, gcStatus]) => {
       setStudents(fresh.students || [])
       const links = linksRes.links || []
       setAllLinks(links)
       setClassLinks(links.filter(l => (fresh.link_ids || []).includes(l.id)))
       setAttendance(attRes.records || [])
       setPatterns(patternsRes)
+      setInterventions(Array.isArray(ivs) ? ivs : [])
       onUpdate(fresh)
+      setGcConnected(gcStatus.connected || false)
+      if (gcStatus.connected) {
+        apiGet('/integrations/google/courses').then(r => setGcCourses(r.courses || [])).catch(() => {})
+      }
     }).catch(() => {})
   }, [cls.class_id])
+
+  async function handleGcConnect() {
+    setGcConnecting(true)
+    try {
+      const { url } = await apiGet('/integrations/google/authorize-url')
+      const popup = window.open(url, 'gc-oauth', 'width=520,height=640')
+      await new Promise((resolve, reject) => {
+        const handler = e => {
+          if (e.data?.gc === 'connected') { window.removeEventListener('message', handler); resolve() }
+          if (e.data?.gc === 'error') { window.removeEventListener('message', handler); reject(new Error('OAuth error')) }
+        }
+        window.addEventListener('message', handler)
+        const timer = setInterval(() => { if (popup?.closed) { clearInterval(timer); reject(new Error('Closed')) } }, 500)
+      })
+      setGcConnected(true)
+      const r = await apiGet('/integrations/google/courses')
+      setGcCourses(r.courses || [])
+    } catch { /* user closed popup */ }
+    setGcConnecting(false)
+  }
+
+  async function handleGcCourseSelect(e) {
+    const courseId = e.target.value
+    if (!courseId) return
+    const course = gcCourses.find(c => c.id === courseId)
+    await apiPost('/integrations/google/connect', {
+      class_id: cls.class_id,
+      gc_course_id: courseId,
+      gc_course_name: course?.name || '',
+    })
+    onUpdate({ ...cls, gc_course_id: courseId, gc_course_name: course?.name || '' })
+  }
+
+  async function handleGcSync() {
+    setSyncing(true)
+    setGcSyncResult(null)
+    try {
+      const res = await apiPost(`/integrations/google/sync/${cls.class_id}`)
+      setGcSyncResult({ ok: true, synced: res.synced, total: res.total })
+    } catch {
+      setGcSyncResult({ ok: false })
+    }
+    setSyncing(false)
+  }
+
+  async function handleGcDisconnect() {
+    await apiDelete(`/integrations/google/disconnect/${cls.class_id}`)
+    onUpdate({ ...cls, gc_course_id: null, gc_course_name: null })
+  }
+
+  function interventionFor(email, flagType) {
+    return interventions.find(iv => iv.student_email === email && iv.flag_type === flagType) || null
+  }
+
+  async function openCase(email, flagType) {
+    try {
+      const iv = await apiPost('/interventions', {
+        class_id: cls.class_id,
+        student_email: email,
+        flag_type: flagType,
+      })
+      setInterventions(prev => {
+        const exists = prev.find(x => x.intervention_id === iv.intervention_id)
+        return exists ? prev.map(x => x.intervention_id === iv.intervention_id ? iv : x) : [iv, ...prev]
+      })
+      setExpandedCase(iv.intervention_id)
+    } catch (e) {
+      console.error(e)
+    }
+  }
+
+  async function updateCase(ivId, updates) {
+    try {
+      const updated = await apiPatch(`/interventions/${ivId}`, updates)
+      setInterventions(prev => prev.map(x => x.intervention_id === ivId ? updated : x))
+    } catch (e) {
+      console.error(e)
+    }
+  }
+
+  async function excuseRecord(recordId, excused, reason = '') {
+    try {
+      await apiPatch(`/attendance/${recordId}`, { excused, excuse_reason: reason })
+      setAttendance(prev =>
+        prev.map(r => r.record_id === recordId ? { ...r, excused, excuse_reason: reason } : r)
+      )
+    } catch (e) {
+      console.error(e)
+    }
+  }
+
+  async function excuseAbsence(studentEmail, date, shouldExcuse) {
+    try {
+      if (shouldExcuse) {
+        await apiPost(`/classes/${cls.class_id}/excuse-absence`, { student_email: studentEmail, date })
+      } else {
+        await apiDelete(`/classes/${cls.class_id}/excuse-absence`, { student_email: studentEmail, date })
+      }
+      setPatterns(prev => {
+        if (!prev) return prev
+        return {
+          ...prev,
+          students: prev.students.map(s => {
+            if (s.student_email !== studentEmail) return s
+            const excusedDates = shouldExcuse
+              ? [...s.excused_absence_dates, date].sort()
+              : s.excused_absence_dates.filter(d => d !== date)
+            const missedDates = shouldExcuse
+              ? s.missed_dates.filter(d => d !== date)
+              : [...s.missed_dates, date].sort()
+            const effectiveExpected = Math.max(
+              (prev.expected_count || 0) - excusedDates.length, 0
+            )
+            const attendanceRate = effectiveExpected > 0
+              ? Math.min(s.sessions / effectiveExpected, 1.0)
+              : 1.0
+            return {
+              ...s,
+              excused_absence_dates: excusedDates,
+              missed_dates: missedDates,
+              effective_expected: effectiveExpected,
+              attendance_rate: Math.round(attendanceRate * 100) / 100,
+            }
+          }),
+        }
+      })
+    } catch (e) {
+      console.error(e)
+    }
+  }
+
+  async function addNote(ivId) {
+    const text = (noteInputs[ivId] || '').trim()
+    if (!text) return
+    try {
+      const note = await apiPost(`/interventions/${ivId}/notes`, { text })
+      setInterventions(prev => prev.map(x =>
+        x.intervention_id === ivId ? { ...x, notes: [...(x.notes || []), note], updated_at: note.created_at } : x
+      ))
+      setNoteInputs(p => ({ ...p, [ivId]: '' }))
+    } catch (e) {
+      console.error(e)
+    }
+  }
+
+  async function deleteNote(ivId, noteId) {
+    try {
+      await apiDelete(`/interventions/${ivId}/notes/${noteId}`)
+      setInterventions(prev => prev.map(x =>
+        x.intervention_id === ivId ? { ...x, notes: (x.notes || []).filter(n => n.note_id !== noteId) } : x
+      ))
+    } catch (e) {
+      console.error(e)
+    }
+  }
 
   async function handleAddStudent() {
     const uid = addInput.trim()
@@ -209,6 +424,10 @@ function ClassDetail({ cls, onBack, onUpdate }) {
           <div className="detail-section-header">
             <span className="detail-section-label">Students</span>
             <span className="detail-section-count">{students.length}</span>
+            <label className="fa-toggle-label" style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 11, color: 'rgba(255,255,255,0.55)' }}>
+              <span>Family absence alerts</span>
+              <input type="checkbox" checked={familyAlerts} onChange={toggleFamilyAlerts} style={{ accentColor: 'var(--sc-accent)' }} />
+            </label>
           </div>
           <div className="detail-section-body">
             <div className="admin-add-row">
@@ -225,18 +444,54 @@ function ClassDetail({ cls, onBack, onUpdate }) {
             {students.length > 0 ? (
               <table className="roster-table">
                 <thead>
-                  <tr><th>Email</th><th></th></tr>
+                  <tr><th>Email</th><th></th><th></th></tr>
                 </thead>
                 <tbody>
                   {students.map(s => (
-                    <tr key={s.user_id}>
-                      <td>{s.username}</td>
-                      <td>
-                        <button className="roster-remove-btn" onClick={() => handleRemoveStudent(s.user_id)}>
-                          Remove
-                        </button>
-                      </td>
-                    </tr>
+                    <>
+                      <tr key={s.user_id}>
+                        <td>{s.username}</td>
+                        <td>
+                          <button className="roster-contact-btn" onClick={() => {
+                            const next = expandedContact === s.user_id ? null : s.user_id
+                            setExpandedContact(next)
+                            if (next) loadParentContact(s.user_id)
+                          }}>
+                            {expandedContact === s.user_id ? 'Close' : 'Parent contact'}
+                          </button>
+                        </td>
+                        <td>
+                          <button className="roster-remove-btn" onClick={() => handleRemoveStudent(s.user_id)}>
+                            Remove
+                          </button>
+                        </td>
+                      </tr>
+                      {expandedContact === s.user_id && (
+                        <tr key={`${s.user_id}-contact`} className="roster-contact-row">
+                          <td colSpan={3}>
+                            <div className="roster-contact-fields">
+                              <input className="admin-input" placeholder="Parent name (e.g. Mrs. Johnson)"
+                                value={(parentContacts[s.user_id] || {}).parent_name || ''}
+                                onChange={e => updateContactField(s.user_id, 'parent_name', e.target.value)} />
+                              <div style={{ display: 'flex', gap: 6 }}>
+                                <input className="admin-input" placeholder="Country code" style={{ width: 72 }}
+                                  value={(parentContacts[s.user_id] || {}).parent_phone_country || '1'}
+                                  onChange={e => updateContactField(s.user_id, 'parent_phone_country', e.target.value)} />
+                                <input className="admin-input" placeholder="Parent phone"
+                                  value={(parentContacts[s.user_id] || {}).parent_phone || ''}
+                                  onChange={e => updateContactField(s.user_id, 'parent_phone', e.target.value)} />
+                              </div>
+                              <input className="admin-input" placeholder="Parent email" type="email"
+                                value={(parentContacts[s.user_id] || {}).parent_email || ''}
+                                onChange={e => updateContactField(s.user_id, 'parent_email', e.target.value)} />
+                              <button className="admin-btn" onClick={() => saveParentContact(s.user_id)}>
+                                {contactSaved[s.user_id] ? '✓ Saved' : 'Save'}
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </>
                   ))}
                 </tbody>
               </table>
@@ -268,6 +523,7 @@ function ClassDetail({ cls, onBack, onUpdate }) {
                     <th>Student</th>
                     <th>Opened</th>
                     <th>Status</th>
+                    <th></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -275,9 +531,14 @@ function ClassDetail({ cls, onBack, onUpdate }) {
                     const dt = new Date(r.opened_at)
                     const dateStr = dt.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
                     const timeStr = dt.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
+                    const tardyThreshold = patterns?.thresholds?.tardy_threshold_minutes ?? 5
                     const late = r.minutes_late
+                    const isTardy = late > tardyThreshold
                     let statusLabel, statusClass
-                    if (late <= 1) {
+                    if (r.excused) {
+                      statusLabel = isTardy ? `${late}m late` : (late <= 1 ? 'On time' : `${late}m late`)
+                      statusClass = isTardy ? 'att-late' : 'att-on-time'
+                    } else if (late <= 1) {
                       statusLabel = late < -1 ? `${Math.abs(late)}m early` : 'On time'
                       statusClass = 'att-on-time'
                     } else if (late <= 5) {
@@ -288,10 +549,20 @@ function ClassDetail({ cls, onBack, onUpdate }) {
                       statusClass = 'att-late'
                     }
                     return (
-                      <tr key={i}>
+                      <tr key={i} className={r.excused ? 'att-row--excused' : ''}>
                         <td className="att-email">{r.student_email}</td>
                         <td className="att-time">{dateStr} {timeStr}</td>
-                        <td><span className={`att-badge ${statusClass}`}>{statusLabel}</span></td>
+                        <td>
+                          <span className={`att-badge ${statusClass}`}>{statusLabel}</span>
+                          {r.excused && <span className="att-badge att-excused" style={{ marginLeft: 4 }}>Excused</span>}
+                        </td>
+                        <td className="att-action-cell">
+                          {r.excused ? (
+                            <button className="att-undo-btn" onClick={() => excuseRecord(r.record_id, false)}>Undo</button>
+                          ) : isTardy ? (
+                            <button className="iv-open-btn" onClick={() => excuseRecord(r.record_id, true)}>Excuse</button>
+                          ) : null}
+                        </td>
                       </tr>
                     )
                   })}
@@ -327,20 +598,41 @@ function ClassDetail({ cls, onBack, onUpdate }) {
                       <th>On time</th>
                       <th>Tardy</th>
                       <th>Flags</th>
+                      <th></th>
                     </tr>
                   </thead>
                   <tbody>
                     {patterns.students.map((s, i) => {
                       const pct = Math.round(s.attendance_rate * 100)
                       const hasFlags = s.flags.length > 0
+                      const effectiveExpected = s.effective_expected ?? patterns.expected_count
+                      const missedDates = s.missed_dates || []
+                      const excusedAbsenceDates = new Set(s.excused_absence_dates || [])
+                      const hasAbsencesToExcuse = missedDates.length > 0 || excusedAbsenceDates.size > 0
                       return (
                         <tr key={i} className={hasFlags ? 'pattern-row--flagged' : ''}>
-                          <td className="att-email">{s.student_email}</td>
+                          <td className="att-email">
+                            <div>{s.student_email}</div>
+                            {hasAbsencesToExcuse && (
+                              <div className="att-excuse-dates">
+                                {missedDates.map(d => (
+                                  <button key={d} className="att-date-pill" onClick={() => excuseAbsence(s.student_email, d, true)}>
+                                    {d.slice(5)}
+                                  </button>
+                                ))}
+                                {[...excusedAbsenceDates].sort().map(d => (
+                                  <button key={d} className="att-date-pill att-date-pill--excused" onClick={() => excuseAbsence(s.student_email, d, false)}>
+                                    {d.slice(5)} ×
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                          </td>
                           <td>
                             <div className="att-rate-bar">
                               <div className="att-rate-fill" style={{ width: `${pct}%`, background: pct >= 80 ? '#48c578' : pct >= 50 ? '#f0c040' : '#ff6b6b' }} />
                             </div>
-                            <span className="att-rate-label">{s.sessions}/{patterns.expected_count}</span>
+                            <span className="att-rate-label">{s.sessions}/{effectiveExpected}</span>
                           </td>
                           <td className="att-stat-cell">{s.on_time}</td>
                           <td className="att-stat-cell">{s.tardy > 0 ? <span style={{ color: s.tardy / (s.sessions || 1) >= 0.33 ? '#ff6b6b' : '#f0c040' }}>{s.tardy}</span> : '—'}</td>
@@ -357,6 +649,24 @@ function ClassDetail({ cls, onBack, onUpdate }) {
                               <span style={{ color: 'rgba(255,255,255,0.2)', fontSize: 12 }}>—</span>
                             )}
                           </td>
+                          <td>
+                            {s.flags.map(f => {
+                              const iv = interventionFor(s.student_email, f)
+                              if (iv) {
+                                return (
+                                  <button key={f} className={`iv-status-pill iv-status-pill--${iv.status}`}
+                                    onClick={() => setExpandedCase(expandedCase === iv.intervention_id ? null : iv.intervention_id)}>
+                                    {iv.status === 'open' ? 'Open' : iv.status === 'in_progress' ? 'In progress' : 'Resolved'}
+                                  </button>
+                                )
+                              }
+                              return (
+                                <button key={f} className="iv-open-btn" onClick={() => openCase(s.student_email, f)}>
+                                  Open case
+                                </button>
+                              )
+                            })}
+                          </td>
                         </tr>
                       )
                     })}
@@ -366,6 +676,162 @@ function ClassDetail({ cls, onBack, onUpdate }) {
             </div>
           </div>
         )}
+
+        {/* Interventions section */}
+        {interventions.length > 0 && (
+          <div className="detail-section-card detail-section-card--full">
+            <div className="detail-section-header">
+              <span className="detail-section-label">Interventions</span>
+              <span className="detail-section-count">{interventions.filter(iv => iv.status !== 'resolved').length} open</span>
+            </div>
+            <div className="detail-section-body">
+              <div className="iv-list">
+                {interventions.map(iv => (
+                  <div key={iv.intervention_id} className="iv-item">
+                    <button
+                      className={`iv-row${expandedCase === iv.intervention_id ? ' iv-row--active' : ''}`}
+                      onClick={() => setExpandedCase(expandedCase === iv.intervention_id ? null : iv.intervention_id)}
+                    >
+                      <div className="iv-row-left">
+                        <span className="iv-student-name">{iv.student_name || iv.student_email}</span>
+                        {iv.student_name && <span className="iv-student-email">{iv.student_email}</span>}
+                        <span className={`att-badge ${iv.flag_type === 'repeat_tardy' ? 'att-late' : 'att-slightly-late'}`} style={{ marginLeft: 6 }}>
+                          {iv.flag_type === 'repeat_tardy' ? 'Repeat tardy' : 'Low attendance'}
+                        </span>
+                      </div>
+                      <div className="iv-row-right">
+                        {iv.assigned_to && <span className="iv-assigned">{iv.assigned_to}</span>}
+                        {(iv.notes || []).length > 0 && (
+                          <span className="iv-note-count">{(iv.notes || []).length} note{iv.notes.length !== 1 ? 's' : ''}</span>
+                        )}
+                        <span className={`iv-status-pill iv-status-pill--${iv.status}`}>
+                          {iv.status === 'open' ? 'Open' : iv.status === 'in_progress' ? 'In progress' : 'Resolved'}
+                        </span>
+                        <span className="iv-chevron">{expandedCase === iv.intervention_id ? '▾' : '▸'}</span>
+                      </div>
+                    </button>
+
+                    {expandedCase === iv.intervention_id && (
+                      <div className="iv-detail">
+                        <div className="iv-detail-controls">
+                          <div className="iv-control-group">
+                            <label className="iv-control-label">Status</label>
+                            <select
+                              className="iv-select"
+                              value={iv.status}
+                              onChange={e => updateCase(iv.intervention_id, { status: e.target.value })}
+                            >
+                              <option value="open">Open</option>
+                              <option value="in_progress">In progress</option>
+                              <option value="resolved">Resolved</option>
+                            </select>
+                          </div>
+                          <div className="iv-control-group">
+                            <label className="iv-control-label">Assigned to</label>
+                            <input
+                              className="iv-input"
+                              placeholder="staff email"
+                              defaultValue={iv.assigned_to || ''}
+                              onBlur={e => updateCase(iv.intervention_id, { assigned_to: e.target.value || null })}
+                            />
+                          </div>
+                        </div>
+
+                        <div className="iv-notes">
+                          {(iv.notes || []).length === 0 && (
+                            <div className="iv-no-notes">No notes yet.</div>
+                          )}
+                          {(iv.notes || []).map(note => (
+                            <div key={note.note_id} className="iv-note">
+                              <div className="iv-note-header">
+                                <span className="iv-note-author">{note.author_email}</span>
+                                <span className="iv-note-date">{new Date(note.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span>
+                                <button className="iv-note-delete" onClick={() => deleteNote(iv.intervention_id, note.note_id)} title="Delete">&#x2715;</button>
+                              </div>
+                              <div className="iv-note-text">{note.text}</div>
+                            </div>
+                          ))}
+                        </div>
+
+                        <div className="iv-add-note">
+                          <input
+                            className="iv-input iv-note-input"
+                            placeholder="Add a note..."
+                            value={noteInputs[iv.intervention_id] || ''}
+                            onChange={e => setNoteInputs(p => ({ ...p, [iv.intervention_id]: e.target.value }))}
+                            onKeyDown={e => e.key === 'Enter' && !e.shiftKey && addNote(iv.intervention_id)}
+                          />
+                          <button
+                            className="iv-add-note-btn"
+                            disabled={!(noteInputs[iv.intervention_id] || '').trim()}
+                            onClick={() => addNote(iv.intervention_id)}
+                          >
+                            Add
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Google Classroom integration */}
+        <div className="detail-section-card detail-section-card--full">
+          <div className="detail-section-header">
+            <span className="detail-section-label">Google Classroom</span>
+            {cls.gc_course_id && (
+              <span className="gc-connected-badge">Connected</span>
+            )}
+          </div>
+          <div className="detail-section-body gc-section-body">
+            {!gcConnected ? (
+              <div className="gc-prompt">
+                <p className="gc-prompt-text">Connect your Google account to sync attendance scores directly to your Google Classroom gradebook.</p>
+                <button className="gc-connect-btn" onClick={handleGcConnect} disabled={gcConnecting}>
+                  {gcConnecting ? 'Connecting...' : (
+                    <><span className="gc-g">G</span> Connect Google Classroom</>
+                  )}
+                </button>
+              </div>
+            ) : !cls.gc_course_id ? (
+              <div className="gc-prompt">
+                <p className="gc-prompt-text">Select which Google Classroom course maps to this class. Attendance scores will sync to that course's gradebook.</p>
+                <select className="gc-course-select" defaultValue="" onChange={handleGcCourseSelect}>
+                  <option value="" disabled>Select a course...</option>
+                  {gcCourses.map(c => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+              </div>
+            ) : (
+              <div className="gc-connected">
+                <div className="gc-course-row">
+                  <span className="gc-course-icon">C</span>
+                  <div className="gc-course-info">
+                    <div className="gc-course-name">{cls.gc_course_name}</div>
+                    <div className="gc-course-meta">Scores post to the "Attendance" assignment (0-100)</div>
+                  </div>
+                </div>
+                {gcSyncResult && (
+                  <div className={`gc-sync-result ${gcSyncResult.ok ? 'gc-sync-result--ok' : 'gc-sync-result--err'}`}>
+                    {gcSyncResult.ok
+                      ? `Synced ${gcSyncResult.synced} of ${gcSyncResult.total} students`
+                      : 'Sync failed. Check your connection and try again.'}
+                  </div>
+                )}
+                <div className="gc-actions">
+                  <button className="gc-sync-btn" onClick={handleGcSync} disabled={gcSyncing}>
+                    {gcSyncing ? 'Syncing...' : 'Sync attendance now'}
+                  </button>
+                  <button className="gc-disconnect-btn" onClick={handleGcDisconnect}>Disconnect</button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
 
       </div>
     </div>
@@ -430,244 +896,162 @@ function TeacherView() {
   )
 }
 
+// ─── Org Intervention List ────────────────────────────────────────────────────
+
+function OrgInterventionList({ onBack }) {
+  const [interventions, setInterventions] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [filter, setFilter] = useState('active')
+  const [search, setSearch] = useState('')
+  const [expandedCase, setExpandedCase] = useState(null)
+  const [noteInputs, setNoteInputs] = useState({})
+
+  useEffect(() => {
+    setLoading(true)
+    const qs = filter === 'all' ? '?status=all' : filter === 'resolved' ? '?status=resolved' : ''
+    apiGet(`/interventions${qs}`).then(ivs => setInterventions(Array.isArray(ivs) ? ivs : [])).finally(() => setLoading(false))
+  }, [filter])
+
+  async function updateCase(ivId, updates) {
+    try {
+      const updated = await apiPatch(`/interventions/${ivId}`, updates)
+      setInterventions(prev => prev.map(x => x.intervention_id === ivId ? updated : x))
+    } catch (e) { console.error(e) }
+  }
+
+  async function addNote(ivId) {
+    const text = (noteInputs[ivId] || '').trim()
+    if (!text) return
+    try {
+      const note = await apiPost(`/interventions/${ivId}/notes`, { text })
+      setInterventions(prev => prev.map(x =>
+        x.intervention_id === ivId ? { ...x, notes: [...(x.notes || []), note] } : x
+      ))
+      setNoteInputs(p => ({ ...p, [ivId]: '' }))
+    } catch (e) { console.error(e) }
+  }
+
+  async function deleteNote(ivId, noteId) {
+    try {
+      await apiDelete(`/interventions/${ivId}/notes/${noteId}`)
+      setInterventions(prev => prev.map(x =>
+        x.intervention_id === ivId ? { ...x, notes: (x.notes || []).filter(n => n.note_id !== noteId) } : x
+      ))
+    } catch (e) { console.error(e) }
+  }
+
+  const q = search.trim().toLowerCase()
+  const flagLabel = f => f === 'repeat_tardy' ? 'repeat tardy' : 'low attendance'
+  const visible = q
+    ? interventions.filter(iv =>
+        (iv.student_name || '').toLowerCase().includes(q) ||
+        (iv.student_email || '').toLowerCase().includes(q) ||
+        flagLabel(iv.flag_type).includes(q) ||
+        (iv.class_name || '').toLowerCase().includes(q)
+      )
+    : interventions
+
+  return (
+    <div>
+      <div className="iv-toolbar">
+        <input
+          className="admin-input admin-search-input"
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          placeholder="Search by name, email, category, or class…"
+        />
+        <div className="iv-filter-row">
+          {['active', 'resolved', 'all'].map(f => (
+            <button key={f} className={`iv-filter-btn${filter === f ? ' iv-filter-btn--active' : ''}`}
+              onClick={() => { setFilter(f); setExpandedCase(null) }}>
+              {f === 'active' ? 'Open / In progress' : f === 'resolved' ? 'Resolved' : 'All'}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {loading && <div style={{ color: 'rgba(255,255,255,0.4)', marginTop: 24 }}>Loading...</div>}
+      {!loading && visible.length === 0 && (
+        <div className="admin-empty" style={{ marginTop: 24 }}>{q ? 'No matches.' : 'No interventions found.'}</div>
+      )}
+
+      <div className="iv-list" style={{ marginTop: 12 }}>
+        {visible.map(iv => (
+          <div key={iv.intervention_id} className="iv-item">
+            <button
+              className={`iv-row${expandedCase === iv.intervention_id ? ' iv-row--active' : ''}`}
+              onClick={() => setExpandedCase(expandedCase === iv.intervention_id ? null : iv.intervention_id)}
+            >
+              <div className="iv-row-left">
+                <span className="iv-student-name">{iv.student_name || iv.student_email}</span>
+                {iv.student_name && <span className="iv-student-email">{iv.student_email}</span>}
+                <span className="iv-class-chip">{iv.class_name}</span>
+                <span className={`att-badge ${iv.flag_type === 'repeat_tardy' ? 'att-late' : 'att-slightly-late'}`} style={{ marginLeft: 4 }}>
+                  {iv.flag_type === 'repeat_tardy' ? 'Repeat tardy' : 'Low attendance'}
+                </span>
+              </div>
+              <div className="iv-row-right">
+                {iv.assigned_to && <span className="iv-assigned">{iv.assigned_to}</span>}
+                {(iv.notes || []).length > 0 && (
+                  <span className="iv-note-count">{iv.notes.length} note{iv.notes.length !== 1 ? 's' : ''}</span>
+                )}
+                <span className={`iv-status-pill iv-status-pill--${iv.status}`}>
+                  {iv.status === 'open' ? 'Open' : iv.status === 'in_progress' ? 'In progress' : 'Resolved'}
+                </span>
+                <span className="iv-chevron">{expandedCase === iv.intervention_id ? '▾' : '▸'}</span>
+              </div>
+            </button>
+
+            {expandedCase === iv.intervention_id && (
+              <div className="iv-detail">
+                <div className="iv-detail-controls">
+                  <div className="iv-control-group">
+                    <label className="iv-control-label">Status</label>
+                    <select className="iv-select" value={iv.status} onChange={e => updateCase(iv.intervention_id, { status: e.target.value })}>
+                      <option value="open">Open</option>
+                      <option value="in_progress">In progress</option>
+                      <option value="resolved">Resolved</option>
+                    </select>
+                  </div>
+                  <div className="iv-control-group">
+                    <label className="iv-control-label">Assigned to</label>
+                    <input className="iv-input" placeholder="staff email" defaultValue={iv.assigned_to || ''}
+                      onBlur={e => updateCase(iv.intervention_id, { assigned_to: e.target.value || null })} />
+                  </div>
+                </div>
+                <div className="iv-notes">
+                  {(iv.notes || []).length === 0 && <div className="iv-no-notes">No notes yet.</div>}
+                  {(iv.notes || []).map(note => (
+                    <div key={note.note_id} className="iv-note">
+                      <div className="iv-note-header">
+                        <span className="iv-note-author">{note.author_email}</span>
+                        <span className="iv-note-date">{new Date(note.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span>
+                        <button className="iv-note-delete" onClick={() => deleteNote(iv.intervention_id, note.note_id)} title="Delete">&#x2715;</button>
+                      </div>
+                      <div className="iv-note-text">{note.text}</div>
+                    </div>
+                  ))}
+                </div>
+                <div className="iv-add-note">
+                  <input className="iv-input iv-note-input" placeholder="Add a note..."
+                    value={noteInputs[iv.intervention_id] || ''}
+                    onChange={e => setNoteInputs(p => ({ ...p, [iv.intervention_id]: e.target.value }))}
+                    onKeyDown={e => e.key === 'Enter' && !e.shiftKey && addNote(iv.intervention_id)} />
+                  <button className="iv-add-note-btn" disabled={!(noteInputs[iv.intervention_id] || '').trim()}
+                    onClick={() => addNote(iv.intervention_id)}>Add</button>
+                </div>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 // ─── School Admin View ────────────────────────────────────────────────────────
 
 const PAGE_SIZE = 20
-
-const DEFAULT_THRESHOLDS = {
-  tardy_threshold_minutes: 5,
-  tardy_rate_flag: 33,
-  attendance_rate_flag: 50,
-  min_sessions_to_flag: 3,
-}
-
-function AlertSettingsCard({ orgId }) {
-  const [settings, setSettings] = useState(null)
-  const [draft, setDraft] = useState(DEFAULT_THRESHOLDS)
-  const [saving, setSaving] = useState(false)
-  const [saved, setSaved] = useState(false)
-  const [saveError, setSaveError] = useState(null)
-  const [open, setOpen] = useState(false)
-
-  useEffect(() => {
-    if (!orgId) return
-    apiGet(`/orgs/${orgId}/attendance-settings`).then(s => {
-      const normalized = {
-        tardy_threshold_minutes: s.tardy_threshold_minutes,
-        tardy_rate_flag: Math.round(s.tardy_rate_flag * 100),
-        attendance_rate_flag: Math.round(s.attendance_rate_flag * 100),
-        min_sessions_to_flag: s.min_sessions_to_flag,
-      }
-      setSettings(normalized)
-      setDraft(normalized)
-    }).catch(() => {})
-  }, [orgId])
-
-  function handleChange(key, value) {
-    setDraft(d => ({ ...d, [key]: value }))
-    setSaved(false)
-    setSaveError(null)
-  }
-
-  async function handleSave() {
-    const tardyMin = Number(draft.tardy_threshold_minutes)
-    const tardyRate = Number(draft.tardy_rate_flag)
-    const attRate = Number(draft.attendance_rate_flag)
-    const minSess = Number(draft.min_sessions_to_flag)
-    if (tardyMin < 0 || tardyMin > 60) return setSaveError('Minutes late must be between 0 and 60.')
-    if (tardyRate < 1 || tardyRate > 100) return setSaveError('Tardy rate must be between 1% and 100%.')
-    if (attRate < 1 || attRate > 100) return setSaveError('Attendance rate must be between 1% and 100%.')
-    if (minSess < 1 || minSess > 20) return setSaveError('Minimum sessions must be between 1 and 20.')
-
-    setSaving(true)
-    setSaveError(null)
-    try {
-      await apiPatch(`/orgs/${orgId}/attendance-settings`, {
-        tardy_threshold_minutes: Number(draft.tardy_threshold_minutes),
-        tardy_rate_flag: Number(draft.tardy_rate_flag) / 100,
-        attendance_rate_flag: Number(draft.attendance_rate_flag) / 100,
-        min_sessions_to_flag: Number(draft.min_sessions_to_flag),
-      })
-      setSettings(draft)
-      setSaved(true)
-    } catch (err) {
-      const msg = err?.detail || err?.message || 'Save failed'
-      setSaveError(typeof msg === 'string' ? msg : JSON.stringify(msg))
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  const dirty = settings && (
-    draft.tardy_threshold_minutes !== settings.tardy_threshold_minutes ||
-    draft.tardy_rate_flag !== settings.tardy_rate_flag ||
-    draft.attendance_rate_flag !== settings.attendance_rate_flag ||
-    draft.min_sessions_to_flag !== settings.min_sessions_to_flag
-  )
-
-  return (
-    <div className="alert-settings-card">
-      <button className="alert-settings-toggle" onClick={() => setOpen(o => !o)}>
-        <span>Alert Settings</span>
-        <span className="alert-settings-chevron">{open ? '▲' : '▼'}</span>
-      </button>
-      {open && (
-        <div className="alert-settings-body">
-          <div className="alert-settings-grid">
-            <label className="alert-settings-label">
-              Minutes late to count as tardy
-              <input
-                type="number"
-                className="alert-settings-input"
-                min={0} max={60}
-                value={draft.tardy_threshold_minutes}
-                onChange={e => handleChange('tardy_threshold_minutes', e.target.value)}
-              />
-            </label>
-            <label className="alert-settings-label">
-              Flag when tardy rate exceeds (%)
-              <input
-                type="number"
-                className="alert-settings-input"
-                min={1} max={100}
-                value={draft.tardy_rate_flag}
-                onChange={e => handleChange('tardy_rate_flag', e.target.value)}
-              />
-            </label>
-            <label className="alert-settings-label">
-              Flag when attendance falls below (%)
-              <input
-                type="number"
-                className="alert-settings-input"
-                min={1} max={100}
-                value={draft.attendance_rate_flag}
-                onChange={e => handleChange('attendance_rate_flag', e.target.value)}
-              />
-            </label>
-            <label className="alert-settings-label">
-              Minimum sessions before flagging
-              <input
-                type="number"
-                className="alert-settings-input"
-                min={1} max={20}
-                value={draft.min_sessions_to_flag}
-                onChange={e => handleChange('min_sessions_to_flag', e.target.value)}
-              />
-            </label>
-          </div>
-          <div className="alert-settings-footer">
-            {saveError && <span className="alert-settings-error">{saveError}</span>}
-            {saved && !dirty && !saveError && <span className="alert-settings-saved">Saved</span>}
-            <button
-              className="admin-btn"
-              onClick={handleSave}
-              disabled={saving || !dirty}
-            >
-              {saving ? 'Saving…' : 'Save'}
-            </button>
-          </div>
-        </div>
-      )}
-    </div>
-  )
-}
-
-function AcademicCalendarCard({ orgId }) {
-  const [dates, setDates] = useState([])
-  const [input, setInput] = useState('')
-  const [adding, setAdding] = useState(false)
-  const [err, setErr] = useState('')
-  const [open, setOpen] = useState(false)
-
-  useEffect(() => {
-    if (!orgId || !open) return
-    apiGet(`/orgs/${orgId}/calendar`).then(r => setDates(r.blackout_dates || [])).catch(() => {})
-  }, [orgId, open])
-
-  async function handleAdd() {
-    if (!input) return
-    setAdding(true)
-    setErr('')
-    try {
-      await apiPost(`/orgs/${orgId}/calendar/blackout`, { date: input })
-      setDates(prev => [...prev, input].sort())
-      setInput('')
-    } catch (e) {
-      setErr(e.message || 'Failed to add date')
-    } finally {
-      setAdding(false)
-    }
-  }
-
-  async function handleRemove(date) {
-    try {
-      await apiDelete(`/orgs/${orgId}/calendar/blackout/${date}`)
-      setDates(prev => prev.filter(d => d !== date))
-    } catch (e) {
-      setErr(e.message || 'Failed to remove date')
-    }
-  }
-
-  // Group dates by "Month Year"
-  const grouped = {}
-  for (const d of dates) {
-    const dt = new Date(d + 'T12:00:00')
-    const label = dt.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })
-    if (!grouped[label]) grouped[label] = []
-    grouped[label].push(d)
-  }
-
-  return (
-    <div className="alert-settings-card">
-      <button className="alert-settings-toggle" onClick={() => setOpen(o => !o)}>
-        <span>Academic Calendar</span>
-        {dates.length > 0 && <span className="cal-badge">{dates.length} day{dates.length !== 1 ? 's' : ''} off</span>}
-        <span className="alert-settings-chevron">{open ? '▲' : '▼'}</span>
-      </button>
-      {open && (
-        <div className="alert-settings-body">
-          <div className="cal-desc">
-            Mark school holidays and snow days. These dates are excluded from expected attendance counts so absent students aren't flagged for days school wasn't in session.
-          </div>
-          <div className="cal-add-row">
-            <input
-              type="date"
-              className="alert-settings-input cal-date-input"
-              value={input}
-              onChange={e => { setInput(e.target.value); setErr('') }}
-              onKeyDown={e => e.key === 'Enter' && handleAdd()}
-            />
-            <button className="admin-btn" onClick={handleAdd} disabled={adding || !input}>
-              {adding ? '…' : 'Add'}
-            </button>
-          </div>
-          {err && <div className="alert-settings-error" style={{ marginBottom: 8 }}>{err}</div>}
-          {dates.length === 0 ? (
-            <div className="admin-empty" style={{ marginTop: 8 }}>No blackout dates set.</div>
-          ) : (
-            <div className="cal-date-list">
-              {Object.entries(grouped).map(([month, ds]) => (
-                <div key={month} className="cal-month-group">
-                  <div className="cal-month-label">{month}</div>
-                  {ds.map(d => {
-                    const dt = new Date(d + 'T12:00:00')
-                    const label = dt.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })
-                    return (
-                      <div key={d} className="cal-date-item">
-                        <span>{label}</span>
-                        <button className="cal-remove-btn" onClick={() => handleRemove(d)} title="Remove">×</button>
-                      </div>
-                    )
-                  })}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  )
-}
 
 function SchoolAdminView() {
   const { orgId } = useAuth()
@@ -677,10 +1061,24 @@ function SchoolAdminView() {
   const [expanded, setExpanded] = useState(null)
   const [search, setSearch] = useState('')
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
+  const [openCases, setOpenCases] = useState([])
+  const [showInterventions, setShowInterventions] = useState(false)
+  const [brandName, setBrandName] = useState('')
+  const [brandSaved, setBrandSaved] = useState(false)
 
   useEffect(() => {
     apiGet('/classes').then(cls => setClasses(cls)).finally(() => setLoading(false))
-  }, [])
+    apiGet('/interventions').then(ivs => setOpenCases(Array.isArray(ivs) ? ivs : [])).catch(() => {})
+    if (orgId) apiGet(`/orgs/${orgId}`).then(org => setBrandName(org.brand_name || '')).catch(() => {})
+  }, [orgId])
+
+  async function saveBrandName() {
+    try {
+      await apiPatch(`/orgs/${orgId}`, { brand_name: brandName })
+      setBrandSaved(true)
+      setTimeout(() => setBrandSaved(false), 2000)
+    } catch { /* ignore */ }
+  }
 
   const teacherLabels = {}
   classes.forEach(cls => {
@@ -724,8 +1122,15 @@ function SchoolAdminView() {
 
   return (
     <>
-      <AlertSettingsCard orgId={orgId} />
-      <AcademicCalendarCard orgId={orgId} />
+      <div className="admin-tabs">
+        <button className={`admin-tab${!showInterventions ? ' admin-tab--active' : ''}`} onClick={() => setShowInterventions(false)}>Teachers</button>
+        <button className={`admin-tab${showInterventions ? ' admin-tab--active' : ''}`} onClick={() => setShowInterventions(true)}>
+          Interventions
+          {openCases.length > 0 && <span className="admin-tab-badge">{openCases.length}</span>}
+        </button>
+      </div>
+
+      {showInterventions ? <OrgInterventionList onBack={() => setShowInterventions(false)} /> : <>
       <div className="admin-search-row">
         <input
           className="admin-input admin-search-input"
@@ -801,6 +1206,24 @@ function SchoolAdminView() {
           </button>
         )}
       </div>
+      </>}
+
+      {!showInterventions && (
+        <div className="org-brand-section">
+          <div className="org-brand-label">Notification display name</div>
+          <div className="org-brand-row">
+            <input className="admin-input" placeholder="e.g. Lincoln High School"
+              value={brandName} onChange={e => setBrandName(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && saveBrandName()} />
+            <button className="admin-btn" onClick={saveBrandName}>
+              {brandSaved ? '✓ Saved' : 'Save'}
+            </button>
+          </div>
+          <div style={{ marginTop: 6, fontSize: 11, color: 'rgba(255,255,255,0.35)' }}>
+            Shown in absence alert texts and emails instead of "LinkJoin"
+          </div>
+        </div>
+      )}
     </>
   )
 }

@@ -1,5 +1,12 @@
-import { Routes, Route, Navigate } from 'react-router-dom'
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
+import { useEffect } from 'react'
 import { useAuth } from './context/AuthContext.jsx'
+
+function ScrollToTop() {
+  const { pathname } = useLocation()
+  useEffect(() => { window.scrollTo(0, 0) }, [pathname])
+  return null
+}
 import Home from './pages/Home.jsx'
 import NewHomepage from './pages/NewHomepage.jsx'
 import Login from './pages/Login.jsx'
@@ -22,6 +29,11 @@ import Subprocessors from './pages/Subprocessors.jsx'
 import BreachPolicy from './pages/BreachPolicy.jsx'
 import AdminDashboard from './pages/AdminDashboard.jsx'
 import Settings from './pages/Settings.jsx'
+import School from './pages/School.jsx'
+import SchoolAttendance from './pages/SchoolAttendance.jsx'
+import NewAttendance from './pages/NewAttendance.jsx'
+import SchoolDashboards from './pages/SchoolDashboards.jsx'
+import StudentProfile from './pages/StudentProfile.jsx'
 
 const TEACHER_ROLES = new Set(['teacher', 'school_admin', 'district_admin'])
 
@@ -40,7 +52,9 @@ function TeacherRoute({ children }) {
 
 export default function App() {
   return (
-    <Routes>
+    <>
+      <ScrollToTop />
+      <Routes>
       <Route path="/" element={<NewHomepage />} />
       <Route path="/old-homepage" element={<Home />} />
       <Route path="/login" element={<AuthPage2 defaultTab="login" />} />
@@ -61,10 +75,16 @@ export default function App() {
       <Route path="/privacy-schools" element={<PrivacySchools />} />
       <Route path="/subprocessors" element={<Subprocessors />} />
       <Route path="/breach-policy" element={<BreachPolicy />} />
+      <Route path="/schools" element={<School />} />
+      <Route path="/schools/attendance" element={<NewAttendance />} />
+      <Route path="/attendance" element={<Navigate to="/schools/attendance" replace />} />
+      <Route path="/schools/new-attendance" element={<Navigate to="/schools/attendance" replace />} />
+      <Route path="/schools/dashboards" element={<SchoolDashboards />} />
       <Route path="/admin" element={<TeacherRoute><AdminDashboard /></TeacherRoute>} />
       <Route path="/settings" element={<PrivateRoute><Settings /></PrivateRoute>} />
-      <Route path="/profile" element={<Navigate to="/settings" replace />} />
+      <Route path="/profile" element={<PrivateRoute><StudentProfile /></PrivateRoute>} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
+    </>
   )
 }

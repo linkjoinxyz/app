@@ -31,6 +31,7 @@ export default function HeaderModern({ onSettings, onAdd, page = 'links' }) {
         <NavLink to="/meetings" active={page === 'links'}>Meetings</NavLink>
         <NavLink to="/bookmarks" active={page === 'bookmarks'}>Bookmarks</NavLink>
         {isTeacher && <NavLink to="/admin" active={page === 'admin'}>Admin</NavLink>}
+        {!isTeacher && <NavLink to="/profile" active={page === 'profile'}>Profile</NavLink>}
         <NavLink to="/settings" active={page === 'settings'}>Settings</NavLink>
         <button className="hm-nav-link" onClick={handleLogout}>Log Out</button>
         {onAdd && <button className="hm-add-btn" onClick={onAdd} aria-label="Add meeting">+</button>}
@@ -45,6 +46,7 @@ export default function HeaderModern({ onSettings, onAdd, page = 'links' }) {
           <NavLink to="/meetings" active={page === 'links'} onClick={() => setMenuOpen(false)}>Meetings</NavLink>
           <NavLink to="/bookmarks" active={page === 'bookmarks'} onClick={() => setMenuOpen(false)}>Bookmarks</NavLink>
           {isTeacher && <NavLink to="/admin" active={page === 'admin'} onClick={() => setMenuOpen(false)}>Admin</NavLink>}
+          {!isTeacher && <NavLink to="/profile" active={page === 'profile'} onClick={() => setMenuOpen(false)}>Profile</NavLink>}
           <NavLink to="/settings" active={page === 'settings'} onClick={() => setMenuOpen(false)}>Settings</NavLink>
           <button onClick={handleLogout}>Log Out</button>
         </div>

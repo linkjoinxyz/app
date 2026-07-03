@@ -43,10 +43,6 @@ export default function PublicFooter() {
           <p className="pf-col-title">Company</p>
           <Link to="/privacy">Privacy Policy</Link>
           <Link to="/tos">Terms of Service</Link>
-          <Link to="/privacy-schools">School Privacy</Link>
-          <Link to="/dpa">Data Processing Agreement</Link>
-          <Link to="/subprocessors">Subprocessors</Link>
-          <Link to="/breach-policy">Breach Policy</Link>
           <Link to="/contact">Contact</Link>
         </div>
       </div>

@@ -47,8 +47,8 @@ export function apiPatch(path, data) {
   return apiFetch(path, { method: 'PATCH', body: JSON.stringify(data) })
 }
 
-export function apiDelete(path) {
-  return apiFetch(path, { method: 'DELETE' })
+export function apiDelete(path, data) {
+  return apiFetch(path, { method: 'DELETE', ...(data ? { body: JSON.stringify(data) } : {}) })
 }
 
 export async function apiDownload(path, filename) {

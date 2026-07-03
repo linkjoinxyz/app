@@ -9,12 +9,12 @@ let reconnectTimer = null
 
 async function getAuth() {
     const { token, email } = await chrome.storage.local.get(['token', 'email'])
-    return token && email ? { token, email } : null
+    return token ? { token, email: email || '' } : null
 }
 
 async function apiFetch(path, options = {}) {
     const auth = await getAuth()
-    if (!auth) return null
+    if (!auth) { console.warn('[LJ] apiFetch: no auth for', path); return null }
     try {
         const res = await fetch(`${BASE_URL}${path}`, {
             ...options,
@@ -24,9 +24,14 @@ async function apiFetch(path, options = {}) {
                 ...(options.headers || {}),
             },
         })
-        if (!res.ok) return null
+        if (!res.ok) {
+            const body = await res.text().catch(() => '')
+            console.error('[LJ] apiFetch', path, 'status:', res.status, body.slice(0, 200))
+            return null
+        }
         return await res.json()
-    } catch {
+    } catch (e) {
+        console.error('[LJ] apiFetch', path, 'fetch error:', e.message)
         return null
     }
 }
@@ -321,10 +326,14 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
         return true
     }
     if (msg.type === 'extractMeeting') {
+        console.log('[LJ] extractMeeting received, calling apiFetch directly')
         apiFetch('/ai/extract-meeting', {
             method: 'POST',
             body: JSON.stringify({ subject: msg.subject, body: msg.body, user_timezone: msg.timezone }),
-        }).then(result => sendResponse(result || null))
+        }).then(result => {
+            console.log('[LJ] extractMeeting result:', result)
+            sendResponse(result || null)
+        })
         return true
     }
     if (msg.type === 'createLink') {

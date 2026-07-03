@@ -1,12 +1,21 @@
 import nh3
 import mistune
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 from app.auth import get_confirmed_user, get_current_user
 from app.database import motor_db
 from app.models.user import (
     UpdateTimezoneRequest, AddNumberRequest, TutorialRequest,
     SortRequest, OpenEarlyRequest, NoteRequest, AutoDeleteRequest, VacationModeRequest,
 )
+
+
+class ParentContactBody(BaseModel):
+    parent_phone: str = ""
+    parent_phone_country: str = "1"
+    parent_email: str = ""
+    parent_name: str = ""
+    student_user_id: str | None = None
 
 router = APIRouter(prefix="/users", tags=["users"])
 
@@ -181,6 +190,47 @@ async def markdown_to_html(body: dict, user: dict = Depends(get_confirmed_user))
     raw_html = mistune.html(md)
     safe_html = nh3.clean(raw_html, tags=_ALLOWED_TAGS)
     return {"html": safe_html}
+
+
+@router.patch("/parent-contact")
+async def update_parent_contact(body: ParentContactBody, user: dict = Depends(get_confirmed_user)):
+    role = user.get("role", "")
+    if body.student_user_id and role in ("school_admin", "district_admin"):
+        student = await motor_db.login.find_one({"user_id": body.student_user_id})
+        if not student:
+            raise HTTPException(status_code=404, detail="Student not found")
+        if student.get("org_id") != user.get("org_id"):
+            raise HTTPException(status_code=403, detail="Student not in your organization")
+        target = {"user_id": body.student_user_id}
+    elif body.student_user_id:
+        raise HTTPException(status_code=403, detail="Only school admins can update other users")
+    else:
+        target = {"username": user["username"]}
+
+    updates = {
+        "parent_phone": body.parent_phone.strip(),
+        "parent_phone_country": body.parent_phone_country.strip(),
+        "parent_email": body.parent_email.strip().lower(),
+        "parent_name": body.parent_name.strip(),
+    }
+    await motor_db.login.update_one(target, {"$set": updates})
+    return {"ok": True}
+
+
+@router.get("/parent-contact/{student_user_id}")
+async def get_parent_contact(student_user_id: str, user: dict = Depends(get_confirmed_user)):
+    role = user.get("role", "")
+    if role not in ("school_admin", "district_admin"):
+        raise HTTPException(status_code=403, detail="Admin access required")
+    student = await motor_db.login.find_one(
+        {"user_id": student_user_id},
+        {"parent_phone": 1, "parent_phone_country": 1, "parent_email": 1, "parent_name": 1, "org_id": 1, "_id": 0},
+    )
+    if not student:
+        raise HTTPException(status_code=404, detail="Student not found")
+    if student.get("org_id") != user.get("org_id"):
+        raise HTTPException(status_code=403, detail="Student not in your organization")
+    return student
 
 
 @router.delete("/me")

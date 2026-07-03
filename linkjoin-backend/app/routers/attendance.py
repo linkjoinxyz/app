@@ -1,12 +1,24 @@
 import csv
 import io
+import logging
+from bson import ObjectId
 from collections import defaultdict
-from datetime import datetime, timezone, timedelta
-from fastapi import APIRouter, Depends, HTTPException, Query
+from datetime import datetime, date as date_type, timezone, timedelta
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
 from app.auth import get_confirmed_user
 from app.database import motor_db
 from app.roles import require_teacher
+
+log = logging.getLogger(__name__)
+
+_GC_SYNC_COOLDOWN_SECONDS = 120
+
+
+class ExcuseBody(BaseModel):
+    excused: bool
+    excuse_reason: str = ""
 
 _DAY_TO_WEEKDAY = {'Sun': 6, 'Mon': 0, 'Tue': 1, 'Wed': 2, 'Thu': 3, 'Fri': 4, 'Sat': 5}
 _LOOKBACK_DAYS = 28
@@ -18,8 +30,25 @@ _MIN_SESSIONS_TO_FLAG = 3
 router = APIRouter(prefix="/attendance", tags=["attendance"])
 
 
+async def _gc_sync_if_due(class_id: str) -> None:
+    try:
+        cls = await motor_db.classes.find_one({"class_id": class_id})
+        if not cls or not cls.get("gc_course_id"):
+            return
+        last = cls.get("gc_last_synced")
+        if last:
+            if last.tzinfo is None:
+                last = last.replace(tzinfo=timezone.utc)
+            if datetime.now(timezone.utc) - last < timedelta(seconds=_GC_SYNC_COOLDOWN_SECONDS):
+                return
+        from app.routers.integrations import _run_sync
+        await _run_sync(class_id, cls)
+    except Exception:
+        log.exception("GC auto-sync failed for class %s", class_id)
+
+
 @router.post("", status_code=201)
-async def log_attendance(body: dict, user: dict = Depends(get_confirmed_user)):
+async def log_attendance(body: dict, background_tasks: BackgroundTasks, user: dict = Depends(get_confirmed_user)):
     email = user["username"]
     link_id = body.get("link_id")
     class_id = body.get("class_id")
@@ -40,7 +69,99 @@ async def log_attendance(body: dict, user: dict = Depends(get_confirmed_user)):
         "opened_at": datetime.now(timezone.utc),
         "minutes_late": int(body.get("minutes_late", 0)),
     })
+    background_tasks.add_task(_gc_sync_if_due, class_id)
     return {"message": "Logged"}
+
+
+@router.get("/me/rewards")
+async def get_my_rewards(user: dict = Depends(get_confirmed_user)):
+    email = user["username"]
+
+    org_id = user.get("org_id")
+    tardy_threshold = _TARDY_THRESHOLD_MINUTES
+    if org_id:
+        org = await motor_db.orgs.find_one({"org_id": org_id}, {"attendance_settings": 1})
+        org_settings = (org or {}).get("attendance_settings") or {}
+        tardy_threshold = int(org_settings.get("tardy_threshold_minutes", _TARDY_THRESHOLD_MINUTES))
+
+    records = []
+    async for r in motor_db.attendance.find(
+        {"student_email": email},
+        {"opened_at": 1, "minutes_late": 1}
+    ).sort("opened_at", 1):
+        records.append(r)
+
+    if not records:
+        return {"current_streak": 0, "longest_streak": 0, "total_sessions": 0,
+                "on_time_sessions": 0, "awards": []}
+
+    by_date: dict[str, list[int]] = defaultdict(list)
+    for r in records:
+        opened = r["opened_at"]
+        if not opened.tzinfo:
+            opened = opened.replace(tzinfo=timezone.utc)
+        by_date[opened.strftime("%Y-%m-%d")].append(r.get("minutes_late", 0))
+
+    dates = sorted(by_date.keys())
+    date_on_time = {d: any(ml <= tardy_threshold for ml in by_date[d]) for d in dates}
+
+    total_sessions = len(records)
+    on_time_sessions = sum(1 for r in records if r.get("minutes_late", 0) <= tardy_threshold)
+
+    # Streaks: consecutive session-dates where student was on time
+    all_streaks: list[int] = []
+    run = 0
+    for d in dates:
+        if date_on_time[d]:
+            run += 1
+        else:
+            if run:
+                all_streaks.append(run)
+            run = 0
+    if run:
+        all_streaks.append(run)
+    longest_streak = max(all_streaks, default=0)
+
+    current_streak = 0
+    for d in reversed(dates):
+        if date_on_time[d]:
+            current_streak += 1
+        else:
+            break
+
+    # Perfect week: any Mon-Fri span with >= 3 session days all on time
+    def has_perfect_week() -> bool:
+        by_week: dict[date_type, list[str]] = defaultdict(list)
+        for d in dates:
+            dt = date_type.fromisoformat(d)
+            week_start = dt - timedelta(days=dt.weekday())
+            by_week[week_start].append(d)
+        return any(
+            len(week_dates) >= 3 and all(date_on_time[d] for d in week_dates)
+            for week_dates in by_week.values()
+        )
+
+    awards: list[str] = []
+    if total_sessions > 0:
+        awards.append("first_steps")
+    if on_time_sessions > 0:
+        awards.append("on_point")
+    if longest_streak >= 5:
+        awards.append("streak_5")
+    if longest_streak >= 10:
+        awards.append("streak_10")
+    if longest_streak >= 20:
+        awards.append("monthly_champion")
+    if has_perfect_week():
+        awards.append("perfect_week")
+
+    return {
+        "current_streak": current_streak,
+        "longest_streak": longest_streak,
+        "total_sessions": total_sessions,
+        "on_time_sessions": on_time_sessions,
+        "awards": awards,
+    }
 
 
 @router.get("/class/{class_id}")
@@ -57,10 +178,35 @@ async def get_class_attendance(class_id: str, user: dict = Depends(get_confirmed
 
     records = []
     async for r in motor_db.attendance.find({"class_id": class_id}).sort("opened_at", -1).limit(200):
-        r.pop("_id", None)
+        r["record_id"] = str(r.pop("_id"))
+        r.setdefault("excused", False)
+        r.setdefault("excuse_reason", "")
         r["opened_at"] = r["opened_at"].isoformat() if isinstance(r.get("opened_at"), datetime) else r.get("opened_at")
         records.append(r)
     return {"records": records}
+
+
+@router.patch("/{record_id}")
+async def excuse_attendance_record(record_id: str, body: ExcuseBody, user: dict = Depends(get_confirmed_user)):
+    require_teacher(user)
+    try:
+        oid = ObjectId(record_id)
+    except Exception:
+        raise HTTPException(status_code=422, detail="Invalid record_id")
+    rec = await motor_db.attendance.find_one({"_id": oid}, {"class_id": 1})
+    if not rec:
+        raise HTTPException(status_code=404, detail="Record not found")
+    cls = await motor_db.classes.find_one({"class_id": rec["class_id"]})
+    if cls:
+        if user.get("role") == "teacher" and cls.get("teacher_id") != user["user_id"]:
+            raise HTTPException(status_code=403, detail="Access denied")
+        if user.get("role") in ("school_admin", "district_admin") and cls.get("org_id") != user.get("org_id"):
+            raise HTTPException(status_code=403, detail="Access denied")
+    await motor_db.attendance.update_one(
+        {"_id": oid},
+        {"$set": {"excused": body.excused, "excuse_reason": body.excuse_reason}}
+    )
+    return {"ok": True}
 
 
 @router.get("/class/{class_id}/patterns")
@@ -90,14 +236,20 @@ async def get_class_patterns(class_id: str, user: dict = Depends(get_confirmed_u
     now = datetime.now(timezone.utc)
     cutoff = now - timedelta(days=_LOOKBACK_DAYS)
 
-    # Count how many times the class should have met in the lookback window
+    # Build ordered list of expected session dates in the lookback window
     class_days = cls.get("days") or []
     scheduled_weekdays = {_DAY_TO_WEEKDAY[d] for d in class_days if d in _DAY_TO_WEEKDAY}
-    expected_count = sum(
-        1 for i in range(_LOOKBACK_DAYS)
+    expected_dates: list[str] = [
+        (cutoff + timedelta(days=i)).strftime("%Y-%m-%d")
+        for i in range(_LOOKBACK_DAYS)
         if (cutoff + timedelta(days=i)).weekday() in scheduled_weekdays
         and (cutoff + timedelta(days=i)).strftime("%Y-%m-%d") not in blackout_dates
-    )
+    ]
+    expected_count = len(expected_dates)
+    expected_dates_set = set(expected_dates)
+
+    # Load per-student excused absences stored on the class document
+    class_excused_absences: list[dict] = cls.get("excused_absences") or []
 
     # Fetch all attendance records within the window
     by_student: dict[str, list] = defaultdict(list)
@@ -110,21 +262,40 @@ async def get_class_patterns(class_id: str, user: dict = Depends(get_confirmed_u
         u = await motor_db.login.find_one({"user_id": uid}, {"_id": 0, "username": 1})
         if u:
             enrolled_emails.add(u["username"])
-            # Ensure zero-record students appear in by_student
             by_student.setdefault(u["username"], [])
 
     results = []
     for email, records in by_student.items():
         total = len(records)
-        tardy = sum(1 for r in records if r.get("minutes_late", 0) > tardy_threshold)
+        # Exclude excused records from tardy count only (still count toward total)
+        tardy = sum(
+            1 for r in records
+            if r.get("minutes_late", 0) > tardy_threshold and not r.get("excused")
+        )
         on_time = total - tardy
         tardy_rate = tardy / total if total > 0 else 0.0
-        attendance_rate = total / expected_count if expected_count > 0 else 1.0
+
+        # Compute per-student excused absence dates that fall on expected session days
+        student_excused_dates = {
+            e["date"] for e in class_excused_absences
+            if e.get("student_email") == email and e.get("date") in expected_dates_set
+        }
+        effective_expected = max(expected_count - len(student_excused_dates), 0)
+        attendance_rate = min(total / effective_expected, 1.0) if effective_expected > 0 else 1.0
+
+        # Compute which expected dates the student has no record for
+        joined_dates = {
+            r["opened_at"].strftime("%Y-%m-%d") if isinstance(r.get("opened_at"), datetime)
+            else str(r.get("opened_at", ""))[:10]
+            for r in records
+        }
+        missed_dates = sorted(expected_dates_set - joined_dates - student_excused_dates)
+        excused_absence_dates = sorted(student_excused_dates)
 
         flags = []
         if total >= min_sessions and tardy_rate >= tardy_rate_flag:
             flags.append("repeat_tardy")
-        if expected_count >= min_sessions and attendance_rate < attendance_rate_flag:
+        if effective_expected >= min_sessions and attendance_rate < attendance_rate_flag:
             flags.append("low_attendance")
 
         results.append({
@@ -134,7 +305,10 @@ async def get_class_patterns(class_id: str, user: dict = Depends(get_confirmed_u
             "on_time": on_time,
             "tardy": tardy,
             "tardy_rate": round(tardy_rate, 2),
-            "attendance_rate": round(min(attendance_rate, 1.0), 2),
+            "effective_expected": effective_expected,
+            "attendance_rate": round(attendance_rate, 2),
+            "missed_dates": missed_dates,
+            "excused_absence_dates": excused_absence_dates,
             "flags": flags,
         })
 
@@ -213,20 +387,37 @@ async def export_class_attendance(
         if d.weekday() in scheduled_weekdays and ds not in blackout_dates:
             session_dates.append((ds, d.strftime("%a")))
 
+    # Build per-student excused absence date sets for CSV status labels
+    class_excused_absences: list[dict] = cls.get("excused_absences") or []
+    excused_by_student: dict[str, set] = defaultdict(set)
+    for e in class_excused_absences:
+        if e.get("student_email") and e.get("date"):
+            excused_by_student[e["student_email"]].add(e["date"])
+
     class_name = cls.get("name", class_id)
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow(["student_email", "student_name", "class_name", "date", "day", "status", "minutes_late"])
+    writer.writerow(["student_email", "student_name", "class_name", "date", "day", "status", "minutes_late", "excused", "excuse_reason"])
 
     for date_str, day_name in session_dates:
         for email, name in enrolled.items():
             rec = by_date_student.get((date_str, email))
             if rec:
                 ml = rec.get("minutes_late", 0)
-                status = "Tardy" if ml > tardy_threshold else "Present"
-                writer.writerow([email, name, class_name, date_str, day_name, status, ml if status == "Tardy" else ""])
+                is_excused = rec.get("excused", False)
+                excuse_reason = rec.get("excuse_reason", "")
+                if is_excused and ml > tardy_threshold:
+                    status = "Excused Tardy"
+                elif ml > tardy_threshold:
+                    status = "Tardy"
+                else:
+                    status = "Present"
+                writer.writerow([email, name, class_name, date_str, day_name, status,
+                                 ml if ml > tardy_threshold else "", is_excused, excuse_reason])
             else:
-                writer.writerow([email, name, class_name, date_str, day_name, "Absent", ""])
+                is_excused_absent = date_str in excused_by_student.get(email, set())
+                status = "Excused Absent" if is_excused_absent else "Absent"
+                writer.writerow([email, name, class_name, date_str, day_name, status, "", is_excused_absent, ""])
 
     safe_name = "".join(c if c.isalnum() or c in " -_" else "_" for c in class_name)
     return StreamingResponse(

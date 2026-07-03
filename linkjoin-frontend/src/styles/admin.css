@@ -902,3 +902,588 @@
   .detail-sections { grid-template-columns: 1fr; }
   .alert-settings-grid { grid-template-columns: 1fr; }
 }
+
+/* ── Admin tabs ─────────────────────────────────────────────────────────────── */
+.admin-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 24px;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+  padding-bottom: 0;
+}
+
+.admin-tab {
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  padding: 8px 16px;
+  font: 600 13px Montserrat, sans-serif;
+  color: rgba(255,255,255,0.4);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  transition: color 0.15s;
+}
+.admin-tab:hover { color: rgba(255,255,255,0.75); }
+.admin-tab--active {
+  color: #fff;
+  border-bottom-color: var(--lightblue, #2B8FD8);
+}
+
+.admin-tab-badge {
+  background: rgba(240,160,40,0.85);
+  color: #000;
+  font: 700 10px Montserrat, sans-serif;
+  border-radius: 9px;
+  padding: 1px 6px;
+  min-width: 16px;
+  text-align: center;
+}
+
+/* ── Intervention styles ─────────────────────────────────────────────────────── */
+
+.iv-org-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  background: rgba(240, 160, 40, 0.08);
+  border: 1px solid rgba(240, 160, 40, 0.25);
+  border-radius: 10px;
+  padding: 12px 18px;
+  margin-bottom: 20px;
+  cursor: pointer;
+  transition: background 0.15s;
+  text-align: left;
+}
+.iv-org-banner:hover { background: rgba(240, 160, 40, 0.14); }
+
+.iv-org-banner-label {
+  font: 600 13px Montserrat, sans-serif;
+  color: rgba(240, 160, 40, 0.95);
+}
+
+.iv-org-banner-link {
+  font: 600 12px Montserrat, sans-serif;
+  color: rgba(43, 143, 216, 0.85);
+}
+
+/* Intervention list */
+.iv-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.iv-item {
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid rgba(255,255,255,0.07);
+}
+
+.iv-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 10px 14px;
+  background: rgba(255,255,255,0.03);
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  gap: 12px;
+  transition: background 0.12s;
+}
+.iv-row:hover { background: rgba(255,255,255,0.06); }
+.iv-row--active { background: rgba(43,143,216,0.08); }
+
+.iv-row-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.iv-student-name {
+  font: 600 13px Montserrat, sans-serif;
+  color: rgba(255,255,255,0.9);
+}
+
+.iv-student-email {
+  font: 400 11px Montserrat, sans-serif;
+  color: rgba(255,255,255,0.4);
+}
+
+.iv-class-chip {
+  font: 500 11px Montserrat, sans-serif;
+  color: rgba(255,255,255,0.5);
+  background: rgba(255,255,255,0.07);
+  border-radius: 4px;
+  padding: 2px 6px;
+}
+
+.iv-row-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.iv-assigned {
+  font: 400 11px Montserrat, sans-serif;
+  color: rgba(255,255,255,0.38);
+}
+
+.iv-note-count {
+  font: 500 11px Montserrat, sans-serif;
+  color: rgba(255,255,255,0.35);
+}
+
+.iv-chevron {
+  font-size: 12px;
+  color: rgba(255,255,255,0.35);
+}
+
+/* Status pills */
+.iv-status-pill {
+  font: 700 10px Montserrat, sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 3px 8px;
+  border-radius: 5px;
+  border: none;
+  cursor: pointer;
+}
+.iv-status-pill--open {
+  background: rgba(240, 160, 40, 0.15);
+  color: rgba(240, 160, 40, 0.95);
+  border: 1px solid rgba(240, 160, 40, 0.3);
+}
+.iv-status-pill--in_progress {
+  background: rgba(43, 143, 216, 0.15);
+  color: rgba(43, 143, 216, 0.9);
+  border: 1px solid rgba(43, 143, 216, 0.3);
+}
+.iv-status-pill--resolved {
+  background: rgba(72, 197, 120, 0.1);
+  color: rgba(72, 197, 120, 0.7);
+  border: 1px solid rgba(72, 197, 120, 0.2);
+}
+
+/* "Open case" button in Patterns table */
+.iv-open-btn {
+  font: 600 11px Montserrat, sans-serif;
+  background: rgba(43,143,216,0.12);
+  border: 1px solid rgba(43,143,216,0.3);
+  color: rgba(43,143,216,0.9);
+  border-radius: 5px;
+  padding: 3px 8px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.12s;
+}
+.iv-open-btn:hover { background: rgba(43,143,216,0.22); }
+
+/* Detail panel */
+.iv-detail {
+  padding: 14px 16px;
+  background: rgba(255,255,255,0.02);
+  border-top: 1px solid rgba(255,255,255,0.07);
+}
+
+.iv-detail-controls {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.iv-control-group {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.iv-control-label {
+  font: 700 10px Montserrat, sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: rgba(255,255,255,0.35);
+}
+
+.iv-select {
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 7px;
+  padding: 7px 10px;
+  color: #fff;
+  font: 500 13px Montserrat, sans-serif;
+  outline: none;
+  cursor: pointer;
+}
+
+.iv-input {
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 7px;
+  padding: 7px 10px;
+  color: #fff;
+  font: 500 13px Montserrat, sans-serif;
+  outline: none;
+  min-width: 180px;
+  transition: border-color 0.12s;
+}
+.iv-input:focus { border-color: rgba(43,143,216,0.5); }
+.iv-input::placeholder { color: rgba(255,255,255,0.22); }
+
+/* Notes */
+.iv-notes {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.iv-no-notes {
+  font: 400 12px Montserrat, sans-serif;
+  color: rgba(255,255,255,0.25);
+}
+
+.iv-note {
+  background: rgba(255,255,255,0.04);
+  border-radius: 7px;
+  padding: 9px 12px;
+}
+
+.iv-note-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.iv-note-author {
+  font: 600 11px Montserrat, sans-serif;
+  color: rgba(255,255,255,0.55);
+}
+
+.iv-note-date {
+  font: 400 11px Montserrat, sans-serif;
+  color: rgba(255,255,255,0.3);
+}
+
+.iv-note-delete {
+  margin-left: auto;
+  background: none;
+  border: none;
+  color: rgba(255,255,255,0.2);
+  font-size: 11px;
+  cursor: pointer;
+  padding: 2px 4px;
+  transition: color 0.12s;
+}
+.iv-note-delete:hover { color: rgba(255,80,80,0.7); }
+
+.iv-note-text {
+  font: 400 13px Montserrat, sans-serif;
+  color: rgba(255,255,255,0.78);
+  line-height: 1.4;
+}
+
+.iv-add-note {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.iv-note-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.iv-add-note-btn {
+  background: rgba(43,143,216,0.15);
+  border: 1px solid rgba(43,143,216,0.32);
+  color: #fff;
+  border-radius: 7px;
+  padding: 7px 14px;
+  font: 600 12px Montserrat, sans-serif;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.12s;
+}
+.iv-add-note-btn:hover { background: rgba(43,143,216,0.28); }
+.iv-add-note-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+
+/* Toolbar + filter bar (OrgInterventionList) */
+.iv-toolbar {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+
+.iv-filter-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.iv-filter-btn {
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.1);
+  color: rgba(255,255,255,0.55);
+  border-radius: 7px;
+  padding: 6px 14px;
+  font: 600 11px Montserrat, sans-serif;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+.iv-filter-btn--active {
+  background: rgba(43,143,216,0.15);
+  border-color: rgba(43,143,216,0.35);
+  color: rgba(43,143,216,0.9);
+}
+.iv-filter-btn:hover:not(.iv-filter-btn--active) { background: rgba(255,255,255,0.09); }
+
+/* Excused attendance */
+.att-excused {
+  background: rgba(43,143,216,0.13);
+  color: rgba(43,143,216,0.9);
+  border: 1px solid rgba(43,143,216,0.28);
+}
+.att-row--excused td { opacity: 0.5; }
+.att-row--excused .att-badge.att-excused { opacity: 1; }
+
+.att-action-cell {
+  text-align: right;
+  white-space: nowrap;
+}
+.att-undo-btn {
+  background: none;
+  border: none;
+  color: rgba(255,255,255,0.35);
+  font: 600 10px Montserrat, sans-serif;
+  cursor: pointer;
+  padding: 2px 4px;
+  text-decoration: underline;
+}
+.att-undo-btn:hover { color: rgba(255,255,255,0.65); }
+
+/* Missed-date pills in the patterns table */
+.att-excuse-dates {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 5px;
+}
+.att-date-pill {
+  font: 600 10px Montserrat, sans-serif;
+  border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 10px;
+  padding: 2px 7px;
+  cursor: pointer;
+  color: rgba(255,255,255,0.4);
+  background: transparent;
+  transition: border-color 0.12s, color 0.12s;
+}
+.att-date-pill:hover {
+  border-color: rgba(43,143,216,0.5);
+  color: rgba(43,143,216,0.85);
+}
+.att-date-pill--excused {
+  background: rgba(43,143,216,0.12);
+  border-color: rgba(43,143,216,0.3);
+  color: rgba(43,143,216,0.85);
+}
+.att-date-pill--excused:hover {
+  background: rgba(43,143,216,0.2);
+  border-color: rgba(43,143,216,0.5);
+}
+
+/* ── Google Classroom integration ──────────────────────────────────────────── */
+
+.gc-connected-badge {
+  font: 600 10px Montserrat, sans-serif;
+  background: rgba(52, 168, 83, 0.15);
+  color: #2a9950;
+  border: 1px solid rgba(52, 168, 83, 0.3);
+  border-radius: 10px;
+  padding: 2px 8px;
+  letter-spacing: 0.03em;
+}
+.gc-section-body {
+  padding: 16px 20px 20px;
+}
+.gc-prompt {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  max-width: 480px;
+}
+.gc-prompt-text {
+  font: 400 12px/1.5 Montserrat, sans-serif;
+  color: rgba(255,255,255,0.5);
+  margin: 0;
+}
+.gc-connect-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 18px;
+  background: #fff;
+  color: #3c4043;
+  border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 6px;
+  font: 600 12px Montserrat, sans-serif;
+  cursor: pointer;
+  width: fit-content;
+  transition: background 0.15s;
+}
+.gc-connect-btn:hover { background: #f1f3f4; }
+.gc-connect-btn:disabled { opacity: 0.5; cursor: default; }
+.gc-g {
+  font-family: 'Product Sans', Arial, sans-serif;
+  font-size: 15px;
+  font-weight: 700;
+  background: linear-gradient(135deg, #4285F4 0%, #34A853 35%, #FBBC05 65%, #EA4335 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  line-height: 1;
+}
+.gc-course-select {
+  padding: 8px 12px;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 6px;
+  color: rgba(255,255,255,0.85);
+  font: 400 12px Montserrat, sans-serif;
+  cursor: pointer;
+  max-width: 340px;
+  width: 100%;
+}
+.gc-connected {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.gc-course-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.gc-course-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #4285F4, #34A853);
+  color: #fff;
+  font: 700 14px Montserrat, sans-serif;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.gc-course-name {
+  font: 600 13px Montserrat, sans-serif;
+  color: rgba(255,255,255,0.85);
+}
+.gc-course-meta {
+  font: 400 11px Montserrat, sans-serif;
+  color: rgba(255,255,255,0.4);
+  margin-top: 2px;
+}
+.gc-sync-result {
+  font: 500 11px Montserrat, sans-serif;
+  padding: 6px 10px;
+  border-radius: 5px;
+  width: fit-content;
+}
+.gc-sync-result--ok {
+  background: rgba(52, 168, 83, 0.12);
+  color: #2a9950;
+  border: 1px solid rgba(52, 168, 83, 0.25);
+}
+.gc-sync-result--err {
+  background: rgba(234, 67, 53, 0.1);
+  color: #c62828;
+  border: 1px solid rgba(234, 67, 53, 0.25);
+}
+.gc-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.gc-sync-btn {
+  padding: 7px 16px;
+  background: rgba(66, 133, 244, 0.15);
+  border: 1px solid rgba(66, 133, 244, 0.3);
+  border-radius: 6px;
+  color: rgba(66, 133, 244, 0.9);
+  font: 600 11px Montserrat, sans-serif;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.gc-sync-btn:hover { background: rgba(66, 133, 244, 0.25); }
+.gc-sync-btn:disabled { opacity: 0.5; cursor: default; }
+.gc-disconnect-btn {
+  padding: 7px 12px;
+  background: transparent;
+  border: none;
+  color: rgba(255,255,255,0.3);
+  font: 400 11px Montserrat, sans-serif;
+  cursor: pointer;
+  transition: color 0.15s;
+}
+.gc-disconnect-btn:hover { color: rgba(255,255,255,0.6); }
+
+/* ── Family absence alerts ───────────────────────────────────── */
+.roster-contact-btn {
+  background: none;
+  border: none;
+  color: rgba(43,143,216,0.75);
+  cursor: pointer;
+  font: 600 11px Montserrat, sans-serif;
+  padding: 2px 6px;
+  border-radius: 4px;
+  transition: color 0.15s;
+  white-space: nowrap;
+}
+.roster-contact-btn:hover { color: rgba(43,143,216,1); }
+
+.roster-contact-row td {
+  padding: 0 0 8px 0;
+}
+.roster-contact-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 12px;
+  background: rgba(43,143,216,0.06);
+  border-radius: 8px;
+  border: 1px solid rgba(43,143,216,0.15);
+}
+
+.org-brand-section {
+  margin-top: 20px;
+  padding: 14px 16px;
+  background: rgba(255,255,255,0.04);
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,0.08);
+}
+.org-brand-label {
+  font: 600 11px Montserrat, sans-serif;
+  color: rgba(255,255,255,0.5);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 8px;
+}
+.org-brand-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}

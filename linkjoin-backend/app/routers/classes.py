@@ -1,5 +1,6 @@
 import secrets
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 from app.auth import get_confirmed_user
 from app.database import motor_db
 from app.models.class_ import CreateClassRequest, UpdateClassRequest, AddStudentsRequest
@@ -7,6 +8,11 @@ from app.roles import require_teacher, require_school_admin, TEACHER_ROLES
 from app.utils import async_next_link_id
 from app.websocket_manager import manager
 from app.utils import configure_data
+
+
+class ExcuseAbsenceBody(BaseModel):
+    student_email: str
+    date: str
 
 router = APIRouter(prefix="/classes", tags=["classes"])
 
@@ -240,3 +246,39 @@ async def remove_class_link(class_id: str, link_id: int, user: dict = Depends(ge
         await _remove_link_from_student(link_id, s["username"])
 
     return {"message": "Link removed from class"}
+
+
+@router.post("/{class_id}/excuse-absence", status_code=200)
+async def add_excused_absence(class_id: str, body: ExcuseAbsenceBody, user: dict = Depends(get_confirmed_user)):
+    require_teacher(user)
+    cls = await motor_db.classes.find_one({"class_id": class_id})
+    if not cls:
+        raise HTTPException(status_code=404, detail="Class not found")
+    if user.get("role") == "teacher" and cls["teacher_id"] != user["user_id"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+    if user.get("role") in ("school_admin", "district_admin") and cls["org_id"] != user.get("org_id"):
+        raise HTTPException(status_code=403, detail="Access denied")
+    entry = {"student_email": body.student_email, "date": body.date}
+    await motor_db.classes.update_one(
+        {"class_id": class_id},
+        {"$addToSet": {"excused_absences": entry}}
+    )
+    return {"ok": True}
+
+
+@router.delete("/{class_id}/excuse-absence", status_code=200)
+async def remove_excused_absence(class_id: str, body: ExcuseAbsenceBody, user: dict = Depends(get_confirmed_user)):
+    require_teacher(user)
+    cls = await motor_db.classes.find_one({"class_id": class_id})
+    if not cls:
+        raise HTTPException(status_code=404, detail="Class not found")
+    if user.get("role") == "teacher" and cls["teacher_id"] != user["user_id"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+    if user.get("role") in ("school_admin", "district_admin") and cls["org_id"] != user.get("org_id"):
+        raise HTTPException(status_code=403, detail="Access denied")
+    entry = {"student_email": body.student_email, "date": body.date}
+    await motor_db.classes.update_one(
+        {"class_id": class_id},
+        {"$pull": {"excused_absences": entry}}
+    )
+    return {"ok": True}

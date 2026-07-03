@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { linksApi } from '../api/links.js'
 import { openSafeUrl } from '../utils.js'
+import { useAuth } from '../context/AuthContext.jsx'
 
 const DAYS_SHORT = { Sun: 'Su', Mon: 'M', Tue: 'Tu', Wed: 'W', Thu: 'Th', Fri: 'F', Sat: 'Sa' }
 
@@ -25,6 +26,8 @@ function formatTime(t) {
 }
 
 export default function LinkCard({ link, isPending, onEdit, onShare, onDelete, onNotes, onToggle, isNext }) {
+  const { role } = useAuth()
+  const canShare = !(role === 'student' && link.share_id)
   const [menuOpen, setMenuOpen] = useState(false)
   const [menuPos, setMenuPos] = useState({ top: 0, right: 0 })
   const [copied, setCopied] = useState(false)
@@ -125,7 +128,7 @@ export default function LinkCard({ link, isPending, onEdit, onShare, onDelete, o
           checked={active}
           onChange={handleToggle}
         />
-        <label className="switch" htmlFor={`switch-${link.id}`} />
+        <label className="switch" htmlFor={`switch-${link.id}`} title={active ? 'Disable' : 'Enable'} />
       </div>
       {isPending && (
         <div className="pending-link-actions" onClick={e => e.stopPropagation()}>
@@ -161,8 +164,10 @@ export default function LinkCard({ link, isPending, onEdit, onShare, onDelete, o
           <hr className="menu_line" />
           <div onClick={() => { setMenuOpen(false); onDelete(link) }}>Delete</div>
           <hr className="menu_line" />
-          <div onClick={() => { setMenuOpen(false); onShare(link) }}>Share</div>
-          <hr className="menu_line" />
+          {canShare && <>
+            <div onClick={() => { setMenuOpen(false); onShare(link) }}>Share</div>
+            <hr className="menu_line" />
+          </>}
           <div onClick={() => { setMenuOpen(false); onNotes(link) }}>Notes</div>
           {link.password && <>
             <hr className="menu_line" />

@@ -200,6 +200,129 @@ def delete_text_job(link: dict) -> None:
             scheduler.remove_job(job_id)
 
 
+async def check_absences() -> None:
+    from datetime import datetime, timezone, timedelta
+    from app.database import motor_db
+
+    now_utc = datetime.now(timezone.utc)
+    today_date = now_utc.strftime("%Y-%m-%d")
+    day_abbrs = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+
+    async for cls in motor_db.classes.find({"family_alerts": True}):
+        class_days = cls.get("days") or []
+        class_time_str = cls.get("time", "")
+        if not class_days or not class_time_str:
+            continue
+
+        teacher = await motor_db.login.find_one({"user_id": cls.get("teacher_id", "")}, {"timezone": 1})
+        tz_name = (teacher or {}).get("timezone") or "UTC"
+        try:
+            tz = pytz_timezone(tz_name)
+        except Exception:
+            tz = utc
+
+        try:
+            h, m = (int(x) for x in class_time_str.split(":"))
+        except (ValueError, TypeError):
+            continue
+
+        now_local = now_utc.astimezone(tz)
+        today_local = now_local.date()
+        today_abbr = day_abbrs[today_local.weekday()]
+        if today_abbr not in class_days:
+            continue
+
+        from datetime import datetime as _dt
+        class_start_local = tz.localize(_dt(today_local.year, today_local.month, today_local.day, h, m, 0))
+        class_start_utc = class_start_local.astimezone(utc)
+        delta = now_utc.replace(tzinfo=None) - class_start_utc.replace(tzinfo=None)
+        if not (timedelta(minutes=30) <= delta <= timedelta(minutes=90)):
+            continue
+
+        org = await motor_db.orgs.find_one({"org_id": cls.get("org_id", "")}, {"blackout_dates": 1, "brand_name": 1, "name": 1})
+        if today_date in set((org or {}).get("blackout_dates") or []):
+            continue
+
+        brand_name = (org or {}).get("brand_name") or (org or {}).get("name") or "LinkJoin"
+        hour12 = h % 12 or 12
+        ampm = "AM" if h < 12 else "PM"
+        class_time_display = f"{hour12}:{m:02d} {ampm}"
+
+        for uid in cls.get("student_ids") or []:
+            student = await motor_db.login.find_one(
+                {"user_id": uid},
+                {"username": 1, "name": 1, "parent_phone": 1, "parent_phone_country": 1, "parent_email": 1, "parent_name": 1, "_id": 0},
+            )
+            if not student:
+                continue
+
+            student_email = student.get("username", "")
+            parent_phone = (student.get("parent_phone") or "").strip()
+            parent_email = (student.get("parent_email") or "").strip()
+            if not parent_phone and not parent_email:
+                continue
+
+            if await motor_db.absence_alerts.find_one({"class_id": cls["class_id"], "student_email": student_email, "date": today_date}):
+                continue
+
+            start_naive = class_start_utc.replace(tzinfo=None)
+            attended = await motor_db.attendance.find_one({
+                "class_id": cls["class_id"],
+                "student_email": student_email,
+                "opened_at": {"$gte": start_naive - timedelta(minutes=5), "$lt": start_naive + timedelta(minutes=30)},
+            })
+            if attended:
+                continue
+
+            student_name = student.get("name") or student_email.split("@")[0]
+            parent_name = (student.get("parent_name") or "").strip() or "Parent/Guardian"
+            class_name = cls.get("name", "class")
+            sms_sent = email_sent = False
+
+            if parent_phone:
+                sms_body = (
+                    f"{brand_name}: {student_name} did not join {class_name} today ({class_time_display}). "
+                    f"Please contact their teacher if you have questions."
+                )
+                def _twilio_send(body=sms_body, to=parent_phone):
+                    from twilio.rest import Client
+                    Client(_settings.twilio_sid, _settings.twilio_token).messages.create(
+                        from_=_settings.twilio_from_number, body=body, to=f"+{to}"
+                    )
+                try:
+                    await asyncio.get_running_loop().run_in_executor(None, _twilio_send)
+                    sms_sent = True
+                except Exception as e:
+                    log.error("[absence] SMS failed for %s: %s", student_email, e)
+
+            if parent_email:
+                html = (
+                    f"<p>Dear {parent_name},</p>"
+                    f"<p><strong>{student_name}</strong> did not join <strong>{class_name}</strong> today, "
+                    f"which was scheduled for {class_time_display}.</p>"
+                    f"<p>If you have questions, please contact their teacher directly.</p>"
+                    f"<p>— {brand_name}</p>"
+                )
+                def _email_send(h=html, pe=parent_email, bn=brand_name, cn=class_name, sn=student_name):
+                    from app.email_service import send_email
+                    send_email(h, f"Absence Alert — {sn} missed {cn}", pe, from_name=bn)
+                try:
+                    await asyncio.get_running_loop().run_in_executor(None, _email_send)
+                    email_sent = True
+                except Exception as e:
+                    log.error("[absence] email failed for %s: %s", student_email, e)
+
+            await motor_db.absence_alerts.insert_one({
+                "class_id": cls["class_id"],
+                "student_email": student_email,
+                "date": today_date,
+                "sms_sent": sms_sent,
+                "email_sent": email_sent,
+                "sent_at": now_utc,
+            })
+            log.info("[absence] alert sent for student %s in class %s", student_email, cls["class_id"])
+
+
 def load_all_text_jobs() -> None:
     # Wipe all persisted jobs first so stale/mismatched jobs never fire
     for job in scheduler.get_jobs():
@@ -214,3 +337,13 @@ def load_all_text_jobs() -> None:
         user = sync_db.login.find_one({"username": link["username"]})
         if user and user.get("number"):
             create_text_job(link)
+
+    scheduler.add_job(
+        check_absences,
+        "interval",
+        minutes=5,
+        id="absence-check",
+        replace_existing=True,
+        misfire_grace_time=3600,
+    )
+    log.info("[scheduler] added absence-check interval job (every 5 min)")

@@ -12,6 +12,7 @@ class UpdateClassRequest(BaseModel):
     name: str | None = None
     time: str | None = None
     days: List[str] | None = None
+    family_alerts: bool | None = None
 
 
 class AddStudentsRequest(BaseModel):
