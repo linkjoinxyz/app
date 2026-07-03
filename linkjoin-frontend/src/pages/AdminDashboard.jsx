@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext.jsx'
 import { apiGet, apiPost, apiDelete, apiPatch, apiPut, apiDownload } from '../api/client.js'
 import HeaderModern from '../components/HeaderModern.jsx'
@@ -448,8 +448,8 @@ function ClassDetail({ cls, onBack, onUpdate }) {
                 </thead>
                 <tbody>
                   {students.map(s => (
-                    <>
-                      <tr key={s.user_id}>
+                    <React.Fragment key={s.user_id}>
+                      <tr>
                         <td>{s.username}</td>
                         <td>
                           <button className="roster-contact-btn" onClick={() => {
@@ -491,7 +491,7 @@ function ClassDetail({ cls, onBack, onUpdate }) {
                           </td>
                         </tr>
                       )}
-                    </>
+                    </React.Fragment>
                   ))}
                 </tbody>
               </table>

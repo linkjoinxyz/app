@@ -523,38 +523,43 @@ export default function Settings() {
               </div>
             </div>
 
-            {user?.role === 'student' && (
+          </section>}
+
+          {role === 'student' && (
+            <section className="settings-section">
+              <div className="settings-section-title">Parent / Guardian Contact</div>
+              <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)', marginBottom: 12 }}>
+                Used to notify your parent or guardian if you miss a class.
+              </div>
               <div className="settings-field">
-                <label className="settings-label">Parent / Guardian Contact</label>
-                <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)', marginBottom: 8 }}>
-                  Used to notify your parent or guardian if you miss a class.
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  <input className="settings-input" placeholder="Parent name (e.g. Mrs. Johnson)"
-                    value={parentName} onChange={e => setParentName(e.target.value)} />
-                  <div className="settings-field-row">
-                    <select className="settings-select settings-country-select"
-                      value={parentPhoneCountry} onChange={e => setParentPhoneCountry(e.target.value)}>
-                      {Object.entries(countryCodes).map(([c, v]) => (
-                        <option key={c} value={v}>{c} +{v}</option>
-                      ))}
-                    </select>
-                    <input className="settings-input" placeholder="Parent phone"
-                      value={parentPhone} onChange={e => setParentPhone(e.target.value.replace(/\D/g, ''))}
-                      inputMode="tel" />
-                  </div>
-                  <div className="settings-field-row">
-                    <input className="settings-input" placeholder="Parent email" type="email"
-                      value={parentEmail} onChange={e => setParentEmail(e.target.value)}
-                      onKeyDown={e => e.key === 'Enter' && saveParentContact()} />
-                    <button className="settings-save-btn" onClick={saveParentContact} disabled={saving.parent}>
-                      {saving.parent ? '…' : 'Save'}
-                    </button>
-                  </div>
+                <input className="settings-input" placeholder="Parent name (e.g. Mrs. Johnson)"
+                  value={parentName} onChange={e => setParentName(e.target.value)} />
+              </div>
+              <div className="settings-field">
+                <div className="settings-field-row">
+                  <select className="settings-select settings-country-select"
+                    value={parentPhoneCountry} onChange={e => setParentPhoneCountry(e.target.value)}>
+                    {Object.entries(countryCodes).map(([c, v]) => (
+                      <option key={c} value={v}>{c} +{v}</option>
+                    ))}
+                  </select>
+                  <input className="settings-input" placeholder="Parent phone"
+                    value={parentPhone} onChange={e => setParentPhone(e.target.value.replace(/\D/g, ''))}
+                    inputMode="tel" />
                 </div>
               </div>
-            )}
-          </section>}
+              <div className="settings-field">
+                <div className="settings-field-row">
+                  <input className="settings-input" placeholder="Parent email" type="email"
+                    value={parentEmail} onChange={e => setParentEmail(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && saveParentContact()} />
+                  <button className="settings-save-btn" onClick={saveParentContact} disabled={saving.parent}>
+                    {saving.parent ? '…' : 'Save'}
+                  </button>
+                </div>
+              </div>
+            </section>
+          )}
 
           {/* PREFERENCES */}
           <section className="settings-section">
