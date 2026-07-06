@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { linksApi } from '../api/links.js'
 import { useModalClose } from '../hooks/useModalClose.js'
 import '../styles/modal.css'
@@ -79,7 +79,7 @@ function fromUTC(time24) {
   return { hour: String(hour), minute: String(m).padStart(2, '0'), period }
 }
 
-export default function LinkModal({ visible, editLink, onClose, onSuccess, prefillDays, prefillDate, defaultAutoOpen = true }) {
+export default function LinkModal({ visible, editLink, onClose, onSuccess, prefillDays, prefillDate, defaultAutoOpen = true, allLinks = [] }) {
   const isEdit = Boolean(editLink)
   const { closing, handleClose } = useModalClose(onClose)
 
@@ -143,6 +143,18 @@ export default function LinkModal({ visible, editLink, onClose, onSuccess, prefi
       return next
     })
   }
+
+  const conflictWarn = useMemo(() => {
+    if (!allLinks.length || !hour) return null
+    const myTime = toUTC(hour, minute, period)
+    const conflicts = allLinks.filter(l =>
+      l.active !== 'false' &&
+      (!editLink || l.id !== editLink.id) &&
+      l.time === myTime &&
+      (l.days || []).some(d => days.includes(d))
+    )
+    return conflicts.length ? conflicts.map(c => c.name).join(', ') : null
+  }, [hour, minute, period, days, allLinks, editLink])
 
   async function handleSubmit() {
     if (!name || !url || !hour || (!days.length && repeats !== 'month' && repeats !== 'day')) {
@@ -368,6 +380,11 @@ export default function LinkModal({ visible, editLink, onClose, onSuccess, prefi
         </div>
 
         {error && <div className="modal-error">{error}</div>}
+        {conflictWarn && (
+          <div className="modal-warn">
+            ⚠ Same time as <strong>{conflictWarn}</strong> — you can still save.
+          </div>
+        )}
 
         <button
           className={`modal-submit${loading ? ' disabled' : ''}`}

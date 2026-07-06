@@ -8,6 +8,13 @@
     to   { opacity: 0; transform: translateY(10px); }
 }
 
+.modal-card svg {
+    position: static;
+    height: auto;
+    width: auto;
+    z-index: auto;
+}
+
 .modal-overlay {
     position: fixed;
     inset: 0;
@@ -355,6 +362,16 @@
     font: 400 13px Montserrat;
     color: #ff7070;
     margin: 0 0 12px;
+}
+
+.modal-warn {
+    font: 400 13px Montserrat, sans-serif;
+    color: #F0C040;
+    background: rgba(255, 200, 50, 0.06);
+    border: 1px solid rgba(255, 200, 50, 0.18);
+    border-radius: 8px;
+    padding: 8px 12px;
+    margin-bottom: 12px;
 }
 
 .modal-submit {
@@ -979,4 +996,144 @@
     border-color: rgba(255, 255, 255, 0.45);
     color: white;
     background: rgba(255, 255, 255, 0.06);
+}
+
+/* ── Open History modal ── */
+/* Wider card variant for history table */
+.modal-card--history {
+    width: min(780px, calc(100vw - 48px));
+}
+
+/* Search + filter toolbar */
+.history-toolbar {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 16px;
+}
+
+.history-search {
+    flex: 1;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 8px;
+    padding: 8px 12px;
+    color: #fff;
+    font: 13px Montserrat, sans-serif;
+    outline: none;
+    transition: border-color 0.15s;
+    min-width: 0;
+}
+
+.history-search::placeholder {
+    color: rgba(255, 255, 255, 0.3);
+}
+
+.history-search:focus {
+    border-color: rgba(43, 143, 216, 0.5);
+}
+
+.history-type-filter {
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 8px;
+    padding: 8px 10px;
+    color: rgba(255, 255, 255, 0.7);
+    font: 13px Montserrat, sans-serif;
+    cursor: pointer;
+    white-space: nowrap;
+    outline: none;
+}
+
+/* Scrollable wrapper — required for sticky thead */
+.history-table-wrap {
+    overflow-y: auto;
+    max-height: 420px;
+}
+
+/* Table — mirrors .roster-table pattern from admin.css */
+.history-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+    font-family: Montserrat, sans-serif;
+    table-layout: fixed;
+}
+
+.history-table th {
+    padding: 6px 10px;
+    color: rgba(255, 255, 255, 0.4);
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    text-align: left;
+    position: sticky;
+    top: 0;
+    background: var(--blue);
+    white-space: nowrap;
+}
+
+.history-table td {
+    padding: 9px 10px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    color: rgba(255, 255, 255, 0.85);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.history-table tr:last-child td {
+    border-bottom: none;
+}
+
+.history-table tr:hover td {
+    background: rgba(255, 255, 255, 0.03);
+}
+
+.history-table .col-time  { width: 140px; }
+.history-table .col-event { width: 110px; }
+.history-table .col-meeting { }
+.history-table .col-user  { width: 110px; }
+
+/* Event type dot */
+.history-dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    margin-right: 6px;
+    vertical-align: middle;
+    flex-shrink: 0;
+}
+
+.history-empty {
+    text-align: center;
+    font: 400 13px Montserrat, sans-serif;
+    color: rgba(255, 255, 255, 0.35);
+    padding: 32px 0 20px;
+}
+
+.history-load-more {
+    display: block;
+    width: 100%;
+    margin-top: 14px;
+    padding: 9px 0;
+    background: none;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: 8px;
+    color: rgba(255, 255, 255, 0.6);
+    font: 500 13px Montserrat, sans-serif;
+    cursor: pointer;
+    transition: border-color 0.15s, color 0.15s;
+}
+
+.history-load-more:hover:not(:disabled) {
+    border-color: rgba(255, 255, 255, 0.4);
+    color: white;
+}
+
+.history-load-more:disabled {
+    opacity: 0.5;
+    cursor: default;
 }

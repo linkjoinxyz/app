@@ -1,7 +1,9 @@
+import asyncio
 import html as _html
 import secrets
+from datetime import datetime, timezone
 from urllib.parse import urlparse
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from app.auth import get_confirmed_user, get_current_user
 from app.audit import log_audit
 from app.database import motor_db
@@ -49,6 +51,101 @@ def _normalize_url(url: str) -> str:
 @router.get("")
 async def get_links(user: dict = Depends(get_current_user)):
     return await configure_data(user["username"])
+
+
+@router.get("/history")
+async def get_link_history(
+    limit: int = Query(default=50, ge=1, le=100),
+    link_id: int | None = None,
+    before: str | None = None,
+    user: dict = Depends(get_confirmed_user),
+):
+    email = user["username"]
+    role = user.get("role", "")
+    org_id = user.get("org_id")
+
+    before_dt = None
+    if before:
+        try:
+            before_dt = datetime.fromisoformat(before.replace("Z", "+00:00"))
+        except (ValueError, TypeError):
+            pass
+
+    # Admins see the full org feed; everyone else sees only their own
+    is_admin = role in ("school_admin", "district_admin") and org_id
+    if is_admin:
+        org_members = await motor_db.login.find(
+            {"org_id": org_id}, {"username": 1, "_id": 0}
+        ).to_list(None)
+        org_emails = [m["username"] for m in org_members] or [email]
+        opens_query: dict = {"username": {"$in": org_emails}}
+        audits_query: dict = {"user": {"$in": org_emails}, "resource_type": "link"}
+    else:
+        opens_query: dict = {"username": email}
+        audits_query: dict = {"user": email, "resource_type": "link"}
+    if link_id is not None:
+        opens_query["link_id"] = link_id
+        audits_query["resource_id"] = link_id
+    if before_dt:
+        opens_query["opened_at"] = {"$lt": before_dt}
+        audits_query["ts"] = {"$lt": before_dt}
+
+    fetch = limit + 1
+    opens_raw, audits_raw = await asyncio.gather(
+        motor_db.open_log.find(opens_query, {"_id": 0}).sort("opened_at", -1).limit(fetch).to_list(None),
+        motor_db.audit_logs.find(audits_query, {"_id": 0}).sort("ts", -1).limit(fetch).to_list(None),
+    )
+
+    action_map = {"create": "create", "update": "edit", "delete": "delete", "toggle": "toggle", "restore": "restore"}
+    events = []
+    for o in opens_raw:
+        ts = o["opened_at"]
+        events.append({
+            "type": "open",
+            "link_id": o["link_id"],
+            "link_name": o.get("link_name", ""),
+            "actor": o.get("username", ""),
+            "ts": ts.strftime("%Y-%m-%dT%H:%M:%S.000Z") if isinstance(ts, datetime) else str(ts),
+            "_ts": ts,
+        })
+    for a in audits_raw:
+        action_key = (a.get("action") or "").split(".")[-1]
+        detail = a.get("detail") or {}
+        ts = a["ts"]
+        events.append({
+            "type": action_map.get(action_key, "edit"),
+            "link_id": a.get("resource_id"),
+            "link_name": detail.get("name", ""),
+            "actor": a.get("user", ""),
+            "ts": ts.strftime("%Y-%m-%dT%H:%M:%S.000Z") if isinstance(ts, datetime) else str(ts),
+            "_ts": ts,
+        })
+
+    events.sort(key=lambda e: e["_ts"], reverse=True)
+    for e in events:
+        del e["_ts"]
+
+    has_more = len(events) > limit
+    events = events[:limit]
+    next_before = events[-1]["ts"] if has_more and events else None
+    return {"events": events, "has_more": has_more, "next_before": next_before}
+
+
+@router.post("/{link_id}/open", status_code=200)
+async def log_link_open(link_id: int, user: dict = Depends(get_confirmed_user)):
+    email = user["username"]
+    link = await motor_db.links.find_one({"username": email, "id": link_id}, {"name": 1, "time": 1})
+    if not link:
+        raise HTTPException(status_code=404, detail="Link not found")
+    await motor_db.open_log.insert_one({
+        "username": email,
+        "link_id": link_id,
+        "link_name": link.get("name", ""),
+        "link_time": link.get("time", ""),
+        "opened_at": datetime.now(timezone.utc),
+    })
+    await analytics("links_opened")
+    return {"ok": True}
 
 
 @router.post("", status_code=201)
@@ -166,7 +263,8 @@ async def delete_link(link_id: int, request: Request, permanent: bool = False, t
             await motor_db.links.delete_many({"share_id": link_id})
 
     await analytics("links_deleted")
-    await log_audit(email, "link.delete", type, link_id, ip=request.client.host if request.client else None)
+    link_name = doc.get("name", "") if not permanent else ""
+    await log_audit(email, "link.delete", type, link_id, ip=request.client.host if request.client else None, detail={"name": link_name})
     await manager.broadcast(await configure_data(email), email)
     return {"message": "Deleted"}
 
@@ -188,6 +286,8 @@ async def restore_link(link_id: int, type: str = "link", user: dict = Depends(ge
     if type != "bookmark" and doc.get("text") and doc.get("text") != "false":
         create_text_job(doc, update=True)
 
+    if type != "bookmark":
+        await log_audit(email, "link.restore", "link", link_id, detail={"name": doc.get("name", "")})
     await manager.broadcast(await configure_data(email), email)
     return {"message": "Restored"}
 
@@ -206,7 +306,7 @@ async def toggle_link(link_id: int, body: ToggleLinkRequest, user: dict = Depend
         updated = {**existing, "active": "true"}
         create_text_job(updated, update=True)
     await analytics("links_edited")
-    await log_audit(email, "link.toggle", "link", link_id, detail={"active": active})
+    await log_audit(email, "link.toggle", "link", link_id, detail={"active": active, "name": existing.get("name", "")})
     await manager.broadcast(await configure_data(email), email)
     return {"message": "Toggled", "active": active}
 

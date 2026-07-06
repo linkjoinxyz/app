@@ -470,3 +470,88 @@
   font: 400 11px Montserrat, sans-serif;
   color: rgba(255,255,255,0.4);
 }
+
+/* ── History Page ──────────────────────────────────────────────────────────── */
+
+.history-page {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 32px 24px 80px;
+}
+
+.history-page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  margin-bottom: 24px;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.history-page-title-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.history-back-btn {
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.4);
+  font: 500 13px Montserrat, sans-serif;
+  cursor: pointer;
+  padding: 0;
+  text-align: left;
+  transition: color 0.15s;
+}
+.history-back-btn:hover { color: rgba(255, 255, 255, 0.75); }
+
+.history-page-title {
+  font: 700 24px Montserrat, sans-serif;
+  color: white;
+  margin: 0;
+}
+
+.history-export-btn {
+  background: rgba(43, 143, 216, 0.15);
+  border: 1px solid rgba(43, 143, 216, 0.35);
+  color: #fff;
+  border-radius: 7px;
+  padding: 8px 18px;
+  font: 600 12px Montserrat, sans-serif;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: background 0.15s;
+}
+.history-export-btn:hover:not(:disabled) { background: rgba(43, 143, 216, 0.28); }
+.history-export-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* Panel that holds the table */
+.history-panel {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+.history-panel-inner {
+  padding: 20px 24px 16px;
+}
+
+/* On the full page the table is not inside a scroll container,
+   so headers shouldn't be sticky (they'd be hidden under the nav) */
+.history-page .history-table th {
+  position: static;
+  background: transparent;
+}
+
+.history-page .history-table-wrap {
+  max-height: none;
+  overflow-y: visible;
+}
+
+@media (max-width: 600px) {
+  .history-page { padding: 20px 12px 60px; }
+  .history-page-header { flex-direction: column; align-items: flex-start; }
+}

@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext.jsx'
 import { apiGet, apiPost, apiDelete, apiPatch, apiPut, apiDownload } from '../api/client.js'
 import HeaderModern from '../components/HeaderModern.jsx'
 import LinkModal from '../components/LinkModal.jsx'
+import HistoryPanel from '../components/HistoryPanel.jsx'
 import '../styles/admin.css'
 
 // ─── helpers ────────────────────────────────────────────────────────────────
@@ -50,6 +52,8 @@ function ClassDetail({ cls, onBack, onUpdate }) {
   const [interventions, setInterventions] = useState([])
   const [expandedCase, setExpandedCase] = useState(null)
   const [noteInputs, setNoteInputs] = useState({})
+  const [assignedDrafts, setAssignedDrafts] = useState({})
+  const [assignedSaved, setAssignedSaved] = useState({})
   const [addInput, setAddInput] = useState('')
   const [addErr, setAddErr] = useState('')
   const [addLoading, setAddLoading] = useState(false)
@@ -728,12 +732,28 @@ function ClassDetail({ cls, onBack, onUpdate }) {
                           </div>
                           <div className="iv-control-group">
                             <label className="iv-control-label">Assigned to</label>
-                            <input
-                              className="iv-input"
-                              placeholder="staff email"
-                              defaultValue={iv.assigned_to || ''}
-                              onBlur={e => updateCase(iv.intervention_id, { assigned_to: e.target.value || null })}
-                            />
+                            <div className="iv-input-row">
+                              <input
+                                className="iv-input"
+                                placeholder="staff email"
+                                value={assignedDrafts[iv.intervention_id] ?? (iv.assigned_to || '')}
+                                onChange={e => setAssignedDrafts(p => ({ ...p, [iv.intervention_id]: e.target.value }))}
+                                onBlur={e => updateCase(iv.intervention_id, { assigned_to: e.target.value || null })}
+                              />
+                              <button
+                                className={`iv-save-btn${assignedSaved[iv.intervention_id] ? ' iv-save-btn--saved' : ''}`}
+                                onClick={async () => {
+                                  const val = assignedDrafts[iv.intervention_id] !== undefined
+                                    ? assignedDrafts[iv.intervention_id]
+                                    : (iv.assigned_to || '')
+                                  await updateCase(iv.intervention_id, { assigned_to: val || null })
+                                  setAssignedSaved(p => ({ ...p, [iv.intervention_id]: true }))
+                                  setTimeout(() => setAssignedSaved(p => ({ ...p, [iv.intervention_id]: false })), 2000)
+                                }}
+                              >
+                                {assignedSaved[iv.intervention_id] ? '✓ Saved' : 'Save'}
+                              </button>
+                            </div>
                           </div>
                         </div>
 
@@ -838,9 +858,238 @@ function ClassDetail({ cls, onBack, onUpdate }) {
   )
 }
 
+// ─── Org Settings Tab ─────────────────────────────────────────────────────────
+
+const DEFAULT_THRESHOLDS = {
+  tardy_threshold_minutes: 5,
+  tardy_rate_flag: 33,
+  attendance_rate_flag: 50,
+  min_sessions_to_flag: 3,
+}
+
+function AlertSettingsCard({ orgId }) {
+  const [settings, setSettings] = useState(null)
+  const [draft, setDraft] = useState(DEFAULT_THRESHOLDS)
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
+  const [saveError, setSaveError] = useState(null)
+
+  useEffect(() => {
+    if (!orgId) return
+    apiGet(`/orgs/${orgId}/attendance-settings`).then(s => {
+      const normalized = {
+        tardy_threshold_minutes: s.tardy_threshold_minutes,
+        tardy_rate_flag: Math.round(s.tardy_rate_flag * 100),
+        attendance_rate_flag: Math.round(s.attendance_rate_flag * 100),
+        min_sessions_to_flag: s.min_sessions_to_flag,
+      }
+      setSettings(normalized)
+      setDraft(normalized)
+    }).catch(() => {})
+  }, [orgId])
+
+  function handleChange(key, value) {
+    setDraft(d => ({ ...d, [key]: value }))
+    setSaved(false)
+    setSaveError(null)
+  }
+
+  async function handleSave() {
+    const tardyMin = Number(draft.tardy_threshold_minutes)
+    const tardyRate = Number(draft.tardy_rate_flag)
+    const attRate = Number(draft.attendance_rate_flag)
+    const minSess = Number(draft.min_sessions_to_flag)
+    if (tardyMin < 0 || tardyMin > 60) return setSaveError('Minutes late must be between 0 and 60.')
+    if (tardyRate < 1 || tardyRate > 100) return setSaveError('Tardy rate must be between 1% and 100%.')
+    if (attRate < 1 || attRate > 100) return setSaveError('Attendance rate must be between 1% and 100%.')
+    if (minSess < 1 || minSess > 20) return setSaveError('Minimum sessions must be between 1 and 20.')
+    setSaving(true)
+    setSaveError(null)
+    try {
+      await apiPatch(`/orgs/${orgId}/attendance-settings`, {
+        tardy_threshold_minutes: tardyMin,
+        tardy_rate_flag: tardyRate / 100,
+        attendance_rate_flag: attRate / 100,
+        min_sessions_to_flag: minSess,
+      })
+      setSettings(draft)
+      setSaved(true)
+    } catch (err) {
+      const msg = err?.detail || err?.message || 'Save failed'
+      setSaveError(typeof msg === 'string' ? msg : JSON.stringify(msg))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const dirty = settings && (
+    draft.tardy_threshold_minutes !== settings.tardy_threshold_minutes ||
+    draft.tardy_rate_flag !== settings.tardy_rate_flag ||
+    draft.attendance_rate_flag !== settings.attendance_rate_flag ||
+    draft.min_sessions_to_flag !== settings.min_sessions_to_flag
+  )
+
+  return (
+    <div className="alert-settings-card">
+      <div className="org-settings-section-title">Alert Settings</div>
+      <div className="alert-settings-body">
+        <div className="alert-settings-grid">
+          <label className="alert-settings-label">
+            Minutes late to count as tardy
+            <input type="number" className="alert-settings-input" min={0} max={60}
+              value={draft.tardy_threshold_minutes}
+              onChange={e => handleChange('tardy_threshold_minutes', e.target.value)} />
+          </label>
+          <label className="alert-settings-label">
+            Flag when tardy rate exceeds (%)
+            <input type="number" className="alert-settings-input" min={1} max={100}
+              value={draft.tardy_rate_flag}
+              onChange={e => handleChange('tardy_rate_flag', e.target.value)} />
+          </label>
+          <label className="alert-settings-label">
+            Flag when attendance falls below (%)
+            <input type="number" className="alert-settings-input" min={1} max={100}
+              value={draft.attendance_rate_flag}
+              onChange={e => handleChange('attendance_rate_flag', e.target.value)} />
+          </label>
+          <label className="alert-settings-label">
+            Minimum sessions before flagging
+            <input type="number" className="alert-settings-input" min={1} max={20}
+              value={draft.min_sessions_to_flag}
+              onChange={e => handleChange('min_sessions_to_flag', e.target.value)} />
+          </label>
+        </div>
+        <div className="alert-settings-footer">
+          {saveError && <span className="alert-settings-error">{saveError}</span>}
+          {saved && !dirty && !saveError && <span className="alert-settings-saved">Saved</span>}
+          <button className="admin-btn" onClick={handleSave} disabled={saving || !dirty}>
+            {saving ? 'Saving…' : 'Save'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function AcademicCalendarCard({ orgId }) {
+  const [dates, setDates] = useState([])
+  const [input, setInput] = useState('')
+  const [adding, setAdding] = useState(false)
+  const [err, setErr] = useState('')
+
+  useEffect(() => {
+    if (!orgId) return
+    apiGet(`/orgs/${orgId}/calendar`).then(r => setDates(r.blackout_dates || [])).catch(() => {})
+  }, [orgId])
+
+  async function handleAdd() {
+    if (!input) return
+    setAdding(true)
+    setErr('')
+    try {
+      await apiPost(`/orgs/${orgId}/calendar/blackout`, { date: input })
+      setDates(prev => [...prev, input].sort())
+      setInput('')
+    } catch (e) {
+      setErr(e.message || 'Failed to add date')
+    } finally {
+      setAdding(false)
+    }
+  }
+
+  async function handleRemove(date) {
+    try {
+      await apiDelete(`/orgs/${orgId}/calendar/blackout/${date}`)
+      setDates(prev => prev.filter(d => d !== date))
+    } catch (e) {
+      setErr(e.message || 'Failed to remove date')
+    }
+  }
+
+  const grouped = {}
+  for (const d of dates) {
+    const dt = new Date(d + 'T12:00:00')
+    const label = dt.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })
+    if (!grouped[label]) grouped[label] = []
+    grouped[label].push(d)
+  }
+
+  return (
+    <div className="alert-settings-card">
+      <div className="org-settings-section-title">
+        Academic Calendar
+        {dates.length > 0 && <span className="cal-badge">{dates.length} day{dates.length !== 1 ? 's' : ''} off</span>}
+      </div>
+      <div className="alert-settings-body">
+        <div className="cal-desc">
+          Mark school holidays and snow days. These dates are excluded from expected attendance counts so absent students aren't flagged for days school wasn't in session.
+        </div>
+        <div className="cal-add-row">
+          <input
+            type="date"
+            className="alert-settings-input cal-date-input"
+            value={input}
+            onChange={e => { setInput(e.target.value); setErr('') }}
+            onKeyDown={e => e.key === 'Enter' && handleAdd()}
+          />
+          <button className="admin-btn" onClick={handleAdd} disabled={adding || !input}>
+            {adding ? '…' : 'Add'}
+          </button>
+        </div>
+        {err && <div className="alert-settings-error" style={{ marginBottom: 8 }}>{err}</div>}
+        {dates.length === 0 ? (
+          <div className="admin-empty" style={{ marginTop: 8 }}>No blackout dates set.</div>
+        ) : (
+          <div className="cal-date-list">
+            {Object.entries(grouped).map(([month, ds]) => (
+              <div key={month} className="cal-month-group">
+                <div className="cal-month-label">{month}</div>
+                {ds.map(d => {
+                  const dt = new Date(d + 'T12:00:00')
+                  const label = dt.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })
+                  return (
+                    <div key={d} className="cal-date-item">
+                      <span>{label}</span>
+                      <button className="cal-remove-btn" onClick={() => handleRemove(d)} title="Remove">×</button>
+                    </div>
+                  )
+                })}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function OrgSettingsTab({ orgId, brandName, setBrandName, brandSaved, saveBrandName }) {
+  return (
+    <div style={{ maxWidth: 600, margin: '0 auto' }}>
+      <div className="org-brand-section" style={{ marginTop: 0, marginBottom: 16 }}>
+        <div className="org-brand-label">Notification display name</div>
+        <div className="org-brand-row">
+          <input className="admin-input" placeholder="e.g. Lincoln High School"
+            value={brandName} onChange={e => setBrandName(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && saveBrandName()} />
+          <button className="admin-btn" onClick={saveBrandName}>
+            {brandSaved ? '✓ Saved' : 'Save'}
+          </button>
+        </div>
+        <div style={{ marginTop: 6, fontSize: 11, color: 'rgba(255,255,255,0.35)' }}>
+          Shown in absence alert texts and emails instead of "LinkJoin"
+        </div>
+      </div>
+      <AlertSettingsCard orgId={orgId} />
+      <AcademicCalendarCard orgId={orgId} />
+    </div>
+  )
+}
+
 // ─── Teacher View ─────────────────────────────────────────────────────────────
 
 function TeacherView() {
+  const navigate = useNavigate()
   const [classes, setClasses] = useState([])
   const [selected, setSelected] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -868,7 +1117,10 @@ function TeacherView() {
 
   return (
     <>
-      <div className="admin-section-title">My Classes</div>
+      <div className="admin-section-header">
+        <div className="admin-section-title">My Classes</div>
+        <button className="admin-log-link" onClick={() => navigate('/history')}>Meeting Open Log →</button>
+      </div>
       <div className="class-grid">
         {classes.map(cls => (
           <div key={cls.class_id} className="class-card" onClick={() => setSelected(cls)}>
@@ -905,6 +1157,8 @@ function OrgInterventionList({ onBack }) {
   const [search, setSearch] = useState('')
   const [expandedCase, setExpandedCase] = useState(null)
   const [noteInputs, setNoteInputs] = useState({})
+  const [assignedDrafts, setAssignedDrafts] = useState({})
+  const [assignedSaved, setAssignedSaved] = useState({})
 
   useEffect(() => {
     setLoading(true)
@@ -1015,8 +1269,28 @@ function OrgInterventionList({ onBack }) {
                   </div>
                   <div className="iv-control-group">
                     <label className="iv-control-label">Assigned to</label>
-                    <input className="iv-input" placeholder="staff email" defaultValue={iv.assigned_to || ''}
-                      onBlur={e => updateCase(iv.intervention_id, { assigned_to: e.target.value || null })} />
+                    <div className="iv-input-row">
+                      <input
+                        className="iv-input"
+                        placeholder="staff email"
+                        value={assignedDrafts[iv.intervention_id] ?? (iv.assigned_to || '')}
+                        onChange={e => setAssignedDrafts(p => ({ ...p, [iv.intervention_id]: e.target.value }))}
+                        onBlur={e => updateCase(iv.intervention_id, { assigned_to: e.target.value || null })}
+                      />
+                      <button
+                        className={`iv-save-btn${assignedSaved[iv.intervention_id] ? ' iv-save-btn--saved' : ''}`}
+                        onClick={async () => {
+                          const val = assignedDrafts[iv.intervention_id] !== undefined
+                            ? assignedDrafts[iv.intervention_id]
+                            : (iv.assigned_to || '')
+                          await updateCase(iv.intervention_id, { assigned_to: val || null })
+                          setAssignedSaved(p => ({ ...p, [iv.intervention_id]: true }))
+                          setTimeout(() => setAssignedSaved(p => ({ ...p, [iv.intervention_id]: false })), 2000)
+                        }}
+                      >
+                        {assignedSaved[iv.intervention_id] ? '✓ Saved' : 'Save'}
+                      </button>
+                    </div>
                   </div>
                 </div>
                 <div className="iv-notes">
@@ -1054,6 +1328,7 @@ function OrgInterventionList({ onBack }) {
 const PAGE_SIZE = 20
 
 function SchoolAdminView() {
+  const navigate = useNavigate()
   const { orgId } = useAuth()
   const [classes, setClasses] = useState([])
   const [loading, setLoading] = useState(true)
@@ -1062,7 +1337,7 @@ function SchoolAdminView() {
   const [search, setSearch] = useState('')
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
   const [openCases, setOpenCases] = useState([])
-  const [showInterventions, setShowInterventions] = useState(false)
+  const [activeTab, setActiveTab] = useState('teachers')
   const [brandName, setBrandName] = useState('')
   const [brandSaved, setBrandSaved] = useState(false)
 
@@ -1123,14 +1398,19 @@ function SchoolAdminView() {
   return (
     <>
       <div className="admin-tabs">
-        <button className={`admin-tab${!showInterventions ? ' admin-tab--active' : ''}`} onClick={() => setShowInterventions(false)}>Teachers</button>
-        <button className={`admin-tab${showInterventions ? ' admin-tab--active' : ''}`} onClick={() => setShowInterventions(true)}>
+        <button className={`admin-tab${activeTab === 'teachers' ? ' admin-tab--active' : ''}`} onClick={() => setActiveTab('teachers')}>Teachers</button>
+        <button className={`admin-tab${activeTab === 'interventions' ? ' admin-tab--active' : ''}`} onClick={() => setActiveTab('interventions')}>
           Interventions
           {openCases.length > 0 && <span className="admin-tab-badge">{openCases.length}</span>}
         </button>
+        <button className={`admin-tab${activeTab === 'log' ? ' admin-tab--active' : ''}`} onClick={() => setActiveTab('log')}>Meeting Open Log</button>
+        <button className={`admin-tab${activeTab === 'org' ? ' admin-tab--active' : ''}`} onClick={() => setActiveTab('org')}>Organization</button>
       </div>
 
-      {showInterventions ? <OrgInterventionList onBack={() => setShowInterventions(false)} /> : <>
+      {activeTab === 'interventions' && <OrgInterventionList onBack={() => setActiveTab('teachers')} />}
+      {activeTab === 'log' && <HistoryPanel />}
+      {activeTab === 'org' && <OrgSettingsTab orgId={orgId} brandName={brandName} setBrandName={setBrandName} brandSaved={brandSaved} saveBrandName={saveBrandName} />}
+      {activeTab === 'teachers' && <>
       <div className="admin-search-row">
         <input
           className="admin-input admin-search-input"
@@ -1208,22 +1488,6 @@ function SchoolAdminView() {
       </div>
       </>}
 
-      {!showInterventions && (
-        <div className="org-brand-section">
-          <div className="org-brand-label">Notification display name</div>
-          <div className="org-brand-row">
-            <input className="admin-input" placeholder="e.g. Lincoln High School"
-              value={brandName} onChange={e => setBrandName(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && saveBrandName()} />
-            <button className="admin-btn" onClick={saveBrandName}>
-              {brandSaved ? '✓ Saved' : 'Save'}
-            </button>
-          </div>
-          <div style={{ marginTop: 6, fontSize: 11, color: 'rgba(255,255,255,0.35)' }}>
-            Shown in absence alert texts and emails instead of "LinkJoin"
-          </div>
-        </div>
-      )}
     </>
   )
 }

@@ -43,223 +43,6 @@ async function resizeToDataURL(file, size = 220) {
   })
 }
 
-// ─── Org Settings Cards ───────────────────────────────────────────────────────
-
-const DEFAULT_THRESHOLDS = {
-  tardy_threshold_minutes: 5,
-  tardy_rate_flag: 33,
-  attendance_rate_flag: 50,
-  min_sessions_to_flag: 3,
-}
-
-function AlertSettingsCard({ orgId }) {
-  const [settings, setSettings] = useState(null)
-  const [draft, setDraft] = useState(DEFAULT_THRESHOLDS)
-  const [saving, setSaving] = useState(false)
-  const [saved, setSaved] = useState(false)
-  const [saveError, setSaveError] = useState(null)
-  const [open, setOpen] = useState(false)
-
-  useEffect(() => {
-    if (!orgId) return
-    apiGet(`/orgs/${orgId}/attendance-settings`).then(s => {
-      const normalized = {
-        tardy_threshold_minutes: s.tardy_threshold_minutes,
-        tardy_rate_flag: Math.round(s.tardy_rate_flag * 100),
-        attendance_rate_flag: Math.round(s.attendance_rate_flag * 100),
-        min_sessions_to_flag: s.min_sessions_to_flag,
-      }
-      setSettings(normalized)
-      setDraft(normalized)
-    }).catch(() => {})
-  }, [orgId])
-
-  function handleChange(key, value) {
-    setDraft(d => ({ ...d, [key]: value }))
-    setSaved(false)
-    setSaveError(null)
-  }
-
-  async function handleSave() {
-    const tardyMin = Number(draft.tardy_threshold_minutes)
-    const tardyRate = Number(draft.tardy_rate_flag)
-    const attRate = Number(draft.attendance_rate_flag)
-    const minSess = Number(draft.min_sessions_to_flag)
-    if (tardyMin < 0 || tardyMin > 60) return setSaveError('Minutes late must be between 0 and 60.')
-    if (tardyRate < 1 || tardyRate > 100) return setSaveError('Tardy rate must be between 1% and 100%.')
-    if (attRate < 1 || attRate > 100) return setSaveError('Attendance rate must be between 1% and 100%.')
-    if (minSess < 1 || minSess > 20) return setSaveError('Minimum sessions must be between 1 and 20.')
-    setSaving(true)
-    setSaveError(null)
-    try {
-      await apiPatch(`/orgs/${orgId}/attendance-settings`, {
-        tardy_threshold_minutes: tardyMin,
-        tardy_rate_flag: tardyRate / 100,
-        attendance_rate_flag: attRate / 100,
-        min_sessions_to_flag: minSess,
-      })
-      setSettings(draft)
-      setSaved(true)
-    } catch (err) {
-      const msg = err?.detail || err?.message || 'Save failed'
-      setSaveError(typeof msg === 'string' ? msg : JSON.stringify(msg))
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  const dirty = settings && (
-    draft.tardy_threshold_minutes !== settings.tardy_threshold_minutes ||
-    draft.tardy_rate_flag !== settings.tardy_rate_flag ||
-    draft.attendance_rate_flag !== settings.attendance_rate_flag ||
-    draft.min_sessions_to_flag !== settings.min_sessions_to_flag
-  )
-
-  return (
-    <div className="alert-settings-card">
-      <button className="alert-settings-toggle" onClick={() => setOpen(o => !o)}>
-        <span>Alert Settings</span>
-        <span className="alert-settings-chevron">{open ? '▲' : '▼'}</span>
-      </button>
-      {open && (
-        <div className="alert-settings-body">
-          <div className="alert-settings-grid">
-            <label className="alert-settings-label">
-              Minutes late to count as tardy
-              <input type="number" className="alert-settings-input" min={0} max={60}
-                value={draft.tardy_threshold_minutes}
-                onChange={e => handleChange('tardy_threshold_minutes', e.target.value)} />
-            </label>
-            <label className="alert-settings-label">
-              Flag when tardy rate exceeds (%)
-              <input type="number" className="alert-settings-input" min={1} max={100}
-                value={draft.tardy_rate_flag}
-                onChange={e => handleChange('tardy_rate_flag', e.target.value)} />
-            </label>
-            <label className="alert-settings-label">
-              Flag when attendance falls below (%)
-              <input type="number" className="alert-settings-input" min={1} max={100}
-                value={draft.attendance_rate_flag}
-                onChange={e => handleChange('attendance_rate_flag', e.target.value)} />
-            </label>
-            <label className="alert-settings-label">
-              Minimum sessions before flagging
-              <input type="number" className="alert-settings-input" min={1} max={20}
-                value={draft.min_sessions_to_flag}
-                onChange={e => handleChange('min_sessions_to_flag', e.target.value)} />
-            </label>
-          </div>
-          <div className="alert-settings-footer">
-            {saveError && <span className="alert-settings-error">{saveError}</span>}
-            {saved && !dirty && !saveError && <span className="alert-settings-saved">Saved</span>}
-            <button className="admin-btn" onClick={handleSave} disabled={saving || !dirty}>
-              {saving ? 'Saving…' : 'Save'}
-            </button>
-          </div>
-        </div>
-      )}
-    </div>
-  )
-}
-
-function AcademicCalendarCard({ orgId }) {
-  const [dates, setDates] = useState([])
-  const [input, setInput] = useState('')
-  const [adding, setAdding] = useState(false)
-  const [err, setErr] = useState('')
-  const [open, setOpen] = useState(false)
-
-  useEffect(() => {
-    if (!orgId || !open) return
-    apiGet(`/orgs/${orgId}/calendar`).then(r => setDates(r.blackout_dates || [])).catch(() => {})
-  }, [orgId, open])
-
-  async function handleAdd() {
-    if (!input) return
-    setAdding(true)
-    setErr('')
-    try {
-      await apiPost(`/orgs/${orgId}/calendar/blackout`, { date: input })
-      setDates(prev => [...prev, input].sort())
-      setInput('')
-    } catch (e) {
-      setErr(e.message || 'Failed to add date')
-    } finally {
-      setAdding(false)
-    }
-  }
-
-  async function handleRemove(date) {
-    try {
-      await apiDelete(`/orgs/${orgId}/calendar/blackout/${date}`)
-      setDates(prev => prev.filter(d => d !== date))
-    } catch (e) {
-      setErr(e.message || 'Failed to remove date')
-    }
-  }
-
-  const grouped = {}
-  for (const d of dates) {
-    const dt = new Date(d + 'T12:00:00')
-    const label = dt.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })
-    if (!grouped[label]) grouped[label] = []
-    grouped[label].push(d)
-  }
-
-  return (
-    <div className="alert-settings-card">
-      <button className="alert-settings-toggle" onClick={() => setOpen(o => !o)}>
-        <span>Academic Calendar</span>
-        {dates.length > 0 && <span className="cal-badge">{dates.length} day{dates.length !== 1 ? 's' : ''} off</span>}
-        <span className="alert-settings-chevron">{open ? '▲' : '▼'}</span>
-      </button>
-      {open && (
-        <div className="alert-settings-body">
-          <div className="cal-desc">
-            Mark school holidays and snow days. These dates are excluded from expected attendance counts so absent students aren't flagged for days school wasn't in session.
-          </div>
-          <div className="cal-add-row">
-            <input
-              type="date"
-              className="alert-settings-input cal-date-input"
-              value={input}
-              onChange={e => { setInput(e.target.value); setErr('') }}
-              onKeyDown={e => e.key === 'Enter' && handleAdd()}
-            />
-            <button className="admin-btn" onClick={handleAdd} disabled={adding || !input}>
-              {adding ? '…' : 'Add'}
-            </button>
-          </div>
-          {err && <div className="alert-settings-error" style={{ marginBottom: 8 }}>{err}</div>}
-          {dates.length === 0 ? (
-            <div className="admin-empty" style={{ marginTop: 8 }}>No blackout dates set.</div>
-          ) : (
-            <div className="cal-date-list">
-              {Object.entries(grouped).map(([month, ds]) => (
-                <div key={month} className="cal-month-group">
-                  <div className="cal-month-label">{month}</div>
-                  {ds.map(d => {
-                    const dt = new Date(d + 'T12:00:00')
-                    const label = dt.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })
-                    return (
-                      <div key={d} className="cal-date-item">
-                        <span>{label}</span>
-                        <button className="cal-remove-btn" onClick={() => handleRemove(d)} title="Remove">×</button>
-                      </div>
-                    )
-                  })}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  )
-}
-
-// ─── Main Settings Page ───────────────────────────────────────────────────────
-
 export default function Settings() {
   const { email: authEmail, logout, role, orgId } = useAuth()
   const navigate = useNavigate()
@@ -429,6 +212,7 @@ export default function Settings() {
     : null
 
   return (
+    <>
     <div className="settings-root">
       <HeaderModern page="settings" />
 
@@ -757,17 +541,11 @@ export default function Settings() {
             </section>
           )}
 
-          {/* ORGANIZATION SETTINGS (school/district admins) */}
-          {(role === 'school_admin' || role === 'district_admin') && orgId && (
-            <>
-              <div className="settings-group-label" style={{ marginTop: 12 }}>Organization Settings</div>
-              <AlertSettingsCard orgId={orgId} />
-              <AcademicCalendarCard orgId={orgId} />
-            </>
-          )}
 
         </div>
       </div>
     </div>
+
+    </>
   )
 }

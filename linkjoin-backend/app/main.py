@@ -66,6 +66,7 @@ async def lifespan(app: FastAPI):
     await motor_db.pending_links.create_index("username")
     await motor_db.deleted_links.create_index("username")
     await motor_db.audit_logs.create_index([("user", 1), ("ts", -1)])
+    await motor_db.audit_logs.create_index([("user", 1), ("resource_type", 1), ("ts", -1)])
     await motor_db.audit_logs.create_index("ts")
     await motor_db.login.create_index("user_id", unique=True, sparse=True)
     await motor_db.classes.create_index("class_id", unique=True)
@@ -80,6 +81,8 @@ async def lifespan(app: FastAPI):
     await motor_db.absence_alerts.create_index(
         [("class_id", 1), ("student_email", 1), ("date", 1)], unique=True
     )
+    await motor_db.open_log.create_index([("username", 1), ("opened_at", -1)])
+    await motor_db.open_log.create_index([("username", 1), ("link_id", 1), ("opened_at", -1)])
 
     async for u in motor_db.login.find({"user_id": {"$exists": False}}):
         await motor_db.login.update_one(

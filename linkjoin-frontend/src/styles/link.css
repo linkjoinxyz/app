@@ -194,7 +194,8 @@
 .lk-badge-meet  { background: rgba(0, 180, 100, 0.12);  color: #2DC97E; }
 .lk-badge-teams { background: rgba(120, 90, 255, 0.12); color: #9B7EFF; }
 .lk-badge-webex { background: rgba(255, 130, 0, 0.12);  color: #FF9A3C; }
-.lk-badge-class { background: rgba(255, 200, 50, 0.12); color: #F0C040; max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lk-badge-class    { background: rgba(255, 200, 50, 0.12); color: #F0C040; max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lk-badge-conflict { background: rgba(255, 160, 50, 0.12); color: #F0A030; }
 
 
 @media (max-width: 730px) {

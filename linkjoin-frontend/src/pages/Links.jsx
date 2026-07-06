@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext.jsx'
 import { useWebSocket } from '../hooks/useWebSocket.js'
@@ -331,6 +331,22 @@ const [showDeleted, setShowDeleted] = useState(false)
     user?.sort
   )
 
+  const conflictMap = useMemo(() => {
+    const result = {}
+    const active = links.filter(l => l.active !== 'false')
+    for (let i = 0; i < active.length; i++) {
+      for (let j = i + 1; j < active.length; j++) {
+        const a = active[i], b = active[j]
+        if (a.time !== b.time) continue
+        const shared = (a.days || []).filter(d => (b.days || []).includes(d))
+        if (!shared.length) continue
+        ;(result[a.id] = result[a.id] || []).push({ id: b.id, name: b.name })
+        ;(result[b.id] = result[b.id] || []).push({ id: a.id, name: a.name })
+      }
+    }
+    return result
+  }, [links])
+
   async function handleResend() {
     if (resendState !== 'idle') return
     setResendState('sending')
@@ -517,6 +533,7 @@ const [showDeleted, setShowDeleted] = useState(false)
                   onDelete={handleDelete} onNotes={handleNotes}
                   onToggle={(id, val) => setLinks(prev => prev.map(lk => lk.id === id ? { ...lk, active: val } : lk))}
                   isNext={l.id === nextId}
+                  conflicts={conflictMap[l.id] || []}
                 />
               ))
             })()}
@@ -554,6 +571,7 @@ const [showDeleted, setShowDeleted] = useState(false)
           onSuccess={refreshLinks}
           prefillDays={calPrefillDays}
           prefillDate={calPrefillDate}
+          allLinks={links}
         />
       )}
 

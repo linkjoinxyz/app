@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { createPortal } from 'react-dom'
+import { useNavigate } from 'react-router-dom'
 import { linksApi } from '../api/links.js'
 import { openSafeUrl } from '../utils.js'
 import { useAuth } from '../context/AuthContext.jsx'
@@ -25,8 +26,9 @@ function formatTime(t) {
   return `${hour}:${String(m).padStart(2, '0')} ${period}`
 }
 
-export default function LinkCard({ link, isPending, onEdit, onShare, onDelete, onNotes, onToggle, isNext }) {
+export default function LinkCard({ link, isPending, onEdit, onShare, onDelete, onNotes, onToggle, isNext, conflicts = [] }) {
   const { role } = useAuth()
+  const navigate = useNavigate()
   const canShare = !(role === 'student' && link.share_id)
   const [menuOpen, setMenuOpen] = useState(false)
   const [menuPos, setMenuPos] = useState({ top: 0, right: 0 })
@@ -113,10 +115,18 @@ export default function LinkCard({ link, isPending, onEdit, onShare, onDelete, o
         <div className="name">{link.name}</div>
         <div className="description">Click to open</div>
       </div>
-      {(link.class_name || platform) && (
+      {(link.class_name || platform || conflicts.length > 0) && (
         <div style={{ display: 'flex', gap: 6 }}>
           {link.class_name && <span className="lk-badge lk-badge-class">{link.class_name}</span>}
           {platform && <span className={`lk-badge lk-badge-${platform.toLowerCase()}`}>{platform}</span>}
+          {conflicts.length > 0 && (
+            <span
+              className="lk-badge lk-badge-conflict"
+              title={`Conflicts with: ${conflicts.map(c => c.name).join(', ')}`}
+            >
+              ⚠ Conflict
+            </span>
+          )}
         </div>
       )}
       <div className="days-dots">{formatDays(days)}</div>
@@ -160,6 +170,8 @@ export default function LinkCard({ link, isPending, onEdit, onShare, onDelete, o
           style={{ display: 'flex', position: 'fixed', ...menuPos, zIndex: 1000 }}
           onClick={e => e.stopPropagation()}
         >
+          <div onClick={() => { setMenuOpen(false); navigate(`/history?link_id=${link.id}&link_name=${encodeURIComponent(link.name)}`) }}>History</div>
+          <hr className="menu_line" />
           <div onClick={() => { setMenuOpen(false); onEdit(link) }}>Edit</div>
           <hr className="menu_line" />
           <div onClick={() => { setMenuOpen(false); onDelete(link) }}>Delete</div>

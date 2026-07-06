@@ -34,6 +34,7 @@ import SchoolAttendance from './pages/SchoolAttendance.jsx'
 import NewAttendance from './pages/NewAttendance.jsx'
 import SchoolDashboards from './pages/SchoolDashboards.jsx'
 import StudentProfile from './pages/StudentProfile.jsx'
+import History from './pages/History.jsx'
 
 const TEACHER_ROLES = new Set(['teacher', 'school_admin', 'district_admin'])
 
@@ -82,6 +83,7 @@ export default function App() {
       <Route path="/schools/dashboards" element={<SchoolDashboards />} />
       <Route path="/admin" element={<TeacherRoute><AdminDashboard /></TeacherRoute>} />
       <Route path="/settings" element={<PrivateRoute><Settings /></PrivateRoute>} />
+      <Route path="/history" element={<PrivateRoute><History /></PrivateRoute>} />
       <Route path="/profile" element={<PrivateRoute><StudentProfile /></PrivateRoute>} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

@@ -71,7 +71,7 @@ export function useAutoOpen(links, user, onDisable, onDelete) {
         const premeetParams = new URLSearchParams({ name: link.name || '', link: link.link })
         if (link.password) premeetParams.set('pw', link.password)
         window.open(`/premeet?${premeetParams}`, '_blank', 'noopener,noreferrer')
-        linksApi.trackOpen().catch(() => {})
+        linksApi.logOpen(link).catch(() => {})
         if (link.class_id && link.link_type === 'primary') {
           const now = new Date()
           const [sh, sm] = link.time.split(':').map(Number)
