@@ -117,7 +117,7 @@ export default function LinkCard({ link, isPending, onEdit, onShare, onDelete, o
       </div>
       {(link.class_name || platform || conflicts.length > 0) && (
         <div style={{ display: 'flex', gap: 6 }}>
-          {link.class_name && <span className="lk-badge lk-badge-class">{link.class_name}</span>}
+          {link.class_name && link.class_name !== link.name && <span className="lk-badge lk-badge-class">{link.class_name}</span>}
           {platform && <span className={`lk-badge lk-badge-${platform.toLowerCase()}`}>{platform}</span>}
           {conflicts.length > 0 && (
             <span
