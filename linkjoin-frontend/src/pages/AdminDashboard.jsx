@@ -259,7 +259,7 @@ function ClassDetail({ cls, onBack, onUpdate, onViewStudent }) {
   // Family alerts
   const [familyAlerts, setFamilyAlerts] = useState(cls.family_alerts || false)
   const [parentContacts, setParentContacts] = useState({})
-  const [expandedContact, setExpandedContact] = useState(null)
+  const [contactModalUser, setContactModalUser] = useState(null)
   const [contactSaved, setContactSaved] = useState({})
 
   async function toggleFamilyAlerts() {
@@ -713,6 +713,44 @@ function ClassDetail({ cls, onBack, onUpdate, onViewStudent }) {
           />
         )}
 
+        {contactModalUser && (
+          <div className="admin-modal-backdrop" onClick={() => setContactModalUser(null)}>
+            <div className="admin-modal" onClick={e => e.stopPropagation()}>
+              <h3>Parent Contact</h3>
+              <div className="admin-modal-field">
+                <label className="admin-modal-label">Parent Name</label>
+                <input className="admin-input" placeholder="Parent name (e.g. Mrs. Johnson)"
+                  value={(parentContacts[contactModalUser] || {}).parent_name || ''}
+                  onChange={e => updateContactField(contactModalUser, 'parent_name', e.target.value)} />
+              </div>
+              <div className="admin-modal-field">
+                <label className="admin-modal-label">Phone</label>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <input className="admin-input" placeholder="1" style={{ width: 64 }}
+                    value={(parentContacts[contactModalUser] || {}).parent_phone_country || '1'}
+                    onChange={e => updateContactField(contactModalUser, 'parent_phone_country', e.target.value)} />
+                  <input className="admin-input" placeholder="Parent phone" style={{ flex: 1 }}
+                    value={(parentContacts[contactModalUser] || {}).parent_phone || ''}
+                    onChange={e => updateContactField(contactModalUser, 'parent_phone', e.target.value)} />
+                </div>
+              </div>
+              <div className="admin-modal-field">
+                <label className="admin-modal-label">Email</label>
+                <input className="admin-input" placeholder="Parent email" type="email"
+                  value={(parentContacts[contactModalUser] || {}).parent_email || ''}
+                  onChange={e => updateContactField(contactModalUser, 'parent_email', e.target.value)} />
+              </div>
+              <div className="admin-modal-actions">
+                <button className="admin-btn-ghost" onClick={() => setContactModalUser(null)}>Cancel</button>
+                <button className="admin-btn" onClick={async () => {
+                  await saveParentContact(contactModalUser)
+                  setContactModalUser(null)
+                }}>Save</button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Students tab */}
         {classTab === 'students' && <div className="detail-section-card">
           <div className="detail-section-header">
@@ -742,50 +780,24 @@ function ClassDetail({ cls, onBack, onUpdate, onViewStudent }) {
                 </thead>
                 <tbody>
                   {students.map(s => (
-                    <React.Fragment key={s.user_id}>
-                      <tr>
-                        <td>
-                          <button className="sp-student-link" onClick={() => onViewStudent?.(s.user_id)}>{s.username}</button>
-                        </td>
-                        <td>
-                          <button className="roster-contact-btn" onClick={() => {
-                            const next = expandedContact === s.user_id ? null : s.user_id
-                            setExpandedContact(next)
-                            if (next) loadParentContact(s.user_id)
-                          }}>
-                            {expandedContact === s.user_id ? 'Close' : 'Parent contact'}
-                          </button>
-                        </td>
-                        <td>
-                          <button className="roster-remove-btn" onClick={() => handleRemoveStudent(s.user_id)}>
-                            Remove
-                          </button>
-                        </td>
-                      </tr>
-                      {expandedContact === s.user_id && (
-                        <tr key={`${s.user_id}-contact`} className="roster-contact-row">
-                          <td colSpan={3}>
-                            <div className="roster-contact-fields">
-                              <input className="admin-input" placeholder="Parent name (e.g. Mrs. Johnson)"
-                                value={(parentContacts[s.user_id] || {}).parent_name || ''}
-                                onChange={e => updateContactField(s.user_id, 'parent_name', e.target.value)} />
-                              <input className="admin-input" placeholder="Country code" style={{ width: 72 }}
-                                value={(parentContacts[s.user_id] || {}).parent_phone_country || '1'}
-                                onChange={e => updateContactField(s.user_id, 'parent_phone_country', e.target.value)} />
-                              <input className="admin-input" placeholder="Parent phone"
-                                value={(parentContacts[s.user_id] || {}).parent_phone || ''}
-                                onChange={e => updateContactField(s.user_id, 'parent_phone', e.target.value)} />
-                              <input className="admin-input" placeholder="Parent email" type="email"
-                                value={(parentContacts[s.user_id] || {}).parent_email || ''}
-                                onChange={e => updateContactField(s.user_id, 'parent_email', e.target.value)} />
-                              <button className="admin-btn" onClick={() => saveParentContact(s.user_id)}>
-                                {contactSaved[s.user_id] ? '✓ Saved' : 'Save'}
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      )}
-                    </React.Fragment>
+                    <tr key={s.user_id}>
+                      <td>
+                        <button className="sp-student-link" onClick={() => onViewStudent?.(s.user_id)}>{s.username}</button>
+                      </td>
+                      <td>
+                        <button className="roster-contact-btn" onClick={() => {
+                          loadParentContact(s.user_id)
+                          setContactModalUser(s.user_id)
+                        }}>
+                          Parent contact
+                        </button>
+                      </td>
+                      <td>
+                        <button className="roster-remove-btn" onClick={() => handleRemoveStudent(s.user_id)}>
+                          Remove
+                        </button>
+                      </td>
+                    </tr>
                   ))}
                 </tbody>
               </table>

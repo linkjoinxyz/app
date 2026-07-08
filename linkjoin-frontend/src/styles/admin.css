@@ -1913,28 +1913,6 @@
 }
 .roster-contact-btn:hover { color: rgba(43,143,216,1); }
 
-.roster-contact-row td {
-  padding: 0 0 8px 0;
-}
-.roster-contact-fields {
-  display: grid;
-  grid-template-columns: 72px 1fr;
-  gap: 6px;
-  padding: 10px 12px;
-  background: rgba(43,143,216,0.06);
-  border-radius: 8px;
-  border: 1px solid rgba(43,143,216,0.15);
-  max-width: 360px;
-}
-.roster-contact-fields > input:first-child,
-.roster-contact-fields > input[type="email"],
-.roster-contact-fields > button {
-  grid-column: 1 / -1;
-}
-.roster-contact-fields > button {
-  justify-self: start;
-  margin-top: 2px;
-}
 
 .org-brand-section {
   margin-top: 20px;
