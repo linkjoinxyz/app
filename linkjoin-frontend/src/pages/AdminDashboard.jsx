@@ -43,7 +43,7 @@ function DayBadge({ day }) {
 
 // ─── Student Profile ─────────────────────────────────────────────────────────
 
-function StudentProfile({ userId, onBack }) {
+function StudentProfile({ userId, onBack, onOpenClass }) {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [err, setErr] = useState(null)
@@ -132,7 +132,11 @@ function StudentProfile({ userId, onBack }) {
               {data.classes.map(c => {
                 const pct = c.sessions > 0 ? Math.round(((c.sessions - c.tardy) / c.sessions) * 100) : null
                 return (
-                  <div key={c.class_id} className="sp-class-row">
+                  <div
+                    key={c.class_id}
+                    className={`sp-class-row${onOpenClass ? ' sp-class-row--link' : ''}`}
+                    onClick={() => onOpenClass?.(c.class_id)}
+                  >
                     <div className="sp-class-info">
                       <div className="sp-class-name">{c.class_name}</div>
                       <div className="sp-class-meta">
@@ -149,6 +153,7 @@ function StudentProfile({ userId, onBack }) {
                           <div className="att-rate-fill" style={{ width: `${pct}%`, background: pct >= 80 ? '#48c578' : pct >= 50 ? '#f0c040' : '#ff6b6b' }} />
                         </div>
                       )}
+                      {onOpenClass && <span className="sp-row-chevron">›</span>}
                     </div>
                   </div>
                 )
@@ -163,7 +168,11 @@ function StudentProfile({ userId, onBack }) {
             <div className="sp-section-title">Open interventions</div>
             <div className="sp-iv-list">
               {data.interventions.map(iv => (
-                <div key={iv.intervention_id} className="sp-iv-row">
+                <div
+                  key={iv.intervention_id}
+                  className={`sp-iv-row${onOpenClass && iv.class_id ? ' sp-iv-row--link' : ''}`}
+                  onClick={() => iv.class_id && onOpenClass?.(iv.class_id)}
+                >
                   <div className="sp-iv-left">
                     <span className={`iv-status-pill iv-status-pill--${iv.status}`}>
                       {iv.status === 'open' ? 'Open' : iv.status === 'in_progress' ? 'In progress' : iv.status}
@@ -175,6 +184,7 @@ function StudentProfile({ userId, onBack }) {
                       {iv.flag_type === 'repeat_tardy' ? 'Repeat tardy' : 'Low attendance'}
                     </span>
                     {iv.notes?.length > 0 && <span className="sp-iv-notes">{iv.notes.length} note{iv.notes.length !== 1 ? 's' : ''}</span>}
+                    {onOpenClass && iv.class_id && <span className="sp-row-chevron">›</span>}
                   </div>
                 </div>
               ))}
@@ -199,7 +209,7 @@ function StudentProfile({ userId, onBack }) {
                   const late = r.minutes_late > 0
                   const excused = r.excused
                   const label = excused ? 'Excused' : late ? `${r.minutes_late}m late` : 'On time'
-                  const color = excused ? 'rgba(255,255,255,0.4)' : late ? '#f0c040' : '#48c578'
+                  const color = excused ? 'rgba(255,255,255,0.65)' : late ? '#f0c040' : '#48c578'
                   return (
                     <tr key={i}>
                       <td className="sp-att-date">{r.opened_at?.slice(0, 10)}</td>
@@ -1966,7 +1976,16 @@ function TeacherView() {
   if (loading) return <div className="admin-spinner-wrap"><div className="admin-spinner" /></div>
 
   if (studentId) {
-    return <StudentProfile userId={studentId} onBack={() => setStudentId(null)} />
+    return (
+      <StudentProfile
+        userId={studentId}
+        onBack={() => setStudentId(null)}
+        onOpenClass={classId => {
+          const cls = classes.find(c => c.class_id === classId)
+          if (cls) { setStudentId(null); setSelected(cls) }
+        }}
+      />
+    )
   }
 
   if (selected) {
@@ -2278,7 +2297,16 @@ function SchoolAdminView() {
   if (loading) return <div className="admin-spinner-wrap"><div className="admin-spinner" /></div>
 
   if (studentId) {
-    return <StudentProfile userId={studentId} onBack={() => setStudentId(null)} />
+    return (
+      <StudentProfile
+        userId={studentId}
+        onBack={() => setStudentId(null)}
+        onOpenClass={classId => {
+          const cls = classes.find(c => c.class_id === classId)
+          if (cls) { setStudentId(null); setSelected(cls) }
+        }}
+      />
+    )
   }
 
   if (selected) {

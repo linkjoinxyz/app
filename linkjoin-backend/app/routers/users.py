@@ -318,7 +318,7 @@ async def get_student_profile(user_id: str, user: dict = Depends(get_confirmed_u
     # Active interventions
     interventions = await motor_db.interventions.find(
         {"student_email": email, "status": {"$ne": "resolved"}},
-        {"_id": 0, "intervention_id": 1, "class_name": 1, "flag_type": 1,
+        {"_id": 0, "intervention_id": 1, "class_id": 1, "class_name": 1, "flag_type": 1,
          "status": 1, "created_at": 1, "updated_at": 1, "notes": 1, "assigned_to": 1},
     ).to_list(None)
     for iv in interventions:
