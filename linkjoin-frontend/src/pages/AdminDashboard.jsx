@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useMatch } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext.jsx'
 import { apiGet, apiPost, apiDelete, apiPatch, apiPut, apiDownload } from '../api/client.js'
 import HeaderModern from '../components/HeaderModern.jsx'
@@ -1959,9 +1959,12 @@ function OrgSettingsTab({ orgId, brandName, setBrandName, brandSaved, saveBrandN
 
 function TeacherView() {
   const navigate = useNavigate()
+  const classMatch = useMatch('/admin/class/:classId')
+  const studentMatch = useMatch('/admin/students/:userId')
+  const urlClassId = classMatch?.params?.classId ?? null
+  const urlUserId = studentMatch?.params?.userId ?? null
+
   const [classes, setClasses] = useState([])
-  const [selected, setSelected] = useState(null)
-  const [studentId, setStudentId] = useState(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -1970,31 +1973,29 @@ function TeacherView() {
 
   function handleUpdate(fresh) {
     setClasses(prev => prev.map(c => c.class_id === fresh.class_id ? fresh : c))
-    if (selected?.class_id === fresh.class_id) setSelected(fresh)
+  }
+
+  if (urlUserId) {
+    return (
+      <StudentProfile
+        userId={urlUserId}
+        onBack={() => navigate(-1)}
+        onOpenClass={classId => navigate(`/admin/class/${classId}`)}
+      />
+    )
   }
 
   if (loading) return <div className="admin-spinner-wrap"><div className="admin-spinner" /></div>
 
-  if (studentId) {
-    return (
-      <StudentProfile
-        userId={studentId}
-        onBack={() => setStudentId(null)}
-        onOpenClass={classId => {
-          const cls = classes.find(c => c.class_id === classId)
-          if (cls) { setStudentId(null); setSelected(cls) }
-        }}
-      />
-    )
-  }
+  const selected = urlClassId ? classes.find(c => c.class_id === urlClassId) ?? null : null
 
   if (selected) {
     return (
       <ClassDetail
         cls={selected}
-        onBack={() => setSelected(null)}
+        onBack={() => navigate(-1)}
         onUpdate={handleUpdate}
-        onViewStudent={id => setStudentId(id)}
+        onViewStudent={id => navigate(`/admin/students/${id}`)}
       />
     )
   }
@@ -2007,7 +2008,7 @@ function TeacherView() {
       </div>
       <div className="class-grid">
         {classes.map(cls => (
-          <div key={cls.class_id} className="class-card" onClick={() => setSelected(cls)}>
+          <div key={cls.class_id} className="class-card" onClick={() => navigate(`/admin/class/${cls.class_id}`)}>
             {(cls.time || cls.days?.length > 0) && (
               <div className="class-card-header">
                 {cls.time && <span className="class-card-time">{formatTime(cls.time)}</span>}
@@ -2214,9 +2215,13 @@ const PAGE_SIZE = 20
 function SchoolAdminView() {
   const navigate = useNavigate()
   const { orgId } = useAuth()
+  const classMatch = useMatch('/admin/class/:classId')
+  const studentMatch = useMatch('/admin/students/:userId')
+  const urlClassId = classMatch?.params?.classId ?? null
+  const urlUserId = studentMatch?.params?.userId ?? null
+
   const [classes, setClasses] = useState([])
   const [loading, setLoading] = useState(true)
-  const [selected, setSelected] = useState(null)
   const [expanded, setExpanded] = useState(null)
   const [search, setSearch] = useState('')
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
@@ -2243,8 +2248,8 @@ function SchoolAdminView() {
   const handleSearchNavigate = useCallback((item) => {
     if (item.tab) setActiveTab(item.tab)
     if (item.classId) {
-      const cls = classes.find(c => c.class_id === item.classId)
-      if (cls) { setSelected(cls); return }
+      navigate(`/admin/class/${item.classId}`)
+      return
     }
     if (item.scroll) {
       const tryScroll = (attemptsLeft) => {
@@ -2292,34 +2297,31 @@ function SchoolAdminView() {
     return acc
   }, {})
 
-  const [studentId, setStudentId] = useState(null)
-
-  if (loading) return <div className="admin-spinner-wrap"><div className="admin-spinner" /></div>
-
-  if (studentId) {
+  if (urlUserId) {
     return (
       <StudentProfile
-        userId={studentId}
-        onBack={() => setStudentId(null)}
-        onOpenClass={classId => {
-          const cls = classes.find(c => c.class_id === classId)
-          if (cls) { setStudentId(null); setSelected(cls) }
-        }}
+        userId={urlUserId}
+        onBack={() => navigate(-1)}
+        onOpenClass={classId => navigate(`/admin/class/${classId}`)}
       />
     )
   }
+
+  if (loading) return <div className="admin-spinner-wrap"><div className="admin-spinner" /></div>
+
+  const selected = urlClassId ? classes.find(c => c.class_id === urlClassId) ?? null : null
 
   if (selected) {
     return (
       <ClassDetail
         cls={selected}
-        onBack={() => setSelected(null)}
+        onBack={() => navigate(-1)}
         onUpdate={fresh => setClasses(prev => prev.map(c =>
           c.class_id === fresh.class_id
             ? { ...fresh, teacher_email: c.teacher_email, teacher_name: c.teacher_name }
             : c
         ))}
-        onViewStudent={id => setStudentId(id)}
+        onViewStudent={id => navigate(`/admin/students/${id}`)}
       />
     )
   }
@@ -2397,7 +2399,7 @@ function SchoolAdminView() {
                 <div className="teacher-classes">
                   <div className="class-grid">
                     {teacherClasses.map(cls => (
-                      <div key={cls.class_id} className="class-card class-card--nested" onClick={() => setSelected(cls)}>
+                      <div key={cls.class_id} className="class-card class-card--nested" onClick={() => navigate(`/admin/class/${cls.class_id}`)}>
                         {(cls.time || cls.days?.length > 0) && (
                           <div className="class-card-header">
                             {cls.time && <span className="class-card-time">{formatTime(cls.time)}</span>}

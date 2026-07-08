@@ -83,7 +83,7 @@ export default function App() {
       <Route path="/schools/new-attendance" element={<Navigate to="/schools/attendance" replace />} />
       <Route path="/schools/dashboards" element={<SchoolDashboards />} />
       <Route path="/demo" element={<Demo />} />
-      <Route path="/admin" element={<TeacherRoute><AdminDashboard /></TeacherRoute>} />
+      <Route path="/admin/*" element={<TeacherRoute><AdminDashboard /></TeacherRoute>} />
       <Route path="/settings" element={<PrivateRoute><Settings /></PrivateRoute>} />
       <Route path="/history" element={<PrivateRoute><History /></PrivateRoute>} />
       <Route path="/profile" element={<PrivateRoute><StudentProfile /></PrivateRoute>} />
