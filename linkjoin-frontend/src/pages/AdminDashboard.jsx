@@ -975,22 +975,28 @@ function ClassDetail({ cls, onBack, onUpdate, onViewStudent }) {
                             )}
                           </td>
                           <td>
-                            {s.flags.map(f => {
-                              const iv = interventionFor(s.student_email, f)
-                              if (iv) {
+                            <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
+                              {s.flags.map(f => {
+                                const iv = interventionFor(s.student_email, f)
+                                const isTardy = f === 'repeat_tardy'
+                                const flagClass = isTardy ? 'iv-flag--tardy' : 'iv-flag--attendance'
+                                const flagLabel = isTardy ? 'Tardy' : 'Attendance'
+                                if (iv) {
+                                  const statusLabel = iv.status === 'open' ? 'Open' : iv.status === 'in_progress' ? 'In progress' : 'Resolved'
+                                  return (
+                                    <button key={f} className={`iv-status-pill ${flagClass}`}
+                                      onClick={() => setExpandedCase(expandedCase === iv.intervention_id ? null : iv.intervention_id)}>
+                                      {flagLabel} · {statusLabel}
+                                    </button>
+                                  )
+                                }
                                 return (
-                                  <button key={f} className={`iv-status-pill iv-status-pill--${iv.status}`}
-                                    onClick={() => setExpandedCase(expandedCase === iv.intervention_id ? null : iv.intervention_id)}>
-                                    {iv.status === 'open' ? 'Open' : iv.status === 'in_progress' ? 'In progress' : 'Resolved'}
+                                  <button key={f} className={`iv-open-btn ${flagClass}`} onClick={() => openCase(s.student_email, f)}>
+                                    {flagLabel} · Open case
                                   </button>
                                 )
-                              }
-                              return (
-                                <button key={f} className="iv-open-btn" onClick={() => openCase(s.student_email, f)}>
-                                  Open case
-                                </button>
-                              )
-                            })}
+                              })}
+                            </div>
                           </td>
                         </tr>
                       )

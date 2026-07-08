@@ -1484,6 +1484,20 @@
 }
 .iv-open-btn:hover { background: rgba(43,143,216,0.4); }
 
+.iv-flag--tardy {
+  background: rgba(255,80,80,0.12) !important;
+  color: #ff6b6b !important;
+  border-color: rgba(255,80,80,0.3) !important;
+}
+.iv-flag--tardy:hover { background: rgba(255,80,80,0.2) !important; }
+
+.iv-flag--attendance {
+  background: rgba(255,190,50,0.12) !important;
+  color: #f0c040 !important;
+  border-color: rgba(255,190,50,0.3) !important;
+}
+.iv-flag--attendance:hover { background: rgba(255,190,50,0.2) !important; }
+
 /* Detail panel */
 .iv-detail {
   padding: 14px 16px;
