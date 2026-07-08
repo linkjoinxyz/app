@@ -1597,7 +1597,6 @@ function CleverRosterCard({ orgId }) {
           <div className="clever-connect-state">
             <p className="clever-hint">
               Connect Clever to auto-populate your class rosters from your district SIS.
-              Students are added by email — no manual entry required.
             </p>
             <button className="clever-connect-btn" onClick={handleConnect} disabled={connecting}>
               <img src="/images/lms/clever.svg" alt="" className="clever-logo" />
@@ -1839,7 +1838,6 @@ function OneRosterCard({ orgId }) {
               <span className={`gc-sync-label${syncResult && !syncResult.ok ? ' gc-sync-label--err' : ''}`}>{syncLabel()}</span>
               <button className="gc-sync-btn" onClick={handleSync} disabled={syncing}>{syncing ? 'Syncing…' : 'Sync now'}</button>
             </div>
-            <p className="gc-hint">Students are added by email and claim their account on first login.</p>
             <button className="gc-disconnect-btn" onClick={handleDisconnect}>Disconnect</button>
           </div>
         )}
