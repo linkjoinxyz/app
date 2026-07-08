@@ -720,7 +720,7 @@ function ClassDetail({ cls, onBack, onUpdate, onViewStudent }) {
               <h3>Parent Contact</h3>
               <div className="admin-modal-field">
                 <label className="admin-modal-label">Parent Name</label>
-                <input className="admin-input" placeholder="Parent name (e.g. Mrs. Johnson)"
+                <input className="admin-input" placeholder="Jane Doe"
                   value={(parentContacts[contactModalUser] || {}).parent_name || ''}
                   onChange={e => updateContactField(contactModalUser, 'parent_name', e.target.value)} />
               </div>
@@ -741,7 +741,7 @@ function ClassDetail({ cls, onBack, onUpdate, onViewStudent }) {
               </div>
               <div className="admin-modal-field">
                 <label className="admin-modal-label">Email</label>
-                <input className="admin-input" placeholder="Parent email" type="email"
+                <input className="admin-input" placeholder="jane.doe@example.com" type="email"
                   value={(parentContacts[contactModalUser] || {}).parent_email || ''}
                   onChange={e => updateContactField(contactModalUser, 'parent_email', e.target.value)} />
               </div>
