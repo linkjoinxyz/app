@@ -74,8 +74,10 @@ function StudentProfile({ userId, onBack, onOpenClass, onOpenIntervention }) {
         <button className="detail-back-btn" onClick={onBack}>
           <img src="/images/arrow-left.svg" alt="back" style={{ width: 18, height: 18, display: 'block' }} />
         </button>
-        <div className="sp-avatar" style={{ background: palette.bg, border: `2px solid ${palette.border}` }}>
-          {initials}
+        <div className="sp-avatar" style={data.avatar ? {} : { background: palette.bg, border: `2px solid ${palette.border}` }}>
+          {data.avatar
+            ? <img src={data.avatar} alt="" style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
+            : initials}
         </div>
         <div className="sp-hero-info">
           <div className="sp-name">{data.name || data.email}</div>
@@ -2298,6 +2300,7 @@ function SchoolAdminView() {
     teacherLabels[cls.teacher_id] = {
       name: cls.teacher_name || '',
       email: cls.teacher_email || '',
+      avatar: cls.teacher_avatar || '',
     }
   })
   const byTeacher = classes.reduce((acc, cls) => {
@@ -2394,8 +2397,10 @@ function SchoolAdminView() {
           return (
             <div key={tid} className={`teacher-item${isOpen ? ' is-expanded' : ''}`}>
               <button className="teacher-row-btn" onClick={() => setExpanded(isOpen ? null : tid)}>
-                <div className="teacher-avatar" style={{ background: av.bg, border: `1px solid ${av.border}` }}>
-                  {(info.name?.trim()?.[0] || avatarSeed[0]).toUpperCase()}
+                <div className="teacher-avatar" style={info.avatar ? {} : { background: av.bg, border: `1px solid ${av.border}` }}>
+                  {info.avatar
+                    ? <img src={info.avatar} alt="" style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
+                    : (info.name?.trim()?.[0] || avatarSeed[0]).toUpperCase()}
                 </div>
                 <div className="teacher-info">
                   <div className="teacher-email-label">{displayName}</div>

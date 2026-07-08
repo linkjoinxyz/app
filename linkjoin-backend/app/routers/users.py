@@ -244,7 +244,7 @@ async def get_student_profile(user_id: str, user: dict = Depends(get_confirmed_u
     student = await motor_db.login.find_one(
         {"user_id": user_id},
         {"_id": 0, "user_id": 1, "username": 1, "name": 1, "role": 1, "org_id": 1,
-         "confirmed": 1, "parent_phone": 1, "parent_phone_country": 1,
+         "confirmed": 1, "avatar": 1, "parent_phone": 1, "parent_phone_country": 1,
          "parent_email": 1, "parent_name": 1, "created_at": 1},
     )
     if not student:
@@ -337,6 +337,7 @@ async def get_student_profile(user_id: str, user: dict = Depends(get_confirmed_u
         "user_id": student["user_id"],
         "email": email,
         "name": student.get("name") or "",
+        "avatar": student.get("avatar") or "",
         "confirmed": student.get("confirmed", False),
         "joined_at": created_at,
         "parent": {
