@@ -5,7 +5,7 @@ from apscheduler.jobstores.memory import MemoryJobStore
 from pytz import utc, timezone as pytz_timezone
 from app.config import get_settings
 from app.database import sync_db
-from app.utils import get_text_time
+from app.utils import get_text_time, get_blackout_set
 
 _settings = get_settings()
 scheduler = AsyncIOScheduler(timezone=utc, jobstores={"default": MemoryJobStore()})
@@ -239,8 +239,8 @@ async def check_absences() -> None:
         if not (timedelta(minutes=30) <= delta <= timedelta(minutes=90)):
             continue
 
-        org = await motor_db.orgs.find_one({"org_id": cls.get("org_id", "")}, {"blackout_dates": 1, "brand_name": 1, "name": 1})
-        if today_date in set((org or {}).get("blackout_dates") or []):
+        org = await motor_db.orgs.find_one({"org_id": cls.get("org_id", "")}, {"blackout_dates": 1, "summer_start": 1, "summer_end": 1, "brand_name": 1, "name": 1})
+        if today_date in get_blackout_set(org or {}):
             continue
 
         brand_name = (org or {}).get("brand_name") or (org or {}).get("name") or "LinkJoin"

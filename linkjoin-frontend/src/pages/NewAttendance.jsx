@@ -86,7 +86,7 @@ export default function NewAttendance() {
       </nav>
 
       {/* Hero */}
-      <section className="sc-att-hero">
+      <section className="sc-att-hero sc-wave-0">
         <div className="sc-att-hero-inner">
           <div className="sc-att-hero-text">
             <span className="sc-hero-eyebrow">Attendance tracking</span>
@@ -157,7 +157,7 @@ export default function NewAttendance() {
       </section>
 
       {/* S1: Logs itself */}
-      <section className="sc-section sc-section--alt">
+      <section className="sc-section sc-section--alt sc-wave-1">
         <div data-rid="s1" className={rc('s1', 'sc-hl sc-hl--flip')}>
           <div className="sc-hl-text">
             <span className="sc-eyebrow">Zero effort</span>
@@ -207,7 +207,7 @@ export default function NewAttendance() {
       </section>
 
       {/* S2: Every timestamp */}
-      <section className="sc-section">
+      <section className="sc-section sc-wave-2">
         <div data-rid="s2" className={rc('s2', 'sc-hl')}>
           <div className="sc-hl-text">
             <span className="sc-eyebrow">The full record</span>
@@ -290,7 +290,7 @@ export default function NewAttendance() {
       </section>
 
       {/* S3: 28-day patterns */}
-      <section className="sc-section sc-section--alt">
+      <section className="sc-section sc-section--alt sc-wave-3">
         <div data-rid="s3" className={rc('s3', 'sc-hl sc-hl--flip')}>
           <div className="sc-hl-text">
             <span className="sc-eyebrow">Pattern detection</span>
@@ -383,8 +383,8 @@ export default function NewAttendance() {
       </section>
 
       {/* S4: Zero hero — asymmetric big number + stacked companion stats */}
-      <section data-rid="s4" className={rc('s4', 'sc-na-zero-section')}>
-        <div className="sc-na-zero-inner">
+      <section className="sc-na-zero-section sc-wave-4">
+        <div data-rid="s4" className={rc('s4', 'sc-na-zero-inner')}>
           <div className="sc-na-zero-left">
             <div className="sc-na-zero-numblock">
               <span className="sc-na-zero-digit">0</span>
@@ -423,7 +423,7 @@ export default function NewAttendance() {
       </section>
 
       {/* S5: Vertical sidebar tabs */}
-      <section className="sc-section">
+      <section className="sc-section sc-wave-5">
         <div data-rid="s5" className={rc('s5', 'sc-na-vtab-wrap')}>
           <div className="sc-na-vtab-sidebar">
             <span className="sc-eyebrow">Close the loop</span>
@@ -578,8 +578,8 @@ export default function NewAttendance() {
       </section>
 
       {/* S6: Admin view — 2-column split */}
-      <section data-rid="s6" className={rc('s6', 'sc-na-admin-section')}>
-        <div className="sc-na-admin-inner">
+      <section className="sc-na-admin-section sc-wave-6">
+        <div data-rid="s6" className={rc('s6', 'sc-na-admin-inner')}>
           <div className="sc-na-admin-text">
             <span className="sc-eyebrow">School-wide</span>
             <h2 className="sc-h2">Every teacher's class. One place.</h2>
@@ -647,7 +647,7 @@ export default function NewAttendance() {
       </section>
 
       {/* S7: Achievement path */}
-      <section className="sc-section">
+      <section className="sc-section sc-wave-7">
         <div data-rid="s7" className={rc('s7', 'sc-na-awards-outer')}>
           <span className="sc-eyebrow sc-na-centered-label">The student angle</span>
           <h2 className="sc-h2 sc-na-centered-h2">Punctuality becomes its own reward.</h2>

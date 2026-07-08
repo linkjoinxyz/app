@@ -158,20 +158,145 @@
   background: var(--sc-bg-alt);
 }
 
-/* Wave dividers between sections */
-.sc-section:not(.sc-section--alt)::after {
-  content: '';
-  display: block;
-  height: 56px;
-  background: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1440 56' preserveAspectRatio='none'><path d='M0,0 C360,56 1080,0 1440,32 L1440,56 L0,56 Z' fill='%23E8F0F9'/></svg>") no-repeat center bottom / 100% 100%;
-}
+/* Generic wave dividers (used by all school pages) */
+/* regular (#F2F4F7) → alt (#E8F0F9) */
+/* alt (#E8F0F9) → regular (#F2F4F7) */
 .sc-section--alt::after {
   content: '';
   display: block;
   height: 56px;
-  background: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1440 56' preserveAspectRatio='none'><path d='M0,32 C360,0 1080,56 1440,24 L1440,56 L0,56 Z' fill='%23F2F4F7'/></svg>") no-repeat center bottom / 100% 100%;
+  background: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1440 56' preserveAspectRatio='none'><rect width='1440' height='56' fill='%23E8F0F9'/><path d='M0,32 C360,0 1080,56 1440,24 L1440,56 L0,56 Z' fill='%23F2F4F7'/></svg>") no-repeat center bottom / 100% 100%;
 }
 .sc-no-wave::after { display: none; }
+
+/* Per-wave overrides for SchoolAttendance — override generic with exact colors */
+
+/* wave-0: hero (white #FFFFFF) → S1 alt (#E8F0F9) */
+.sc-wave-0::after {
+  content: '';
+  display: block;
+  height: 56px;
+  background: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1440 56' preserveAspectRatio='none'><rect width='1440' height='56' fill='%23FFFFFF'/><path d='M0,32 C360,0 1080,56 1440,24 L1440,56 L0,56 Z' fill='%23E8F0F9'/></svg>") no-repeat center bottom / 100% 100%;
+}
+
+/* wave-1: S1 alt (#E8F0F9) → S2 regular (#F2F4F7) */
+.sc-wave-1::after {
+  content: '';
+  display: block;
+  height: 56px;
+  background: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1440 56' preserveAspectRatio='none'><rect width='1440' height='56' fill='%23E8F0F9'/><path d='M0,32 C360,0 1080,56 1440,24 L1440,56 L0,56 Z' fill='%23F2F4F7'/></svg>") no-repeat center bottom / 100% 100%;
+}
+
+/* wave-2: S2 regular (#F2F4F7) → S3 alt (#E8F0F9) */
+.sc-wave-2::after {
+  content: '';
+  display: block;
+  height: 56px;
+  background: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1440 56' preserveAspectRatio='none'><rect width='1440' height='56' fill='%23F2F4F7'/><path d='M0,0 C360,56 1080,0 1440,32 L1440,56 L0,56 Z' fill='%23E8F0F9'/></svg>") no-repeat center bottom / 100% 100%;
+}
+
+/* wave-3: S3 alt (#E8F0F9) → S4 zero-section (#FFFFFF) */
+.sc-wave-3::after {
+  content: '';
+  display: block;
+  height: 56px;
+  background: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1440 56' preserveAspectRatio='none'><rect width='1440' height='56' fill='%23E8F0F9'/><path d='M0,32 C360,0 1080,56 1440,24 L1440,56 L0,56 Z' fill='%23FFFFFF'/></svg>") no-repeat center bottom / 100% 100%;
+}
+
+/* wave-4: S4 zero-section (#FFFFFF) → S5 regular (#F2F4F7) */
+.sc-wave-4 { position: relative; }
+.sc-wave-4::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 56px;
+  background: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1440 56' preserveAspectRatio='none'><rect width='1440' height='56' fill='%23FFFFFF'/><path d='M0,0 C360,56 1080,0 1440,32 L1440,56 L0,56 Z' fill='%23F2F4F7'/></svg>") no-repeat center bottom / 100% 100%;
+}
+
+/* wave-5: S5 alt (#E8F0F9) → S6 regular (#F2F4F7) */
+.sc-wave-5::after {
+  content: '';
+  display: block;
+  height: 56px;
+  background: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1440 56' preserveAspectRatio='none'><rect width='1440' height='56' fill='%23F2F4F7'/><path d='M0,0 C360,56 1080,0 1440,32 L1440,56 L0,56 Z' fill='%23E8F0F9'/></svg>") no-repeat center bottom / 100% 100%;
+}
+
+/* wave-6: S6 admin-section (#E8F0F9) → S7 regular (#F2F4F7) */
+.sc-wave-6 { position: relative; }
+.sc-wave-6::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 56px;
+  background: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1440 56' preserveAspectRatio='none'><rect width='1440' height='56' fill='%23E8F0F9'/><path d='M0,32 C360,0 1080,56 1440,24 L1440,56 L0,56 Z' fill='%23F2F4F7'/></svg>") no-repeat center bottom / 100% 100%;
+}
+
+/* wave-7: S7 regular (#F2F4F7) → CTA white (#FFFFFF) */
+.sc-wave-7::after {
+  content: '';
+  display: block;
+  height: 56px;
+  background: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1440 56' preserveAspectRatio='none'><rect width='1440' height='56' fill='%23F2F4F7'/><path d='M0,0 C360,56 1080,0 1440,32 L1440,56 L0,56 Z' fill='%23FFFFFF'/></svg>") no-repeat center bottom / 100% 100%;
+}
+
+/* ── SchoolDashboards per-wave overrides ──────────────────────────────────── */
+
+/* wave-d0: hero (#FFFFFF) → S1 alt (#E8F0F9) */
+.sc-wave-d0::after {
+  content: '';
+  display: block;
+  height: 56px;
+  background: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1440 56' preserveAspectRatio='none'><rect width='1440' height='56' fill='%23FFFFFF'/><path d='M0,32 C360,0 1080,56 1440,24 L1440,56 L0,56 Z' fill='%23E8F0F9'/></svg>") no-repeat center bottom / 100% 100%;
+}
+
+/* wave-d1: S1 alt (#E8F0F9) → S2 zero (#FFFFFF) */
+.sc-wave-d1::after {
+  content: '';
+  display: block;
+  height: 56px;
+  background: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1440 56' preserveAspectRatio='none'><rect width='1440' height='56' fill='%23E8F0F9'/><path d='M0,32 C360,0 1080,56 1440,24 L1440,56 L0,56 Z' fill='%23FFFFFF'/></svg>") no-repeat center bottom / 100% 100%;
+}
+
+/* wave-d2: S2 zero (#FFFFFF) → S3 alt (#E8F0F9) — absolute to clear padding */
+.sc-wave-d2 { position: relative; }
+.sc-wave-d2::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 56px;
+  background: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1440 56' preserveAspectRatio='none'><rect width='1440' height='56' fill='%23FFFFFF'/><path d='M0,32 C360,0 1080,56 1440,24 L1440,56 L0,56 Z' fill='%23E8F0F9'/></svg>") no-repeat center bottom / 100% 100%;
+}
+
+/* wave-d3: S3 alt (#E8F0F9) → S4 roles (#FFFFFF) */
+.sc-wave-d3::after {
+  content: '';
+  display: block;
+  height: 56px;
+  background: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1440 56' preserveAspectRatio='none'><rect width='1440' height='56' fill='%23E8F0F9'/><path d='M0,32 C360,0 1080,56 1440,24 L1440,56 L0,56 Z' fill='%23FFFFFF'/></svg>") no-repeat center bottom / 100% 100%;
+}
+
+/* wave-d4: S4 roles (#FFFFFF) → CTA alt (#E8F0F9) — absolute to clear padding */
+.sc-wave-d4 { position: relative; }
+.sc-wave-d4::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 56px;
+  background: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1440 56' preserveAspectRatio='none'><rect width='1440' height='56' fill='%23FFFFFF'/><path d='M0,32 C360,0 1080,56 1440,24 L1440,56 L0,56 Z' fill='%23E8F0F9'/></svg>") no-repeat center bottom / 100% 100%;
+}
+
+/* CTA on dashboards page uses alt background to pair with wave-d4 */
+.sc-na-cta-split.sc-na-cta-split--alt {
+  background: var(--sc-bg-alt);
+}
 
 .sc-hl {
   display: grid;
@@ -184,6 +309,9 @@
 }
 .sc-hl--flip { direction: rtl; }
 .sc-hl--flip > * { direction: ltr; }
+.sc-hl--top { align-items: flex-start; }
+[data-rid="s5"] { align-items: stretch; }
+[data-rid="s5"] .sc-hl-visual { align-self: stretch; }
 
 .sc-eyebrow {
   display: block;
@@ -649,12 +777,12 @@
 
 .sc-footer {
   background: #D8E4F0;
-  border-top: 1px solid #C3D4E6;
   padding: 48px clamp(24px, 6vw, 72px) 32px;
   display: grid;
   grid-template-columns: 1fr auto;
   gap: 40px;
   align-items: start;
+  margin: 0;
 }
 
 .sc-footer-brand img {
@@ -754,7 +882,6 @@
 /* Feature page hero — split layout */
 .sc-att-hero {
   background: var(--sc-surface);
-  border-bottom: 1px solid var(--sc-border);
 }
 .sc-att-hero-inner {
   display: grid;
@@ -1539,6 +1666,15 @@
   transition: box-shadow .12s, background .12s;
 }
 .sc-class-card-full:hover { background: var(--sc-surface); box-shadow: var(--sc-shadow); }
+.sc-class-card-full--active {
+  background: var(--sc-surface);
+  box-shadow: var(--sc-shadow);
+  border-color: var(--sc-accent);
+}
+.sc-teacher-class-detail {
+  border-top: 1px solid var(--sc-border);
+  margin: 0 4px;
+}
 .sc-class-card-name {
   font: 700 12px Montserrat, sans-serif;
   color: var(--sc-text);
@@ -2065,7 +2201,6 @@
 .sc-na-zero-section {
   background: var(--sc-surface);
   padding: 80px clamp(20px, 5vw, 64px);
-  border-bottom: 1px solid var(--sc-border);
 }
 .sc-na-zero-inner {
   max-width: var(--sc-max);
@@ -2189,7 +2324,7 @@
   font: 400 12px/1.4 Montserrat, sans-serif;
   color: var(--sc-muted);
 }
-.sc-na-vtab-content { padding-top: 2px; }
+.sc-na-vtab-content { padding-top: 15%; padding-left: 10%;}
 .sc-na-vtab-content .sc-mock {
   max-width: 560px;
   margin: 0;
@@ -2200,6 +2335,7 @@
   .sc-na-vtab-wrap { grid-template-columns: 1fr; gap: 40px; }
   .sc-na-vtab-sidebar { position: static; }
   .sc-na-vtab-content .sc-mock { max-width: 100%; }
+  .sc-na-vtab-content { padding: 0; }
 }
 
 /* ── S6: Admin 2-column split ────────────────────────────────────────────────── */
@@ -2207,8 +2343,6 @@
 .sc-na-admin-section {
   background: var(--sc-bg-alt);
   padding: 96px clamp(20px, 5vw, 64px);
-  border-top: 1px solid var(--sc-border);
-  border-bottom: 1px solid var(--sc-border);
 }
 .sc-na-admin-inner {
   max-width: var(--sc-max);
@@ -2369,6 +2503,62 @@
   margin: 0;
 }
 .sc-detail-tab { cursor: pointer; }
+.sc-detail-tab-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #22c55e;
+  display: inline-block;
+  flex-shrink: 0;
+}
+.sc-sd-integration-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 0 12px;
+  border-bottom: 1px solid var(--sc-border);
+  margin-bottom: 10px;
+}
+.sc-sd-integration-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: #fff;
+  border: 1px solid var(--sc-border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.sc-sd-integration-info { flex: 1; min-width: 0; }
+.sc-sd-integration-name {
+  font: 600 12px Montserrat, sans-serif;
+  color: var(--sc-text);
+}
+.sc-sd-integration-meta {
+  font: 400 11px Montserrat, sans-serif;
+  color: var(--sc-muted);
+  margin-top: 1px;
+}
+.sc-sd-integration-sync {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+.sc-sd-integration-sync-text {
+  font: 400 11px Montserrat, sans-serif;
+  color: var(--sc-muted);
+}
+.sc-sd-integration-sync-btn {
+  font: 600 11px Montserrat, sans-serif;
+  color: var(--sc-accent);
+  background: none;
+  border: 1px solid var(--sc-accent);
+  border-radius: 5px;
+  padding: 3px 10px;
+  cursor: pointer;
+}
 
 /* ── SchoolDashboards: full-width class detail spotlight ───────────────────── */
 
@@ -2427,8 +2617,6 @@
 .sc-sd-roles-section {
   background: var(--sc-surface);
   padding: 96px clamp(20px, 5vw, 64px);
-  border-top: 1px solid var(--sc-border);
-  border-bottom: 1px solid var(--sc-border);
 }
 .sc-sd-roles-inner {
   max-width: var(--sc-max);
@@ -2496,8 +2684,7 @@
 
 .sc-na-cta-split {
   background: var(--sc-surface);
-  border-top: 1px solid var(--sc-border);
-  padding: 80px clamp(20px, 5vw, 64px);
+  padding: 80px clamp(20px, 5vw, 64px) 120px clamp(20px, 5vw, 64px);
 }
 .sc-na-cta-split-inner {
   max-width: var(--sc-max);

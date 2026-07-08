@@ -1,5 +1,5 @@
 import secrets
-from datetime import datetime
+from datetime import datetime, date, timedelta
 from pymongo import ReturnDocument
 from app.database import sync_db, motor_db
 from app.encryption import decrypt
@@ -94,6 +94,20 @@ async def configure_data(email: str) -> dict:
         }
 
     return {key: _clean_items(items) for key, items in raw.items()}
+
+
+def get_blackout_set(org: dict) -> set[str]:
+    """Return all effective blackout dates: individual dates + expanded summer range."""
+    dates: set[str] = set(org.get("blackout_dates") or [])
+    start = org.get("summer_start") or ""
+    end = org.get("summer_end") or ""
+    if start and end and start <= end:
+        cur = date.fromisoformat(start)
+        stop = date.fromisoformat(end)
+        while cur <= stop:
+            dates.add(cur.isoformat())
+            cur += timedelta(days=1)
+    return dates
 
 
 def get_text_time(days: list, time: str, before: int) -> dict:

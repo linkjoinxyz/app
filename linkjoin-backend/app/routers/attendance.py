@@ -10,6 +10,7 @@ from pydantic import BaseModel
 from app.auth import get_confirmed_user
 from app.database import motor_db
 from app.roles import require_teacher
+from app.utils import get_blackout_set
 
 log = logging.getLogger(__name__)
 
@@ -224,10 +225,10 @@ async def get_class_patterns(class_id: str, user: dict = Depends(get_confirmed_u
     # Load org-level settings (thresholds + blackout dates)
     org = await motor_db.orgs.find_one(
         {"org_id": cls.get("org_id", "")},
-        {"attendance_settings": 1, "blackout_dates": 1}
+        {"attendance_settings": 1, "blackout_dates": 1, "summer_start": 1, "summer_end": 1}
     )
     org_settings = (org or {}).get("attendance_settings") or {}
-    blackout_dates = set((org or {}).get("blackout_dates") or [])
+    blackout_dates = get_blackout_set(org or {})
     tardy_threshold = int(org_settings.get("tardy_threshold_minutes", _TARDY_THRESHOLD_MINUTES))
     tardy_rate_flag = float(org_settings.get("tardy_rate_flag", _TARDY_RATE_FLAG))
     attendance_rate_flag = float(org_settings.get("attendance_rate_flag", _ATTENDANCE_RATE_FLAG))
@@ -351,9 +352,9 @@ async def export_class_attendance(
 
     org = await motor_db.orgs.find_one(
         {"org_id": cls.get("org_id", "")},
-        {"blackout_dates": 1, "attendance_settings": 1}
+        {"blackout_dates": 1, "attendance_settings": 1, "summer_start": 1, "summer_end": 1}
     )
-    blackout_dates = set((org or {}).get("blackout_dates") or [])
+    blackout_dates = get_blackout_set(org or {})
     org_settings = (org or {}).get("attendance_settings") or {}
     tardy_threshold = int(org_settings.get("tardy_threshold_minutes", _TARDY_THRESHOLD_MINUTES))
 

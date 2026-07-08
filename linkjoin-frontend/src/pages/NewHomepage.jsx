@@ -44,13 +44,14 @@ const BASE = '#060F1A'
 
 function WaveDivider({ top, bottom, flip = false }) {
   const d = flip
-    ? 'M0,0 H1440 V40 C1080,0 360,80 0,40 Z'
-    : 'M0,0 H1440 V40 C1080,80 360,0 0,40 Z'
+    ? 'M0,40 C360,0 1080,80 1440,40 V82 H0 Z'
+    : 'M0,40 C360,80 1080,0 1440,40 V82 H0 Z'
   return (
-    <div style={{ background: bottom, lineHeight: 0, overflow: 'hidden' }}>
-      <svg viewBox="0 0 1440 80" preserveAspectRatio="none"
+    <div style={{ background: top, lineHeight: 0, overflow: 'hidden' }}>
+      <svg viewBox="0 0 1440 82" preserveAspectRatio="none"
            style={{ display: 'block', width: '100%', height: 80 }}>
-        <path d={d} fill={top} />
+        <rect width="1440" height="82" fill={top} />
+        <path d={d} fill={bottom} />
       </svg>
     </div>
   )
@@ -136,9 +137,62 @@ export default function NewHomepage() {
         </Link>
 
         <div className="nh-nav-links">
-          <Link to="/meetings">Meetings</Link>
-          <Link to="/bookmarks">Bookmarks</Link>
-          <Link to="/pricing">Pricing</Link>
+          <div className="nh-nav-dropdown">
+            <button className="nh-nav-dd-trigger">
+              Product
+              <img src="/images/angle-down.svg" className="nh-nav-dd-chevron" width="14" height="14" alt="" aria-hidden="true" />
+            </button>
+            <div className="nh-nav-menu">
+              <Link to="/meetings" className="nh-nav-menu-item">
+                <span className="nh-nav-menu-icon">
+                  <img src="/images/link.svg" width="16" height="16" alt="" aria-hidden="true" />
+                </span>
+                <span>
+                  <span className="nh-nav-menu-label">Meetings</span>
+                  <span className="nh-nav-menu-sub">Auto-open meetings on time</span>
+                </span>
+              </Link>
+              <Link to="/bookmarks" className="nh-nav-menu-item">
+                <span className="nh-nav-menu-icon">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <path d="M5 3h14v19l-7-4.5L5 22V3z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round"/>
+                  </svg>
+                </span>
+                <span>
+                  <span className="nh-nav-menu-label">Bookmarks</span>
+                  <span className="nh-nav-menu-sub">Save links for quick access</span>
+                </span>
+              </Link>
+            </div>
+          </div>
+
+          <div className="nh-nav-dropdown">
+            <button className="nh-nav-dd-trigger">
+              Resources
+              <img src="/images/angle-down.svg" className="nh-nav-dd-chevron" width="14" height="14" alt="" aria-hidden="true" />
+            </button>
+            <div className="nh-nav-menu">
+              <Link to="/pricing" className="nh-nav-menu-item">
+                <span className="nh-nav-menu-icon nh-nav-menu-icon-text">$</span>
+                <span>
+                  <span className="nh-nav-menu-label">Pricing</span>
+                  <span className="nh-nav-menu-sub">Plans for every team size</span>
+                </span>
+              </Link>
+              <Link to="/schools" className="nh-nav-menu-item">
+                <span className="nh-nav-menu-icon">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round"/>
+                    <path d="M9 22V12h6v10" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round"/>
+                  </svg>
+                </span>
+                <span>
+                  <span className="nh-nav-menu-label">Schools</span>
+                  <span className="nh-nav-menu-sub">K-12 attendance &amp; dashboards</span>
+                </span>
+              </Link>
+            </div>
+          </div>
         </div>
 
         <div className="nh-nav-right">
@@ -170,9 +224,12 @@ export default function NewHomepage() {
           <div className="nh-mobile-menu">
             <button className="nh-menu-login" onClick={() => { setMenuOpen(false); setAuthModal('login') }}>Log In</button>
             <button className="nh-menu-cta" onClick={() => { setMenuOpen(false); setAuthModal('signup') }}>Sign Up</button>
-            <Link to="/pricing" onClick={() => setMenuOpen(false)}>Pricing</Link>
-            <Link to="/bookmarks" onClick={() => setMenuOpen(false)}>Bookmarks</Link>
+            <p className="nh-mobile-menu-section">Product</p>
             <Link to="/meetings" onClick={() => setMenuOpen(false)}>Meetings</Link>
+            <Link to="/bookmarks" onClick={() => setMenuOpen(false)}>Bookmarks</Link>
+            <p className="nh-mobile-menu-section">Resources</p>
+            <Link to="/pricing" onClick={() => setMenuOpen(false)}>Pricing</Link>
+            <Link to="/schools" onClick={() => setMenuOpen(false)}>Schools</Link>
           </div>
         )}
       </nav>
@@ -517,9 +574,7 @@ export default function NewHomepage() {
                 ].map((e, i) => (
                   <div key={i} className="nh-mock-cal-import-row">
                     <div className="nh-mock-cal-import-check">
-                      <svg width="11" height="9" viewBox="0 0 11 9" fill="none">
-                        <path d="M1 4.5L4 7.5L10 1" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                      </svg>
+                      <img src="/images/check.svg" width="11" height="11" alt="" aria-hidden="true" />
                     </div>
                     <div className="nh-mock-cal-import-info">
                       <span className="nh-mock-cal-import-name">{e.name}</span>
@@ -542,6 +597,57 @@ export default function NewHomepage() {
 
         <WaveDivider top={BAND} bottom={BASE} flip />
 
+      </section>
+
+      {/* Schools hero */}
+      <section className="nh-schools-wrap">
+
+        {/* ── SPLIT LAYOUT (revert option — swap nh-schools-inner for nh-schools-split below) ──
+        <div className="nh-schools-split">
+          <div data-rid="schools-text" className={rc('schools-text', 'nh-schools-text')}>
+            <p className="nh-hl-eyebrow">LinkJoin for Schools</p>
+            <h2 className="nh-schools-h2">Every student.<br />Every class.<br /><span className="nh-schools-accent">On time.</span></h2>
+            <p className="nh-schools-body">LinkJoin tracks attendance the moment a student joins, sends alerts to families before you notice anyone's missing, and keeps every record FERPA and COPPA compliant.</p>
+            <div className="nh-schools-pills">{['Real-time attendance', 'Family alerts', 'FERPA & COPPA compliant', 'Google Classroom'].map(p => <span key={p} className="nh-schools-pill">{p}</span>)}</div>
+            <div className="nh-schools-actions"><Link to="/schools" className="nh-btn-primary nh-btn-lg">See LinkJoin for Schools</Link><Link to="/schools" className="nh-btn-ghost nh-btn-lg">Book a demo</Link></div>
+          </div>
+          <div data-rid="schools-visual" className={rc('schools-visual', 'nh-schools-visual')}>[attendance mock]</div>
+        </div>
+        ── END SPLIT LAYOUT ── */}
+
+        <div className="nh-schools-inner">
+          <div data-rid="schools-card" className={rc('schools-card', 'nh-schools-card')}>
+            <div className="nh-schools-stripe">
+              <p className="nh-hl-eyebrow">For schools &amp; districts</p>
+              <h2 className="nh-schools-h2">
+                Attendance tracking and family alerts,<br />
+                built for K-12 schools.
+              </h2>
+              <p className="nh-schools-body">
+                LinkJoin logs attendance the moment a student joins, sends notifications to families when someone is missing, and keeps all records in compliance with FERPA and COPPA.
+              </p>
+              <div className="nh-schools-feats">
+                {[
+                  'Real-time attendance tracking',
+                  'Automated family alerts',
+                  'FERPA & COPPA compliant',
+                ].map(feat => (
+                  <div key={feat} className="nh-schools-feat">
+                    <span className="nh-schools-feat-dot" />
+                    <span className="nh-schools-feat-label">{feat}</span>
+                  </div>
+                ))}
+              </div>
+              <Link to="/schools" className="nh-hl-link">
+                See LinkJoin for Schools
+                <span>&#8594;</span>
+              </Link>
+            </div>
+            <div className="nh-schools-img">
+              <img src="/images/classes-meeting-image.svg" alt="LinkJoin for Schools" />
+            </div>
+          </div>
+        </div>
       </section>
 
       {/* Testimonials */}
@@ -605,7 +711,7 @@ export default function NewHomepage() {
       {/* CTA */}
       <section data-rid="cta" className={rc('cta', 'nh-cta')}>
         <div className="nh-cta-glow" aria-hidden="true" />
-        <h2 className="nh-cta-h2">Stop being late.<br />Start on time, today.</h2>
+        <h2 className="nh-cta-h2">Never Be Late Again.</h2>
         <p className="nh-cta-sub">Free to start. No credit card required.</p>
         <div className="nh-cta-actions">
           <button className="nh-btn-primary nh-btn-lg" onClick={() => setAuthModal('signup')}>

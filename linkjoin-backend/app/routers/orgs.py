@@ -1,10 +1,24 @@
 import secrets
+from datetime import date, timedelta
+import httpx
+from icalendar import Calendar
 from fastapi import APIRouter, Depends, HTTPException, Header
 from app.auth import get_confirmed_user
 from app.database import motor_db
 from app.config import get_settings
 from app.models.org import CreateOrgRequest, UpdateOrgRequest
 from app.roles import require_school_admin
+
+# Keywords that identify "no school" events in a calendar feed
+_NO_SCHOOL_KEYWORDS = {
+    "no school", "holiday", "break", "vacation", "recess",
+    "inservice", "in-service", "in service", "professional development",
+    "pd day", "staff development", "teacher workday", "teacher work day",
+    "last day", "first day", "spring break", "winter break",
+    "fall break", "thanksgiving", "presidents", "martin luther",
+    "memorial day", "labor day", "independence day", "new year",
+    "christmas", "hanukkah", "snow day", "emergency",
+}
 
 router = APIRouter(prefix="/orgs", tags=["orgs"])
 _settings = get_settings()
@@ -58,10 +72,18 @@ async def get_calendar(org_id: str, user: dict = Depends(get_confirmed_user)):
     require_school_admin(user)
     if user.get("org_id") != org_id:
         raise HTTPException(status_code=403, detail="Access denied")
-    org = await motor_db.orgs.find_one({"org_id": org_id}, {"_id": 0, "blackout_dates": 1})
+    org = await motor_db.orgs.find_one(
+        {"org_id": org_id},
+        {"_id": 0, "blackout_dates": 1, "summer_start": 1, "summer_end": 1, "ical_url": 1},
+    )
     if not org:
         raise HTTPException(status_code=404, detail="Org not found")
-    return {"blackout_dates": sorted(org.get("blackout_dates") or [])}
+    return {
+        "blackout_dates": sorted(org.get("blackout_dates") or []),
+        "summer_start": org.get("summer_start") or "",
+        "summer_end": org.get("summer_end") or "",
+        "ical_url": org.get("ical_url") or "",
+    }
 
 
 @router.post("/{org_id}/calendar/blackout", status_code=201)
@@ -85,6 +107,153 @@ async def remove_blackout_date(org_id: str, date: str, user: dict = Depends(get_
         raise HTTPException(status_code=403, detail="Access denied")
     await motor_db.orgs.update_one({"org_id": org_id}, {"$pull": {"blackout_dates": date}})
     return {"message": "Removed"}
+
+
+@router.put("/{org_id}/calendar/summer", status_code=200)
+async def set_summer_break(org_id: str, body: dict, user: dict = Depends(get_confirmed_user)):
+    require_school_admin(user)
+    if user.get("org_id") != org_id:
+        raise HTTPException(status_code=403, detail="Access denied")
+    import datetime as dt
+    start = (body.get("summer_start") or "").strip()
+    end = (body.get("summer_end") or "").strip()
+    update: dict = {}
+    if start:
+        try:
+            dt.datetime.strptime(start, "%Y-%m-%d")
+        except ValueError:
+            raise HTTPException(status_code=422, detail="summer_start must be YYYY-MM-DD")
+        update["summer_start"] = start
+    else:
+        update["summer_start"] = ""
+    if end:
+        try:
+            dt.datetime.strptime(end, "%Y-%m-%d")
+        except ValueError:
+            raise HTTPException(status_code=422, detail="summer_end must be YYYY-MM-DD")
+        update["summer_end"] = end
+    else:
+        update["summer_end"] = ""
+    if update.get("summer_start") and update.get("summer_end") and update["summer_start"] > update["summer_end"]:
+        raise HTTPException(status_code=422, detail="summer_start must be before summer_end")
+    await motor_db.orgs.update_one({"org_id": org_id}, {"$set": update})
+    return {"message": "Saved"}
+
+
+def _parse_ical(data: bytes) -> dict:
+    """Parse an iCal feed and extract blackout dates and summer break.
+
+    Returns:
+        {
+            "blackout_dates": ["2026-11-26", ...],
+            "summer_start": "2026-06-13",  # or ""
+            "summer_end": "2026-08-22",    # or ""
+        }
+    """
+    cal = Calendar.from_ical(data)
+    blackout: set[str] = set()
+    summer_candidates: list[tuple[date, date]] = []  # (start, end) of long breaks
+
+    for component in cal.walk():
+        if component.name != "VEVENT":
+            continue
+
+        summary = str(component.get("SUMMARY") or "").lower().strip()
+        dtstart = component.get("DTSTART")
+        dtend = component.get("DTEND")
+        if not dtstart:
+            continue
+
+        # Normalise to date objects (some feeds use datetime)
+        start_val = dtstart.dt
+        if hasattr(start_val, "date"):
+            start_val = start_val.date()
+
+        end_val = dtend.dt if dtend else None
+        if end_val and hasattr(end_val, "date"):
+            end_val = end_val.date()
+        if not end_val:
+            end_val = start_val
+
+        # iCal DTEND for all-day events is exclusive (the day after the last day)
+        duration = (end_val - start_val).days
+
+        # Check if summary matches any no-school keyword
+        is_no_school = any(kw in summary for kw in _NO_SCHOOL_KEYWORDS)
+
+        if not is_no_school:
+            continue
+
+        # Long multi-day break (>= 14 days) that spans summer months → summer candidate
+        if duration >= 14 and (start_val.month >= 5 or end_val.month <= 9):
+            # DTEND is exclusive, so the last actual day is end_val - 1 day
+            actual_end = end_val - timedelta(days=1)
+            summer_candidates.append((start_val, actual_end))
+        else:
+            # Expand the range into individual blackout dates (DTEND exclusive)
+            cur = start_val
+            while cur < end_val:
+                blackout.add(cur.isoformat())
+                cur += timedelta(days=1)
+
+    # Pick the longest summer candidate
+    summer_start = ""
+    summer_end = ""
+    if summer_candidates:
+        longest = max(summer_candidates, key=lambda p: (p[1] - p[0]).days)
+        summer_start = longest[0].isoformat()
+        summer_end = longest[1].isoformat()
+
+    return {
+        "blackout_dates": sorted(blackout),
+        "summer_start": summer_start,
+        "summer_end": summer_end,
+    }
+
+
+@router.post("/{org_id}/calendar/ical", status_code=200)
+async def import_ical(org_id: str, body: dict, user: dict = Depends(get_confirmed_user)):
+    """Fetch an iCal URL and import no-school events into the org calendar."""
+    require_school_admin(user)
+    if user.get("org_id") != org_id:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    url = (body.get("url") or "").strip()
+    if not url:
+        raise HTTPException(status_code=422, detail="url is required")
+
+    try:
+        async with httpx.AsyncClient(follow_redirects=True, timeout=15) as client:
+            resp = await client.get(url, headers={"User-Agent": "LinkJoin/1.0"})
+        resp.raise_for_status()
+    except httpx.HTTPStatusError as e:
+        raise HTTPException(status_code=400, detail=f"Calendar fetch failed: {e.response.status_code}")
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Could not fetch calendar: {str(e)}")
+
+    try:
+        parsed = _parse_ical(resp.content)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Could not parse calendar: {str(e)}")
+
+    update: dict = {"ical_url": url}
+    if parsed["summer_start"]:
+        update["summer_start"] = parsed["summer_start"]
+        update["summer_end"] = parsed["summer_end"]
+    if parsed["blackout_dates"]:
+        # Merge with existing dates rather than replacing
+        await motor_db.orgs.update_one(
+            {"org_id": org_id},
+            {"$addToSet": {"blackout_dates": {"$each": parsed["blackout_dates"]}}, "$set": {k: v for k, v in update.items() if k != "blackout_dates"}},
+        )
+    else:
+        await motor_db.orgs.update_one({"org_id": org_id}, {"$set": update})
+
+    return {
+        "imported_dates": len(parsed["blackout_dates"]),
+        "summer_start": parsed["summer_start"],
+        "summer_end": parsed["summer_end"],
+    }
 
 
 _DEFAULT_ATTENDANCE_SETTINGS = {

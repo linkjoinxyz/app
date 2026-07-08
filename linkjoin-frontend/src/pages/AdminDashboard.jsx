@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext.jsx'
 import { apiGet, apiPost, apiDelete, apiPatch, apiPut, apiDownload } from '../api/client.js'
@@ -52,6 +52,7 @@ function ClassDetail({ cls, onBack, onUpdate }) {
   const [interventions, setInterventions] = useState([])
   const [expandedCase, setExpandedCase] = useState(null)
   const [noteInputs, setNoteInputs] = useState({})
+  const [classTab, setClassTab] = useState('links')
   const [assignedDrafts, setAssignedDrafts] = useState({})
   const [assignedSaved, setAssignedSaved] = useState({})
   const [addInput, setAddInput] = useState('')
@@ -184,6 +185,73 @@ function ClassDetail({ cls, onBack, onUpdate }) {
     onUpdate({ ...cls, gc_course_id: null, gc_course_name: null })
   }
 
+  // Canvas integration
+  const [canvasConnected, setCanvasConnected] = useState(false)
+  const [canvasOrgConfigured, setCanvasOrgConfigured] = useState(false)
+  const [canvasCourses, setCanvasCourses] = useState([])
+  const [canvasConnecting, setCanvasConnecting] = useState(false)
+  const [canvasSyncing, setCanvasSyncing] = useState(false)
+  const [canvasSyncResult, setCanvasSyncResult] = useState(null)
+
+  useEffect(() => {
+    apiGet('/integrations/canvas/status').then(r => {
+      setCanvasConnected(r.connected || false)
+      setCanvasOrgConfigured(r.org_configured || false)
+      if (r.connected) {
+        apiGet('/integrations/canvas/courses').then(r2 => setCanvasCourses(r2.courses || [])).catch(() => {})
+      }
+    }).catch(() => {})
+  }, [cls.class_id])
+
+  async function handleCanvasConnect() {
+    setCanvasConnecting(true)
+    try {
+      const { url } = await apiGet('/integrations/canvas/authorize-url')
+      const popup = window.open(url, 'canvas-oauth', 'width=520,height=640')
+      await new Promise((resolve, reject) => {
+        const handler = e => {
+          if (e.data?.canvas === 'connected') { window.removeEventListener('message', handler); resolve() }
+          if (e.data?.canvas === 'error') { window.removeEventListener('message', handler); reject(new Error('OAuth error')) }
+        }
+        window.addEventListener('message', handler)
+        const timer = setInterval(() => { if (popup?.closed) { clearInterval(timer); reject(new Error('Closed')) } }, 500)
+      })
+      setCanvasConnected(true)
+      const r = await apiGet('/integrations/canvas/courses')
+      setCanvasCourses(r.courses || [])
+    } catch { /* user closed popup */ }
+    setCanvasConnecting(false)
+  }
+
+  async function handleCanvasCourseSelect(e) {
+    const courseId = e.target.value
+    if (!courseId) return
+    const course = canvasCourses.find(c => c.id === courseId)
+    await apiPost('/integrations/canvas/connect', {
+      class_id: cls.class_id,
+      canvas_course_id: courseId,
+      canvas_course_name: course?.name || '',
+    })
+    onUpdate({ ...cls, canvas_course_id: courseId, canvas_course_name: course?.name || '' })
+  }
+
+  async function handleCanvasSync() {
+    setCanvasSyncing(true)
+    setCanvasSyncResult(null)
+    try {
+      const res = await apiPost(`/integrations/canvas/sync/${cls.class_id}`)
+      setCanvasSyncResult({ ok: true, synced: res.synced, total: res.total })
+    } catch {
+      setCanvasSyncResult({ ok: false })
+    }
+    setCanvasSyncing(false)
+  }
+
+  async function handleCanvasDisconnect() {
+    await apiDelete(`/integrations/canvas/disconnect/${cls.class_id}`)
+    onUpdate({ ...cls, canvas_course_id: null, canvas_course_name: null })
+  }
+
   function interventionFor(email, flagType) {
     return interventions.find(iv => iv.student_email === email && iv.flag_type === flagType) || null
   }
@@ -200,6 +268,7 @@ function ClassDetail({ cls, onBack, onUpdate }) {
         return exists ? prev.map(x => x.intervention_id === iv.intervention_id ? iv : x) : [iv, ...prev]
       })
       setExpandedCase(iv.intervention_id)
+      setClassTab('interventions')
     } catch (e) {
       console.error(e)
     }
@@ -385,33 +454,55 @@ function ClassDetail({ cls, onBack, onUpdate }) {
         )}
       </div>
 
-      {/* Section grid */}
-      <div className="detail-sections">
+      {/* Tab bar */}
+      <div className="detail-tab-bar">
+        {[
+          { key: 'links',        label: 'Links' },
+          { key: 'students',     label: 'Students' },
+          { key: 'attendance',   label: 'Attendance' },
+          { key: 'patterns',     label: 'Patterns' },
+          { key: 'interventions', label: 'Interventions', badge: interventions.filter(iv => iv.status !== 'resolved').length || null },
+          { key: 'integrations', label: 'Integrations' },
+        ].map(t => (
+          <button
+            key={t.key}
+            className={`detail-tab-btn${classTab === t.key ? ' detail-tab-btn--active' : ''}`}
+            onClick={() => setClassTab(t.key)}
+          >
+            {t.label}
+            {t.badge ? <span className="detail-tab-badge">{t.badge}</span> : null}
+          </button>
+        ))}
+      </div>
 
-        {/* Links section */}
-        <div className="detail-section-card">
-          <div className="detail-section-header">
-            <span className="detail-section-label">Links</span>
-            <span className="detail-section-count">{classLinks.length}</span>
-            <button className="detail-section-add-btn" onClick={() => { setEditingLink(null); setShowLinkModal(true) }}>
-              + Add
-            </button>
+      <div className="detail-tab-body">
+
+        {/* Links tab */}
+        {classTab === 'links' && (
+          <div className="detail-section-card">
+            <div className="detail-section-header">
+              <span className="detail-section-label">Links</span>
+              <span className="detail-section-count">{classLinks.length}</span>
+              <button className="detail-section-add-btn" onClick={() => { setEditingLink(null); setShowLinkModal(true) }}>
+                + Add
+              </button>
+            </div>
+            <div className="detail-section-body">
+              {classLinks.length > 0 ? (
+                <div className="class-links-list">
+                  {classLinks.map(l => (
+                    <div key={l.id} className="class-link-pill" onClick={() => { setEditingLink(l); setShowLinkModal(true) }}>
+                      <span>{l.name}</span>
+                      <button onClick={e => { e.stopPropagation(); handleRemoveLink(l.id) }}>&#x2715;</button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="admin-empty">No links assigned yet.</div>
+              )}
+            </div>
           </div>
-          <div className="detail-section-body">
-            {classLinks.length > 0 ? (
-              <div className="class-links-list">
-                {classLinks.map(l => (
-                  <div key={l.id} className="class-link-pill" onClick={() => { setEditingLink(l); setShowLinkModal(true) }}>
-                    <span>{l.name}</span>
-                    <button onClick={e => { e.stopPropagation(); handleRemoveLink(l.id) }}>&#x2715;</button>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="admin-empty">No links assigned yet.</div>
-            )}
-          </div>
-        </div>
+        )}
 
         {showLinkModal && (
           <LinkModal
@@ -423,8 +514,8 @@ function ClassDetail({ cls, onBack, onUpdate }) {
           />
         )}
 
-        {/* Students section */}
-        <div className="detail-section-card">
+        {/* Students tab */}
+        {classTab === 'students' && <div className="detail-section-card">
           <div className="detail-section-header">
             <span className="detail-section-label">Students</span>
             <span className="detail-section-count">{students.length}</span>
@@ -503,10 +594,10 @@ function ClassDetail({ cls, onBack, onUpdate }) {
               <div className="admin-empty">No students enrolled yet.</div>
             )}
           </div>
-        </div>
+        </div>}
 
-        {/* Attendance section */}
-        <div className="detail-section-card detail-section-card--full">
+        {/* Attendance tab */}
+        {classTab === 'attendance' && <div className="detail-section-card detail-section-card--full">
           <div className="detail-section-header">
             <span className="detail-section-label">Attendance</span>
             <span className="detail-section-count">{attendance.length}</span>
@@ -576,10 +667,14 @@ function ClassDetail({ cls, onBack, onUpdate }) {
               <div className="admin-empty">No attendance recorded yet. Records appear when students' meetings auto-open.</div>
             )}
           </div>
-        </div>
+        </div>}
 
-        {/* Patterns section */}
-        {patterns && (
+        {/* Patterns tab */}
+        {classTab === 'patterns' && (!patterns ? (
+          <div className="detail-section-card detail-section-card--full">
+            <div className="detail-section-body"><div className="admin-empty">No pattern data yet. Patterns appear after a few sessions.</div></div>
+          </div>
+        ) : (
           <div className="detail-section-card detail-section-card--full">
             <div className="detail-section-header">
               <span className="detail-section-label">Patterns</span>
@@ -619,13 +714,14 @@ function ClassDetail({ cls, onBack, onUpdate }) {
                             <div>{s.student_email}</div>
                             {hasAbsencesToExcuse && (
                               <div className="att-excuse-dates">
+                                <span className="att-excuse-label">Absences:</span>
                                 {missedDates.map(d => (
-                                  <button key={d} className="att-date-pill" onClick={() => excuseAbsence(s.student_email, d, true)}>
+                                  <button key={d} className="att-date-pill" title="Click to excuse this absence" onClick={() => excuseAbsence(s.student_email, d, true)}>
                                     {d.slice(5)}
                                   </button>
                                 ))}
                                 {[...excusedAbsenceDates].sort().map(d => (
-                                  <button key={d} className="att-date-pill att-date-pill--excused" onClick={() => excuseAbsence(s.student_email, d, false)}>
+                                  <button key={d} className="att-date-pill att-date-pill--excused" title="Excused — click to undo" onClick={() => excuseAbsence(s.student_email, d, false)}>
                                     {d.slice(5)} ×
                                   </button>
                                 ))}
@@ -679,10 +775,10 @@ function ClassDetail({ cls, onBack, onUpdate }) {
               )}
             </div>
           </div>
-        )}
+        ))}
 
-        {/* Interventions section */}
-        {interventions.length > 0 && (
+        {/* Interventions tab */}
+        {classTab === 'interventions' && (
           <div className="detail-section-card detail-section-card--full">
             <div className="detail-section-header">
               <span className="detail-section-label">Interventions</span>
@@ -795,13 +891,16 @@ function ClassDetail({ cls, onBack, onUpdate }) {
                 ))}
               </div>
             </div>
+            {interventions.length === 0 && (
+              <div className="detail-section-body"><div className="admin-empty">No open cases for this class.</div></div>
+            )}
           </div>
         )}
 
-        {/* Google Classroom integration */}
-        <div className="detail-section-card detail-section-card--full">
+        {/* Integrations tab */}
+        {classTab === 'integrations' && <div className="detail-section-card detail-section-card--full">
           <div className="detail-section-header">
-            <span className="detail-section-label">Google Classroom</span>
+            <span className="detail-section-label">Integrations</span>
             {cls.gc_course_id && (
               <span className="gc-connected-badge">Connected</span>
             )}
@@ -829,29 +928,91 @@ function ClassDetail({ cls, onBack, onUpdate }) {
             ) : (
               <div className="gc-connected">
                 <div className="gc-course-row">
-                  <span className="gc-course-icon">C</span>
+                  <span className="gc-course-icon"><span className="gc-g">G</span></span>
                   <div className="gc-course-info">
-                    <div className="gc-course-name">{cls.gc_course_name}</div>
-                    <div className="gc-course-meta">Scores post to the "Attendance" assignment (0-100)</div>
+                    <div className="gc-course-name">Google Classroom</div>
+                    <div className="gc-course-meta">{cls.gc_course_name}</div>
                   </div>
+                  <span className="gc-connected-badge">Connected</span>
                 </div>
-                {gcSyncResult && (
-                  <div className={`gc-sync-result ${gcSyncResult.ok ? 'gc-sync-result--ok' : 'gc-sync-result--err'}`}>
-                    {gcSyncResult.ok
-                      ? `Synced ${gcSyncResult.synced} of ${gcSyncResult.total} students`
-                      : 'Sync failed. Check your connection and try again.'}
-                  </div>
-                )}
-                <div className="gc-actions">
+                <div className="gc-sync-row">
+                  <span className="gc-sync-label">
+                    {gcSyncResult
+                      ? gcSyncResult.ok
+                        ? `Last sync: Synced ${gcSyncResult.synced} of ${gcSyncResult.total} students`
+                        : 'Last sync failed. Check your connection.'
+                      : 'Sync attendance scores to your gradebook.'}
+                  </span>
                   <button className="gc-sync-btn" onClick={handleGcSync} disabled={gcSyncing}>
-                    {gcSyncing ? 'Syncing...' : 'Sync attendance now'}
+                    {gcSyncing ? 'Syncing...' : 'Sync now'}
                   </button>
-                  <button className="gc-disconnect-btn" onClick={handleGcDisconnect}>Disconnect</button>
                 </div>
+                <p className="gc-hint">Scores post to the "Attendance" assignment (0–100) in your gradebook.</p>
+                <button className="gc-disconnect-btn" onClick={handleGcDisconnect}>Disconnect</button>
               </div>
             )}
           </div>
-        </div>
+        </div>}
+
+        {classTab === 'integrations' && (
+          <div className="detail-section-card detail-section-card--full" style={{ marginTop: 12 }}>
+            <div className="detail-section-header">
+              <span className="detail-section-label">Canvas LMS</span>
+              {cls.canvas_course_id && <span className="gc-connected-badge">Connected</span>}
+            </div>
+            <div className="detail-section-body gc-section-body">
+              {!canvasOrgConfigured ? (
+                <div className="gc-prompt">
+                  <p className="gc-prompt-text">Canvas is not configured for your school. Ask your admin to add Canvas credentials in Organization Settings.</p>
+                </div>
+              ) : !canvasConnected ? (
+                <div className="gc-prompt">
+                  <p className="gc-prompt-text">Connect your Canvas account to sync attendance scores directly to your Canvas gradebook.</p>
+                  <button className="gc-connect-btn canvas-connect-btn" onClick={handleCanvasConnect} disabled={canvasConnecting}>
+                    {canvasConnecting ? 'Connecting...' : (
+                      <><span className="canvas-c">C</span> Connect Canvas</>
+                    )}
+                  </button>
+                </div>
+              ) : !cls.canvas_course_id ? (
+                <div className="gc-prompt">
+                  <p className="gc-prompt-text">Select which Canvas course maps to this class. Attendance scores will sync to that course's gradebook.</p>
+                  <select className="gc-course-select" defaultValue="" onChange={handleCanvasCourseSelect}>
+                    <option value="" disabled>Select a course...</option>
+                    {canvasCourses.map(c => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                </div>
+              ) : (
+                <div className="gc-connected">
+                  <div className="gc-course-row">
+                    <span className="gc-course-icon"><span className="canvas-c">C</span></span>
+                    <div className="gc-course-info">
+                      <div className="gc-course-name">Canvas LMS</div>
+                      <div className="gc-course-meta">{cls.canvas_course_name}</div>
+                    </div>
+                    <span className="gc-connected-badge">Connected</span>
+                  </div>
+                  <div className="gc-sync-row">
+                    <span className="gc-sync-label">
+                      {canvasSyncResult
+                        ? canvasSyncResult.ok
+                          ? `Last sync: Synced ${canvasSyncResult.synced} of ${canvasSyncResult.total} students`
+                          : 'Last sync failed. Check your connection.'
+                        : 'Sync attendance scores to your gradebook.'}
+                    </span>
+                    <button className="gc-sync-btn" onClick={handleCanvasSync} disabled={canvasSyncing}>
+                      {canvasSyncing ? 'Syncing...' : 'Sync now'}
+                    </button>
+                  </div>
+                  <p className="gc-hint">Scores post to the "Attendance" assignment (0–100) in your Canvas gradebook.</p>
+                  <button className="gc-disconnect-btn" onClick={handleCanvasDisconnect}>Disconnect</button>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
       </div>
     </div>
@@ -976,11 +1137,56 @@ function AcademicCalendarCard({ orgId }) {
   const [input, setInput] = useState('')
   const [adding, setAdding] = useState(false)
   const [err, setErr] = useState('')
+  const [summerStart, setSummerStart] = useState('')
+  const [summerEnd, setSummerEnd] = useState('')
+  const [summerSaving, setSummerSaving] = useState(false)
+  const [summerErr, setSummerErr] = useState('')
+  const [icalUrl, setIcalUrl] = useState('')
+  const [icalImporting, setIcalImporting] = useState(false)
+  const [icalResult, setIcalResult] = useState(null)
+  const [icalErr, setIcalErr] = useState('')
 
   useEffect(() => {
     if (!orgId) return
-    apiGet(`/orgs/${orgId}/calendar`).then(r => setDates(r.blackout_dates || [])).catch(() => {})
+    apiGet(`/orgs/${orgId}/calendar`).then(r => {
+      setDates(r.blackout_dates || [])
+      setSummerStart(r.summer_start || '')
+      setSummerEnd(r.summer_end || '')
+      setIcalUrl(r.ical_url || '')
+    }).catch(() => {})
   }, [orgId])
+
+  async function handleIcalImport() {
+    if (!icalUrl.trim()) return
+    setIcalImporting(true)
+    setIcalErr('')
+    setIcalResult(null)
+    try {
+      const r = await apiPost(`/orgs/${orgId}/calendar/ical`, { url: icalUrl.trim() })
+      setIcalResult(r)
+      // Refresh the full calendar to show imported dates
+      const cal = await apiGet(`/orgs/${orgId}/calendar`)
+      setDates(cal.blackout_dates || [])
+      setSummerStart(cal.summer_start || '')
+      setSummerEnd(cal.summer_end || '')
+    } catch (e) {
+      setIcalErr(e.message || 'Import failed')
+    } finally {
+      setIcalImporting(false)
+    }
+  }
+
+  async function handleSummerSave() {
+    setSummerSaving(true)
+    setSummerErr('')
+    try {
+      await apiPut(`/orgs/${orgId}/calendar/summer`, { summer_start: summerStart, summer_end: summerEnd })
+    } catch (e) {
+      setSummerErr(e.message || 'Failed to save')
+    } finally {
+      setSummerSaving(false)
+    }
+  }
 
   async function handleAdd() {
     if (!input) return
@@ -1024,6 +1230,50 @@ function AcademicCalendarCard({ orgId }) {
         <div className="cal-desc">
           Mark school holidays and snow days. These dates are excluded from expected attendance counts so absent students aren't flagged for days school wasn't in session.
         </div>
+        <div id="admin-section-ical" className="cal-section-label">Import from Calendar URL</div>
+        <div className="cal-ical-row">
+          <input
+            type="url"
+            className="alert-settings-input cal-ical-input"
+            placeholder="https://calendar.google.com/…/basic.ics"
+            value={icalUrl}
+            onChange={e => { setIcalUrl(e.target.value); setIcalErr(''); setIcalResult(null) }}
+            onKeyDown={e => e.key === 'Enter' && handleIcalImport()}
+          />
+          <button className="admin-btn" onClick={handleIcalImport} disabled={icalImporting || !icalUrl.trim()}>
+            {icalImporting ? 'Importing…' : 'Import'}
+          </button>
+        </div>
+        <div className="cal-ical-hint">Paste your district's iCal (.ics) URL. Holidays, breaks, and no-school days are detected automatically.</div>
+        {icalResult && (
+          <div className="cal-ical-result">
+            {icalResult.imported_dates > 0 && <span>Added {icalResult.imported_dates} day{icalResult.imported_dates !== 1 ? 's' : ''} off.</span>}
+            {icalResult.summer_start && <span> Summer break: {icalResult.summer_start.slice(5)} – {icalResult.summer_end.slice(5)}.</span>}
+            {icalResult.imported_dates === 0 && !icalResult.summer_start && <span>No no-school events found — check the URL or try a different feed.</span>}
+          </div>
+        )}
+        {icalErr && <div className="alert-settings-error" style={{ marginBottom: 8 }}>{icalErr}</div>}
+        <div id="admin-section-summer" className="cal-section-label" style={{ marginTop: 16 }}>Summer Break</div>
+        <div className="cal-summer-row">
+          <input
+            type="date"
+            className="alert-settings-input cal-date-input"
+            value={summerStart}
+            onChange={e => { setSummerStart(e.target.value); setSummerErr('') }}
+          />
+          <span className="cal-summer-to">to</span>
+          <input
+            type="date"
+            className="alert-settings-input cal-date-input"
+            value={summerEnd}
+            onChange={e => { setSummerEnd(e.target.value); setSummerErr('') }}
+          />
+          <button className="admin-btn" onClick={handleSummerSave} disabled={summerSaving}>
+            {summerSaving ? '…' : 'Save'}
+          </button>
+        </div>
+        {summerErr && <div className="alert-settings-error" style={{ marginBottom: 8 }}>{summerErr}</div>}
+        <div className="cal-section-label">Individual Days Off</div>
         <div className="cal-add-row">
           <input
             type="date"
@@ -1063,10 +1313,428 @@ function AcademicCalendarCard({ orgId }) {
   )
 }
 
+function CleverRosterCard({ orgId }) {
+  const [status, setStatus] = useState(null)
+  const [connecting, setConnecting] = useState(false)
+  const [syncing, setSyncing] = useState(false)
+  const [syncResult, setSyncResult] = useState(null)
+
+  useEffect(() => {
+    if (!orgId) return
+    apiGet(`/integrations/clever/status?org_id=${orgId}`)
+      .then(r => setStatus(r))
+      .catch(() => setStatus({ connected: false }))
+  }, [orgId])
+
+  async function handleConnect() {
+    setConnecting(true)
+    try {
+      const { url } = await apiGet('/integrations/clever/authorize-url')
+      const popup = window.open(url, 'clever-oauth', 'width=520,height=640')
+      await new Promise((resolve, reject) => {
+        const handler = e => {
+          if (e.data?.clever === 'connected') { window.removeEventListener('message', handler); resolve() }
+          if (e.data?.clever === 'error') { window.removeEventListener('message', handler); reject(new Error('OAuth error')) }
+        }
+        window.addEventListener('message', handler)
+        const timer = setInterval(() => { if (popup?.closed) { clearInterval(timer); reject(new Error('Closed')) } }, 500)
+      })
+      const r = await apiGet(`/integrations/clever/status?org_id=${orgId}`)
+      setStatus(r)
+    } catch { /* user closed popup */ }
+    setConnecting(false)
+  }
+
+  async function handleSync() {
+    setSyncing(true)
+    setSyncResult(null)
+    try {
+      const res = await apiPost(`/integrations/clever/sync/${orgId}`)
+      setSyncResult({ ok: true, ...res })
+      const r = await apiGet(`/integrations/clever/status?org_id=${orgId}`)
+      setStatus(r)
+    } catch (e) {
+      const detail = e?.detail || e?.message || 'Sync failed'
+      setSyncResult({ ok: false, message: typeof detail === 'string' ? detail : 'Sync failed' })
+    }
+    setSyncing(false)
+  }
+
+  async function handleDisconnect() {
+    await apiDelete(`/integrations/clever/disconnect/${orgId}`)
+    setStatus({ connected: false })
+    setSyncResult(null)
+  }
+
+  function syncLabel() {
+    if (syncResult) {
+      if (!syncResult.ok) return syncResult.message
+      const parts = [`Synced ${syncResult.students} student${syncResult.students !== 1 ? 's' : ''} across ${syncResult.sections} class${syncResult.sections !== 1 ? 'es' : ''}`]
+      if (syncResult.new_classes > 0) parts.push(`${syncResult.new_classes} new class${syncResult.new_classes !== 1 ? 'es' : ''} created`)
+      return parts.join(' · ')
+    }
+    if (status?.last_sync_stats) {
+      const s = status.last_sync_stats
+      return `Last sync: ${s.students} student${s.students !== 1 ? 's' : ''} across ${s.sections} class${s.sections !== 1 ? 'es' : ''}`
+    }
+    return 'No syncs yet'
+  }
+
+  return (
+    <div className="alert-settings-card" style={{ marginTop: 16 }}>
+      <div className="org-settings-section-title">Roster Sync</div>
+      <div className="alert-settings-body">
+        {status === null ? (
+          <div className="admin-empty">Loading...</div>
+        ) : !status.connected ? (
+          <div className="clever-connect-state">
+            <p className="clever-hint">
+              Connect Clever to auto-populate your class rosters from your district SIS.
+              Students are added by email — no manual entry required.
+            </p>
+            <button className="clever-connect-btn" onClick={handleConnect} disabled={connecting}>
+              <img src="/images/lms/clever.svg" alt="" className="clever-logo" />
+              {connecting ? 'Connecting...' : 'Connect Clever'}
+            </button>
+          </div>
+        ) : (
+          <div className="clever-connected">
+            <div className="clever-row">
+              <div className="clever-icon">
+                <img src="/images/lms/clever.svg" alt="Clever" className="clever-logo-sm" />
+              </div>
+              <div className="gc-course-info">
+                <div className="gc-course-name">Clever</div>
+                {status.district_name && <div className="gc-course-meta">{status.district_name}</div>}
+              </div>
+              <span className="gc-connected-badge">Connected</span>
+            </div>
+            <div className="gc-sync-row">
+              <span className={`gc-sync-label${syncResult && !syncResult.ok ? ' gc-sync-label--err' : ''}`}>
+                {syncLabel()}
+              </span>
+              <button className="gc-sync-btn" onClick={handleSync} disabled={syncing}>
+                {syncing ? 'Syncing...' : 'Sync now'}
+              </button>
+            </div>
+            <p className="gc-hint">Class rosters update automatically. Students claim their accounts on first login.</p>
+            <button className="gc-disconnect-btn" onClick={handleDisconnect}>Disconnect</button>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+const ADMIN_SEARCH_INDEX = [
+  { label: 'Teachers', hint: 'View and manage teacher classes', tab: 'teachers', scroll: null, keywords: ['staff', 'class', 'roster'] },
+  { label: 'Interventions', hint: 'At-risk students and open cases', tab: 'interventions', scroll: null, keywords: ['at-risk', 'flag', 'case', 'counselor'] },
+  { label: 'Meeting Open Log', hint: 'History of all meeting opens', tab: 'log', scroll: null, keywords: ['history', 'log', 'meeting', 'open'] },
+  { label: 'Organization Settings', hint: 'School name, alerts, calendar, integrations', tab: 'org', scroll: null, keywords: ['settings', 'school', 'config'] },
+  { label: 'Notification Display Name', hint: 'School name shown in absence alert texts and emails', tab: 'org', scroll: 'admin-section-display-name', keywords: ['brand', 'school name', 'sms', 'email', 'text'] },
+  { label: 'Alert Settings', hint: 'Tardy threshold, attendance rate flags, minimum sessions', tab: 'org', scroll: 'admin-section-alerts', keywords: ['tardy', 'threshold', 'flag', 'absent', 'rate', 'minutes', 'sessions'] },
+  { label: 'Academic Calendar', hint: 'Holidays, snow days, and blackout dates', tab: 'org', scroll: 'admin-section-calendar', keywords: ['holiday', 'blackout', 'snow day', 'days off', 'calendar'] },
+  { label: 'Import Calendar URL', hint: 'Auto-import holidays from iCal / Google Calendar', tab: 'org', scroll: 'admin-section-ical', keywords: ['ical', 'ics', 'google calendar', 'import', 'url', 'subscribe'] },
+  { label: 'Summer Break', hint: 'Set summer start and end dates', tab: 'org', scroll: 'admin-section-summer', keywords: ['summer', 'break', 'vacation', 'end of year', 'start of year'] },
+  { label: 'Clever Roster Sync', hint: 'Connect Clever to import student rosters', tab: 'org', scroll: 'admin-section-roster', keywords: ['clever', 'roster', 'sync', 'students', 'sis'] },
+  { label: 'OneRoster Sync', hint: 'Connect PowerSchool, Infinite Campus, or Skyward via OneRoster', tab: 'org', scroll: 'admin-section-oneroster', keywords: ['oneroster', 'one roster', 'powerschool', 'infinite campus', 'skyward', 'sis', 'roster'] },
+  { label: 'Canvas LMS', hint: 'Configure Canvas gradebook sync for teachers', tab: 'org', scroll: 'admin-section-canvas', keywords: ['canvas', 'lms', 'gradebook', 'instructure', 'grades', 'lms sync'] },
+]
+
+function AdminSearch({ extraIndex, onClose, onNavigate }) {
+  const [q, setQ] = useState('')
+  const [cursor, setCursor] = useState(0)
+  const inputRef = useRef(null)
+  const index = [...ADMIN_SEARCH_INDEX, ...(extraIndex || [])]
+
+  useEffect(() => { inputRef.current?.focus() }, [])
+
+  const results = q.trim()
+    ? index.filter(item => {
+        const haystack = [item.label, item.hint, ...(item.keywords || [])].join(' ').toLowerCase()
+        return q.trim().toLowerCase().split(/\s+/).every(word => haystack.includes(word))
+      }).slice(0, 8)
+    : ADMIN_SEARCH_INDEX.slice(0, 6)
+
+  function handleKey(e) {
+    if (e.key === 'Escape') { onClose(); return }
+    if (e.key === 'ArrowDown') { e.preventDefault(); setCursor(c => Math.min(c + 1, results.length - 1)) }
+    if (e.key === 'ArrowUp') { e.preventDefault(); setCursor(c => Math.max(c - 1, 0)) }
+    if (e.key === 'Enter' && results[cursor]) { onNavigate(results[cursor]); onClose() }
+  }
+
+  return (
+    <div className="admin-search-overlay" onMouseDown={onClose}>
+      <div className="admin-search-modal" onMouseDown={e => e.stopPropagation()}>
+        <div className="admin-search-input-row">
+          <span className="admin-search-icon">⌕</span>
+          <input
+            ref={inputRef}
+            className="admin-search-input"
+            placeholder="Search admin dashboard…"
+            value={q}
+            onChange={e => { setQ(e.target.value); setCursor(0) }}
+            onKeyDown={handleKey}
+          />
+          <kbd className="admin-search-esc" onClick={onClose}>esc</kbd>
+        </div>
+        {results.length > 0 && (
+          <div className="admin-search-results">
+            {results.map((item, i) => (
+              <button
+                key={i}
+                className={`admin-search-result${cursor === i ? ' admin-search-result--active' : ''}`}
+                onMouseEnter={() => setCursor(i)}
+                onClick={() => { onNavigate(item); onClose() }}
+              >
+                <span className="admin-search-result-label">{item.label}</span>
+                <span className="admin-search-result-hint">{item.hint}</span>
+              </button>
+            ))}
+          </div>
+        )}
+        {results.length === 0 && q.trim() && (
+          <div className="admin-search-empty">No results for "{q}"</div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function OneRosterCard({ orgId }) {
+  const [status, setStatus] = useState(null)
+  const [form, setForm] = useState({ base_url: '', client_id: '', client_secret: '' })
+  const [connecting, setConnecting] = useState(false)
+  const [connectErr, setConnectErr] = useState('')
+  const [syncing, setSyncing] = useState(false)
+  const [syncResult, setSyncResult] = useState(null)
+
+  useEffect(() => {
+    if (!orgId) return
+    apiGet(`/integrations/oneroster/status?org_id=${orgId}`)
+      .then(r => {
+        setStatus(r)
+        if (r.connected) setForm(f => ({ ...f, base_url: r.base_url || '' }))
+      })
+      .catch(() => setStatus({ connected: false }))
+  }, [orgId])
+
+  async function handleConnect(e) {
+    e.preventDefault()
+    setConnecting(true)
+    setConnectErr('')
+    try {
+      const r = await apiPost('/integrations/oneroster/connect', form)
+      setStatus({ connected: true, district_name: r.district_name, base_url: form.base_url })
+    } catch (e) {
+      setConnectErr(e.message || 'Could not connect. Check your credentials and base URL.')
+    } finally {
+      setConnecting(false)
+    }
+  }
+
+  async function handleSync() {
+    setSyncing(true)
+    setSyncResult(null)
+    try {
+      const res = await apiPost(`/integrations/oneroster/sync/${orgId}`)
+      setSyncResult({ ok: true, ...res })
+      const r = await apiGet(`/integrations/oneroster/status?org_id=${orgId}`)
+      setStatus(r)
+    } catch (e) {
+      setSyncResult({ ok: false, message: e.message || 'Sync failed' })
+    }
+    setSyncing(false)
+  }
+
+  async function handleDisconnect() {
+    await apiDelete(`/integrations/oneroster/disconnect/${orgId}`)
+    setStatus({ connected: false })
+    setSyncResult(null)
+    setForm({ base_url: '', client_id: '', client_secret: '' })
+  }
+
+  function syncLabel() {
+    if (syncResult) {
+      if (!syncResult.ok) return syncResult.message
+      const parts = [`Synced ${syncResult.students} student${syncResult.students !== 1 ? 's' : ''} across ${syncResult.sections} class${syncResult.sections !== 1 ? 'es' : ''}`]
+      if (syncResult.new_classes > 0) parts.push(`${syncResult.new_classes} new`)
+      return parts.join(' · ')
+    }
+    if (status?.last_sync_stats) {
+      const s = status.last_sync_stats
+      return `Last sync: ${s.students} student${s.students !== 1 ? 's' : ''} across ${s.sections} class${s.sections !== 1 ? 'es' : ''}`
+    }
+    return 'No syncs yet'
+  }
+
+  if (status === null) return null
+
+  return (
+    <div className="alert-settings-card" style={{ marginTop: 16 }}>
+      <div className="org-settings-section-title">OneRoster Sync</div>
+      <div className="alert-settings-body">
+        {!status.connected ? (
+          <>
+            <p className="clever-connect-desc">Connect your district's OneRoster-compatible SIS (PowerSchool, Infinite Campus, Skyward) to auto-populate class rosters.</p>
+            <form className="or-connect-form" onSubmit={handleConnect}>
+              <div className="or-field">
+                <label className="or-label">API Base URL</label>
+                <input
+                  className="alert-settings-input"
+                  placeholder="https://district.powerschool.com/ims/oneroster/v1p1"
+                  value={form.base_url}
+                  onChange={e => setForm(f => ({ ...f, base_url: e.target.value }))}
+                  required
+                />
+              </div>
+              <div className="or-field-row">
+                <div className="or-field">
+                  <label className="or-label">Client ID</label>
+                  <input
+                    className="alert-settings-input"
+                    placeholder="client_id"
+                    value={form.client_id}
+                    onChange={e => setForm(f => ({ ...f, client_id: e.target.value }))}
+                    required
+                  />
+                </div>
+                <div className="or-field">
+                  <label className="or-label">Client Secret</label>
+                  <input
+                    className="alert-settings-input"
+                    type="password"
+                    placeholder="client_secret"
+                    value={form.client_secret}
+                    onChange={e => setForm(f => ({ ...f, client_secret: e.target.value }))}
+                    required
+                  />
+                </div>
+              </div>
+              {connectErr && <div className="alert-settings-error" style={{ marginBottom: 8 }}>{connectErr}</div>}
+              <button className="admin-btn or-connect-btn" type="submit" disabled={connecting}>
+                {connecting ? 'Connecting…' : 'Test & Connect'}
+              </button>
+            </form>
+            <p className="or-hint">Credentials are provided by your district IT department from your SIS admin console.</p>
+          </>
+        ) : (
+          <div className="clever-connected">
+            <div className="clever-row">
+              <span className="clever-icon or-icon">OR</span>
+              <div className="clever-info">
+                <div className="clever-name">OneRoster</div>
+                <div className="clever-district">{status.district_name || status.base_url}</div>
+              </div>
+              <span className="gc-connected-badge">Connected</span>
+            </div>
+            <div className="gc-sync-row">
+              <span className={`gc-sync-label${syncResult && !syncResult.ok ? ' gc-sync-label--err' : ''}`}>{syncLabel()}</span>
+              <button className="gc-sync-btn" onClick={handleSync} disabled={syncing}>{syncing ? 'Syncing…' : 'Sync now'}</button>
+            </div>
+            <p className="gc-hint">Students are added by email and claim their account on first login.</p>
+            <button className="gc-disconnect-btn" onClick={handleDisconnect}>Disconnect</button>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function CanvasConfigCard({ orgId }) {
+  const [status, setStatus] = useState(null)
+  const [form, setForm] = useState({ base_url: '', client_id: '', client_secret: '' })
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
+  const [saveErr, setSaveErr] = useState('')
+
+  useEffect(() => {
+    if (!orgId) return
+    apiGet('/integrations/canvas/org-config')
+      .then(r => {
+        setStatus(r)
+        if (r.configured) setForm(f => ({ ...f, base_url: r.base_url || '' }))
+      })
+      .catch(() => setStatus({ configured: false }))
+  }, [orgId])
+
+  async function handleSave(e) {
+    e.preventDefault()
+    setSaving(true)
+    setSaveErr('')
+    setSaved(false)
+    try {
+      await apiPost('/integrations/canvas/org-config', form)
+      setStatus({ configured: true, base_url: form.base_url })
+      setSaved(true)
+      setTimeout(() => setSaved(false), 2500)
+    } catch (err) {
+      setSaveErr(err.message || 'Could not save Canvas credentials.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  if (status === null) return null
+
+  return (
+    <div className="alert-settings-card" style={{ marginTop: 16 }}>
+      <div className="org-settings-section-title">Canvas LMS</div>
+      <div className="alert-settings-body">
+        <p className="clever-connect-desc">
+          {status.configured
+            ? 'Canvas is configured. Teachers can connect their Canvas account from the class Integrations tab.'
+            : 'Enter your school\'s Canvas developer key credentials so teachers can sync attendance grades to Canvas.'}
+        </p>
+        <form className="or-connect-form" onSubmit={handleSave}>
+          <div className="or-field">
+            <label className="or-label">Canvas Base URL</label>
+            <input
+              className="alert-settings-input"
+              placeholder="https://yourschool.instructure.com"
+              value={form.base_url}
+              onChange={e => setForm(f => ({ ...f, base_url: e.target.value }))}
+              required
+            />
+          </div>
+          <div className="or-field-row">
+            <div className="or-field">
+              <label className="or-label">Client ID</label>
+              <input
+                className="alert-settings-input"
+                placeholder="Developer key ID"
+                value={form.client_id}
+                onChange={e => setForm(f => ({ ...f, client_id: e.target.value }))}
+                required={!status.configured}
+              />
+            </div>
+            <div className="or-field">
+              <label className="or-label">Client Secret</label>
+              <input
+                className="alert-settings-input"
+                type="password"
+                placeholder={status.configured ? '(unchanged)' : 'Developer key secret'}
+                value={form.client_secret}
+                onChange={e => setForm(f => ({ ...f, client_secret: e.target.value }))}
+                required={!status.configured}
+              />
+            </div>
+          </div>
+          {saveErr && <div className="alert-settings-error" style={{ marginBottom: 8 }}>{saveErr}</div>}
+          <button className="admin-btn or-connect-btn" type="submit" disabled={saving}>
+            {saving ? 'Saving…' : saved ? '✓ Saved' : status.configured ? 'Update Credentials' : 'Save & Enable'}
+          </button>
+        </form>
+        <p className="or-hint">Developer key credentials are created in your Canvas admin panel under Developer Keys.</p>
+      </div>
+    </div>
+  )
+}
+
 function OrgSettingsTab({ orgId, brandName, setBrandName, brandSaved, saveBrandName }) {
   return (
     <div style={{ maxWidth: 600, margin: '0 auto' }}>
-      <div className="org-brand-section" style={{ marginTop: 0, marginBottom: 16 }}>
+      <div id="admin-section-display-name" className="org-brand-section" style={{ marginTop: 0, marginBottom: 16 }}>
         <div className="org-brand-label">Notification display name</div>
         <div className="org-brand-row">
           <input className="admin-input" placeholder="e.g. Lincoln High School"
@@ -1080,8 +1748,13 @@ function OrgSettingsTab({ orgId, brandName, setBrandName, brandSaved, saveBrandN
           Shown in absence alert texts and emails instead of "LinkJoin"
         </div>
       </div>
-      <AlertSettingsCard orgId={orgId} />
-      <AcademicCalendarCard orgId={orgId} />
+      <div id="admin-section-alerts"><AlertSettingsCard orgId={orgId} /></div>
+      <div id="admin-section-calendar"><AcademicCalendarCard orgId={orgId} /></div>
+      <div id="admin-section-roster">
+        <CleverRosterCard orgId={orgId} />
+        <div id="admin-section-oneroster"><OneRosterCard orgId={orgId} /></div>
+        <div id="admin-section-canvas"><CanvasConfigCard orgId={orgId} /></div>
+      </div>
     </div>
   )
 }
@@ -1340,12 +2013,51 @@ function SchoolAdminView() {
   const [activeTab, setActiveTab] = useState('teachers')
   const [brandName, setBrandName] = useState('')
   const [brandSaved, setBrandSaved] = useState(false)
+  const [searchOpen, setSearchOpen] = useState(false)
 
   useEffect(() => {
     apiGet('/classes').then(cls => setClasses(cls)).finally(() => setLoading(false))
     apiGet('/interventions').then(ivs => setOpenCases(Array.isArray(ivs) ? ivs : [])).catch(() => {})
     if (orgId) apiGet(`/orgs/${orgId}`).then(org => setBrandName(org.brand_name || '')).catch(() => {})
   }, [orgId])
+
+  useEffect(() => {
+    function onKey(e) {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') { e.preventDefault(); setSearchOpen(true) }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+
+  const handleSearchNavigate = useCallback((item) => {
+    if (item.tab) setActiveTab(item.tab)
+    if (item.classId) {
+      const cls = classes.find(c => c.class_id === item.classId)
+      if (cls) { setSelected(cls); return }
+    }
+    if (item.scroll) {
+      const tryScroll = (attemptsLeft) => {
+        const el = document.getElementById(item.scroll)
+        if (el && el.getBoundingClientRect().height > 0) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+        } else if (attemptsLeft > 0) {
+          setTimeout(() => tryScroll(attemptsLeft - 1), 100)
+        }
+      }
+      setTimeout(() => tryScroll(15), 80)
+    }
+  }, [classes])
+
+  const dynamicSearchIndex = classes.flatMap(cls => [
+    {
+      label: cls.name || 'Untitled class',
+      hint: `${cls.teacher_name || cls.teacher_email || 'Unknown teacher'} · ${(cls.student_ids || []).length} students`,
+      tab: 'teachers',
+      classId: cls.class_id,
+      scroll: null,
+      keywords: [cls.teacher_email || '', cls.teacher_name || ''],
+    },
+  ])
 
   async function saveBrandName() {
     try {
@@ -1397,6 +2109,13 @@ function SchoolAdminView() {
 
   return (
     <>
+      {searchOpen && (
+        <AdminSearch
+          extraIndex={dynamicSearchIndex}
+          onClose={() => setSearchOpen(false)}
+          onNavigate={handleSearchNavigate}
+        />
+      )}
       <div className="admin-tabs">
         <button className={`admin-tab${activeTab === 'teachers' ? ' admin-tab--active' : ''}`} onClick={() => setActiveTab('teachers')}>Teachers</button>
         <button className={`admin-tab${activeTab === 'interventions' ? ' admin-tab--active' : ''}`} onClick={() => setActiveTab('interventions')}>
@@ -1405,6 +2124,11 @@ function SchoolAdminView() {
         </button>
         <button className={`admin-tab${activeTab === 'log' ? ' admin-tab--active' : ''}`} onClick={() => setActiveTab('log')}>Meeting Open Log</button>
         <button className={`admin-tab${activeTab === 'org' ? ' admin-tab--active' : ''}`} onClick={() => setActiveTab('org')}>Organization</button>
+        <button className="admin-tab admin-search-trigger" onClick={() => setSearchOpen(true)} title="Search (⌘K)">
+          <span className="admin-search-trigger-icon">⌕</span>
+          <span className="admin-search-trigger-label">Search</span>
+          <kbd className="admin-search-trigger-kbd">⌘K</kbd>
+        </button>
       </div>
 
       {activeTab === 'interventions' && <OrgInterventionList onBack={() => setActiveTab('teachers')} />}

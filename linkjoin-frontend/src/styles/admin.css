@@ -178,7 +178,47 @@
   flex-shrink: 0;
 }
 
-/* Two-column sections */
+/* Tab bar */
+.detail-tab-bar {
+  display: flex;
+  border-bottom: 1px solid rgba(255,255,255,0.09);
+  gap: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+.detail-tab-btn {
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  padding: 10px 16px;
+  font: 600 12px Montserrat, sans-serif;
+  color: rgba(255,255,255,0.4);
+  cursor: pointer;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: color 0.15s;
+}
+.detail-tab-btn:hover { color: rgba(255,255,255,0.75); }
+.detail-tab-btn--active {
+  color: #fff;
+  border-bottom-color: #2B8FD8;
+}
+.detail-tab-badge {
+  background: #2B8FD8;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  border-radius: 8px;
+  padding: 1px 6px;
+  min-width: 16px;
+  text-align: center;
+}
+.detail-tab-body { padding-top: 4px; }
+
+/* Two-column sections (kept for any legacy use) */
 .detail-sections {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -855,6 +895,57 @@
   margin-bottom: 14px;
 }
 
+.cal-section-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.35);
+  font-family: 'Montserrat', sans-serif;
+  margin-bottom: 8px;
+  margin-top: 4px;
+}
+
+.cal-ical-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.cal-ical-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.cal-ical-hint {
+  font-size: 11px;
+  color: rgba(255,255,255,0.35);
+  font-family: 'Montserrat', sans-serif;
+  margin-bottom: 6px;
+}
+
+.cal-ical-result {
+  font-size: 12px;
+  color: rgba(120,220,130,0.9);
+  font-family: 'Montserrat', sans-serif;
+  margin-bottom: 8px;
+}
+
+.cal-summer-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.cal-summer-to {
+  font-size: 12px;
+  color: rgba(255,255,255,0.4);
+  font-family: 'Montserrat', sans-serif;
+}
+
 .cal-add-row {
   display: flex;
   gap: 8px;
@@ -974,6 +1065,141 @@
   border-radius: 9px;
   padding: 1px 6px;
   min-width: 16px;
+  text-align: center;
+}
+
+/* ── Admin search trigger ────────────────────────────────────────────────────── */
+
+.admin-search-trigger {
+  margin-left: auto;
+  color: rgba(255,255,255,0.3);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.admin-search-trigger:hover { color: rgba(255,255,255,0.6); }
+
+.admin-search-trigger-icon {
+  font-size: 15px;
+  line-height: 1;
+}
+.admin-search-trigger-label {
+  font-size: 12px;
+}
+.admin-search-trigger-kbd {
+  font: 11px/1 Montserrat, sans-serif;
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 4px;
+  padding: 1px 5px;
+  color: rgba(255,255,255,0.3);
+}
+
+/* ── Admin search modal ──────────────────────────────────────────────────────── */
+
+.admin-search-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.6);
+  z-index: 1000;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 80px;
+  backdrop-filter: blur(2px);
+}
+
+.admin-search-modal {
+  width: 560px;
+  max-width: calc(100vw - 32px);
+  background: #1a1f2e;
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 24px 60px rgba(0,0,0,0.6);
+}
+
+.admin-search-input-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 16px;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+
+.admin-search-icon {
+  font-size: 18px;
+  color: rgba(255,255,255,0.3);
+  flex-shrink: 0;
+}
+
+.admin-search-input {
+  flex: 1;
+  background: none;
+  border: none;
+  outline: none;
+  font: 400 15px Montserrat, sans-serif;
+  color: #fff;
+  caret-color: var(--lightblue, #2B8FD8);
+}
+.admin-search-input::placeholder { color: rgba(255,255,255,0.25); }
+
+.admin-search-esc {
+  font: 11px/1 Montserrat, sans-serif;
+  background: rgba(255,255,255,0.07);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 4px;
+  padding: 2px 6px;
+  color: rgba(255,255,255,0.25);
+  cursor: pointer;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+.admin-search-results {
+  display: flex;
+  flex-direction: column;
+  padding: 6px;
+  max-height: 360px;
+  overflow-y: auto;
+}
+
+.admin-search-result {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 9px 12px;
+  border-radius: 7px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.1s;
+}
+.admin-search-result--active {
+  background: rgba(43,143,216,0.15);
+}
+.admin-search-result:hover {
+  background: rgba(255,255,255,0.06);
+}
+.admin-search-result--active:hover {
+  background: rgba(43,143,216,0.15);
+}
+
+.admin-search-result-label {
+  font: 600 13px Montserrat, sans-serif;
+  color: rgba(255,255,255,0.9);
+}
+.admin-search-result-hint {
+  font: 400 11px Montserrat, sans-serif;
+  color: rgba(255,255,255,0.35);
+}
+
+.admin-search-empty {
+  padding: 24px 16px;
+  font: 400 13px Montserrat, sans-serif;
+  color: rgba(255,255,255,0.3);
   text-align: center;
 }
 
@@ -1339,8 +1565,16 @@
 .att-excuse-dates {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 4px;
   margin-top: 5px;
+}
+.att-excuse-label {
+  font: 500 9px Montserrat, sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: rgba(255,255,255,0.25);
+  margin-right: 2px;
 }
 .att-date-pill {
   font: 600 10px Montserrat, sans-serif;
@@ -1417,6 +1651,18 @@
   background-clip: text;
   line-height: 1;
 }
+.canvas-connect-btn {
+  background: #E66000;
+  color: #fff;
+  border-color: transparent;
+}
+.canvas-connect-btn:hover { background: #c85500; }
+.canvas-c {
+  font-size: 15px;
+  font-weight: 800;
+  color: #fff;
+  line-height: 1;
+}
 .gc-course-select {
   padding: 8px 12px;
   background: rgba(255,255,255,0.06);
@@ -1431,20 +1677,21 @@
 .gc-connected {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 12px;
 }
 .gc-course-row {
   display: flex;
   align-items: center;
   gap: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(255,255,255,0.07);
 }
 .gc-course-icon {
-  width: 32px;
-  height: 32px;
+  width: 36px;
+  height: 36px;
   border-radius: 8px;
-  background: linear-gradient(135deg, #4285F4, #34A853);
-  color: #fff;
-  font: 700 14px Montserrat, sans-serif;
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.12);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1459,49 +1706,45 @@
   color: rgba(255,255,255,0.4);
   margin-top: 2px;
 }
-.gc-sync-result {
-  font: 500 11px Montserrat, sans-serif;
-  padding: 6px 10px;
-  border-radius: 5px;
-  width: fit-content;
-}
-.gc-sync-result--ok {
-  background: rgba(52, 168, 83, 0.12);
-  color: #2a9950;
-  border: 1px solid rgba(52, 168, 83, 0.25);
-}
-.gc-sync-result--err {
-  background: rgba(234, 67, 53, 0.1);
-  color: #c62828;
-  border: 1px solid rgba(234, 67, 53, 0.25);
-}
-.gc-actions {
+.gc-sync-row {
   display: flex;
   align-items: center;
-  gap: 10px;
+  justify-content: space-between;
+  gap: 12px;
+}
+.gc-sync-label {
+  font: 400 11px Montserrat, sans-serif;
+  color: rgba(255,255,255,0.4);
+}
+.gc-hint {
+  font: 400 11px/1.5 Montserrat, sans-serif;
+  color: rgba(255,255,255,0.3);
+  margin: 0;
 }
 .gc-sync-btn {
-  padding: 7px 16px;
+  padding: 6px 14px;
   background: rgba(66, 133, 244, 0.15);
   border: 1px solid rgba(66, 133, 244, 0.3);
   border-radius: 6px;
   color: rgba(66, 133, 244, 0.9);
   font: 600 11px Montserrat, sans-serif;
   cursor: pointer;
+  white-space: nowrap;
   transition: background 0.15s;
 }
 .gc-sync-btn:hover { background: rgba(66, 133, 244, 0.25); }
 .gc-sync-btn:disabled { opacity: 0.5; cursor: default; }
 .gc-disconnect-btn {
-  padding: 7px 12px;
+  padding: 0;
   background: transparent;
   border: none;
-  color: rgba(255,255,255,0.3);
+  color: rgba(255,255,255,0.25);
   font: 400 11px Montserrat, sans-serif;
   cursor: pointer;
   transition: color 0.15s;
+  align-self: flex-start;
 }
-.gc-disconnect-btn:hover { color: rgba(255,255,255,0.6); }
+.gc-disconnect-btn:hover { color: rgba(255,255,255,0.55); }
 
 /* ── Family absence alerts ───────────────────────────────────── */
 .roster-contact-btn {
@@ -1548,4 +1791,122 @@
   display: flex;
   gap: 8px;
   align-items: center;
+}
+
+/* ── Clever Roster Card ─────────────────────────────────────── */
+.clever-connect-state {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.clever-connect-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.14);
+  border-radius: 8px;
+  color: rgba(255,255,255,0.8);
+  font: 600 12px Montserrat, sans-serif;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+  align-self: flex-start;
+}
+.clever-connect-btn:hover { background: rgba(255,255,255,0.1); border-color: rgba(255,255,255,0.22); }
+.clever-connect-btn:disabled { opacity: 0.5; cursor: default; }
+.clever-logo {
+  width: 18px;
+  height: 18px;
+  object-fit: contain;
+  filter: brightness(0) invert(1);
+  opacity: 0.75;
+}
+.clever-connected {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.clever-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(255,255,255,0.07);
+}
+.clever-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.12);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.clever-logo-sm {
+  width: 20px;
+  height: 20px;
+  object-fit: contain;
+  filter: brightness(0) invert(1);
+  opacity: 0.75;
+}
+.gc-sync-label--err {
+  color: rgba(255,100,100,0.8);
+}
+
+/* ── OneRoster ───────────────────────────────────────────────────────────────── */
+
+.or-connect-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+.or-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  flex: 1;
+}
+.or-field-row {
+  display: flex;
+  gap: 12px;
+}
+.or-label {
+  font: 600 10px/1 Montserrat, sans-serif;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.4);
+}
+.or-connect-btn {
+  align-self: flex-start;
+}
+.or-hint {
+  font-size: 11px;
+  color: rgba(255,255,255,0.3);
+  font-family: Montserrat, sans-serif;
+  margin: 0;
+  line-height: 1.5;
+}
+.or-icon {
+  font: 700 11px/1 Montserrat, sans-serif;
+  color: rgba(255,255,255,0.6);
+  letter-spacing: 0.02em;
+}
+.clever-info {
+  flex: 1;
+  min-width: 0;
+}
+.clever-name {
+  font: 600 13px Montserrat, sans-serif;
+  color: rgba(255,255,255,0.9);
+}
+.clever-district {
+  font: 400 11px Montserrat, sans-serif;
+  color: rgba(255,255,255,0.4);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }

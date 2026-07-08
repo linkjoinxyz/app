@@ -14,7 +14,7 @@ const CLASS_CARDS = [
   { name: 'Biology',       time: '1:15 PM', days: ['Mon','Wed','Fri'], students: 19, links: 1 },
 ]
 
-const DETAIL_TABS = ['Links', 'Students', 'Attendance', 'Patterns', 'Interventions']
+const DETAIL_TABS = ['Links', 'Students', 'Attendance', 'Patterns', 'Interventions', 'Integrations']
 
 export default function SchoolDashboards() {
   const [scrolled, setScrolled]   = useState(false)
@@ -68,7 +68,7 @@ export default function SchoolDashboards() {
       </nav>
 
       {/* Hero */}
-      <section className="sc-att-hero">
+      <section className="sc-att-hero sc-wave-d0">
         <div className="sc-att-hero-inner">
           <div className="sc-att-hero-text">
             <span className="sc-hero-eyebrow">Multi-level dashboards</span>
@@ -137,7 +137,7 @@ export default function SchoolDashboards() {
       </section>
 
       {/* S1: Role switcher - vertical sidebar tabs */}
-      <section className="sc-section sc-section--alt">
+      <section className="sc-section sc-section--alt sc-wave-d1">
         <div data-rid="s1" className={rc('s1', 'sc-na-vtab-wrap')}>
           <div className="sc-na-vtab-sidebar">
             <span className="sc-eyebrow">Every level, one tool</span>
@@ -164,8 +164,8 @@ export default function SchoolDashboards() {
             {expanded === 0 && (
               <div className="sc-mock sc-mock--pad">
                 <div className="sc-dash-grid">
-                  {CLASS_CARDS.map(c => (
-                    <div key={c.name} className="sc-class-card-full">
+                  {CLASS_CARDS.map((c, idx) => (
+                    <div key={c.name} className={`sc-class-card-full${idx === 0 ? ' sc-class-card-full--active' : ''}`}>
                       <div className="sc-class-card-name">{c.name}</div>
                       <div className="sc-class-card-time">{c.time}</div>
                       <div className="sc-class-card-days">
@@ -177,6 +177,33 @@ export default function SchoolDashboards() {
                       </div>
                     </div>
                   ))}
+                </div>
+                <div className="sc-teacher-class-detail">
+                  <div className="sc-detail-header">
+                    <div className="sc-detail-class-name">AP Chemistry</div>
+                    <div className="sc-detail-meta">
+                      <span className="sc-detail-time">9:00 AM</span>
+                      {['Mon','Wed','Fri'].map(d => <span key={d} className="sc-class-mini-day">{d}</span>)}
+                      <span className="sc-detail-count">22 students</span>
+                    </div>
+                  </div>
+                  <div className="sc-detail-tabs">
+                    {['Links', 'Students', 'Attendance', 'Patterns', 'Interventions', 'Integrations'].map((tab, i) => (
+                      <button key={tab} className={`sc-detail-tab${i === 2 ? ' sc-detail-tab--active' : ''}`}>
+                        {tab}
+                        {tab === 'Interventions' && <span className="sc-detail-tab-badge">2</span>}
+                      </button>
+                    ))}
+                  </div>
+                  <table className="sc-mock-table">
+                    <thead><tr><th>Student</th><th>Time</th><th>Status</th></tr></thead>
+                    <tbody>
+                      <tr><td>Maya R.</td><td>9:01 AM</td><td><span className="sc-badge sc-badge--green">On time</span></td></tr>
+                      <tr><td>Jordan T.</td><td>9:04 AM</td><td><span className="sc-badge sc-badge--yellow">2m late</span></td></tr>
+                      <tr><td>Sam L.</td><td className="sc-mock-absent-time">Not joined</td><td><span className="sc-badge sc-badge--red">Absent</span></td></tr>
+                      <tr><td>Priya M.</td><td>9:02 AM</td><td><span className="sc-badge sc-badge--green">On time</span></td></tr>
+                    </tbody>
+                  </table>
                 </div>
               </div>
             )}
@@ -274,8 +301,8 @@ export default function SchoolDashboards() {
       </section>
 
       {/* S2: Drill-down number hero */}
-      <section data-rid="s2" className={rc('s2', 'sc-na-zero-section')}>
-        <div className="sc-na-zero-inner">
+      <section className="sc-na-zero-section sc-wave-d2">
+        <div data-rid="s2" className={rc('s2', 'sc-na-zero-inner')}>
           <div className="sc-na-zero-left">
             <div className="sc-na-zero-numblock">
               <span className="sc-na-zero-digit">3</span>
@@ -314,7 +341,7 @@ export default function SchoolDashboards() {
       </section>
 
       {/* S3: Full-width class detail spotlight */}
-      <section className="sc-section sc-section--alt">
+      <section className="sc-section sc-section--alt sc-wave-d3">
         <div data-rid="s3" className={rc('s3', 'sc-sd-spotlight')}>
           <div className="sc-sd-spotlight-head">
             <span className="sc-eyebrow">Full class access</span>
@@ -342,6 +369,7 @@ export default function SchoolDashboards() {
                   <button key={tab} className={`sc-detail-tab${i === detailTab ? ' sc-detail-tab--active' : ''}`} onClick={() => setDetailTab(i)}>
                     {tab}
                     {tab === 'Interventions' && <span className="sc-detail-tab-badge">2</span>}
+                    {tab === 'Integrations' && <span className="sc-detail-tab-dot" />}
                   </button>
                 ))}
               </div>
@@ -434,12 +462,31 @@ export default function SchoolDashboards() {
                   </div>
                 </div>
               )}
+              {detailTab === 5 && (
+                <div className="sc-sd-tab-body">
+                  <div className="sc-sd-integration-row">
+                    <div className="sc-sd-integration-icon">
+                      <span className="gc-g" style={{fontSize:15,fontWeight:700}}>G</span>
+                    </div>
+                    <div className="sc-sd-integration-info">
+                      <div className="sc-sd-integration-name">Google Classroom</div>
+                      <div className="sc-sd-integration-meta">AP Chemistry · Period 2</div>
+                    </div>
+                    <span className="sc-badge sc-badge--green">Connected</span>
+                  </div>
+                  <div className="sc-sd-integration-sync">
+                    <span className="sc-sd-integration-sync-text">Last sync: Synced 19 of 22 students</span>
+                    <button className="sc-sd-integration-sync-btn">Sync now</button>
+                  </div>
+                  <p className="sc-sd-tab-hint">Attendance scores post automatically to the "Attendance" assignment in your gradebook.</p>
+                </div>
+              )}
             </div>
           </div>
           <div className="sc-sd-callouts">
             <div className="sc-sd-callout">
               <div className="sc-sd-callout-dot" />
-              <div className="sc-sd-callout-text">5 tabs, one screen, no separate pages</div>
+              <div className="sc-sd-callout-text">6 tabs, one screen, no separate pages</div>
             </div>
             <div className="sc-sd-callout">
               <div className="sc-sd-callout-dot" />
@@ -454,8 +501,8 @@ export default function SchoolDashboards() {
       </section>
 
       {/* S4: Role access comparison cards */}
-      <section data-rid="s4" className={rc('s4', 'sc-sd-roles-section')}>
-        <div className="sc-sd-roles-inner">
+      <section className="sc-sd-roles-section sc-wave-d4">
+        <div data-rid="s4" className={rc('s4', 'sc-sd-roles-inner')}>
           <div className="sc-sd-roles-head">
             <span className="sc-eyebrow">Role-based access</span>
             <h2 className="sc-h2">No configuration.<br/>No one sees too much.</h2>
@@ -526,8 +573,8 @@ export default function SchoolDashboards() {
       </section>
 
       {/* CTA: Split layout */}
-      <section data-rid="cta" className={rc('cta', 'sc-na-cta-split')}>
-        <div className="sc-na-cta-split-inner">
+      <section className="sc-na-cta-split sc-na-cta-split--alt">
+        <div data-rid="cta" className={rc('cta', 'sc-na-cta-split-inner')}>
           <div className="sc-na-cta-split-text">
             <h2 className="sc-na-cta-split-h2">Give your admin team<br/>the visibility they need.</h2>
             <p className="sc-na-cta-split-sub">Set up takes minutes. Your teachers don't need to do anything.</p>
