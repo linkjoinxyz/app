@@ -958,7 +958,7 @@ function ClassDetail({ cls, onBack, onUpdate }) {
           <div className="detail-section-card detail-section-card--full" style={{ marginTop: 12 }}>
             <div className="detail-section-header">
               <span className="detail-section-label">Canvas LMS</span>
-              {cls.canvas_course_id && <span className="gc-connected-badge">Connected</span>}
+              {canvasConnected && cls.canvas_course_id && <span className="gc-connected-badge">Connected</span>}
             </div>
             <div className="detail-section-body gc-section-body">
               {!canvasOrgConfigured ? (
