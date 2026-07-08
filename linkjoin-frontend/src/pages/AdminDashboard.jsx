@@ -5,6 +5,7 @@ import { apiGet, apiPost, apiDelete, apiPatch, apiPut, apiDownload } from '../ap
 import HeaderModern from '../components/HeaderModern.jsx'
 import LinkModal from '../components/LinkModal.jsx'
 import HistoryPanel from '../components/HistoryPanel.jsx'
+import countryCodes from '../../public/country_codes.json'
 import '../styles/admin.css'
 
 // ─── helpers ────────────────────────────────────────────────────────────────
@@ -726,9 +727,13 @@ function ClassDetail({ cls, onBack, onUpdate, onViewStudent }) {
               <div className="admin-modal-field">
                 <label className="admin-modal-label">Phone</label>
                 <div style={{ display: 'flex', gap: 8 }}>
-                  <input className="admin-input" placeholder="1" style={{ width: 64 }}
+                  <select className="admin-input" style={{ width: 130, flexShrink: 0 }}
                     value={(parentContacts[contactModalUser] || {}).parent_phone_country || '1'}
-                    onChange={e => updateContactField(contactModalUser, 'parent_phone_country', e.target.value)} />
+                    onChange={e => updateContactField(contactModalUser, 'parent_phone_country', e.target.value)}>
+                    {Object.entries(countryCodes).map(([c, v]) => (
+                      <option key={c} value={v}>{c} +{v}</option>
+                    ))}
+                  </select>
                   <input className="admin-input" placeholder="Parent phone" style={{ flex: 1 }}
                     value={(parentContacts[contactModalUser] || {}).parent_phone || ''}
                     onChange={e => updateContactField(contactModalUser, 'parent_phone', e.target.value)} />
