@@ -237,14 +237,15 @@ async def get_class_patterns(class_id: str, user: dict = Depends(get_confirmed_u
     now = datetime.now(timezone.utc)
     cutoff = now - timedelta(days=_LOOKBACK_DAYS)
 
-    # Build ordered list of expected session dates in the lookback window
+    # Build ordered list of scheduled class dates in the lookback window.
+    # All scheduled days count toward expected_count; blackout dates are excluded
+    # from the missed-days list but do not reduce expected_count.
     class_days = cls.get("days") or []
     scheduled_weekdays = {_DAY_TO_WEEKDAY[d] for d in class_days if d in _DAY_TO_WEEKDAY}
     expected_dates: list[str] = [
         (cutoff + timedelta(days=i)).strftime("%Y-%m-%d")
         for i in range(_LOOKBACK_DAYS)
         if (cutoff + timedelta(days=i)).weekday() in scheduled_weekdays
-        and (cutoff + timedelta(days=i)).strftime("%Y-%m-%d") not in blackout_dates
     ]
     expected_count = len(expected_dates)
     expected_dates_set = set(expected_dates)
@@ -279,11 +280,10 @@ async def get_class_patterns(class_id: str, user: dict = Depends(get_confirmed_u
             existing = best_by_date.get(date_str)
             if existing is None or r.get("minutes_late", 0) < existing.get("minutes_late", 0):
                 best_by_date[date_str] = r
-        deduped = list(best_by_date.values())
         joined_dates = set(best_by_date.keys())
+        deduped = list(best_by_date.values())
 
         total = len(deduped)
-        # Exclude excused records from tardy count only (still count toward total)
         tardy = sum(
             1 for r in deduped
             if r.get("minutes_late", 0) > tardy_threshold and not r.get("excused")
@@ -299,8 +299,8 @@ async def get_class_patterns(class_id: str, user: dict = Depends(get_confirmed_u
         effective_expected = max(expected_count - len(student_excused_dates), 0)
         attendance_rate = min(total / effective_expected, 1.0) if effective_expected > 0 else 1.0
 
-        # Compute which expected dates the student has no record for
-        missed_dates = sorted(expected_dates_set - joined_dates - student_excused_dates)
+        # Compute which expected dates the student has no record for (exclude blackouts)
+        missed_dates = sorted(expected_dates_set - joined_dates - student_excused_dates - blackout_dates)
         excused_absence_dates = sorted(student_excused_dates)
 
         flags = []
