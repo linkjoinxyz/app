@@ -1919,7 +1919,7 @@ function CanvasConfigCard({ orgId }) {
               <input
                 className="alert-settings-input"
                 type="password"
-                placeholder={status.configured ? '(unchanged)' : 'Developer key secret'}
+                placeholder="Developer key secret"
                 value={form.client_secret}
                 onChange={e => setForm(f => ({ ...f, client_secret: e.target.value }))}
                 required={!status.configured}
