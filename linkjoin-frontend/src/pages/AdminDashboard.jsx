@@ -306,7 +306,7 @@ function ClassDetail({ cls, onBack, onUpdate, onViewStudent }) {
   useEffect(() => {
     Promise.all([
       apiGet(`/classes/${cls.class_id}`),
-      apiGet('/links'),
+      apiGet(`/classes/${cls.class_id}/links`),
       apiGet(`/attendance/class/${cls.class_id}`).catch(() => ({ records: [] })),
       apiGet(`/attendance/class/${cls.class_id}/patterns`).catch(() => null),
       apiGet(`/interventions?class_id=${cls.class_id}`).catch(() => []),
@@ -315,7 +315,7 @@ function ClassDetail({ cls, onBack, onUpdate, onViewStudent }) {
       setStudents(fresh.students || [])
       const links = linksRes.links || []
       setAllLinks(links)
-      setClassLinks(links.filter(l => (fresh.link_ids || []).includes(l.id)))
+      setClassLinks(links)
       setAttendance(attRes.records || [])
       setPatterns(patternsRes)
       setInterventions(Array.isArray(ivs) ? ivs : [])
@@ -583,11 +583,11 @@ function ClassDetail({ cls, onBack, onUpdate, onViewStudent }) {
       await apiPost(`/classes/${cls.class_id}/links/${newId}`)
       const [fresh, linksRes] = await Promise.all([
         apiGet(`/classes/${cls.class_id}`),
-        apiGet('/links'),
+        apiGet(`/classes/${cls.class_id}/links`),
       ])
       const links = linksRes.links || []
       setAllLinks(links)
-      setClassLinks(links.filter(l => (fresh.link_ids || []).includes(l.id)))
+      setClassLinks(links)
       onUpdate(fresh)
     } catch (e) {
       console.error(e)
@@ -598,11 +598,11 @@ function ClassDetail({ cls, onBack, onUpdate, onViewStudent }) {
     try {
       const [fresh, linksRes] = await Promise.all([
         apiGet(`/classes/${cls.class_id}`),
-        apiGet('/links'),
+        apiGet(`/classes/${cls.class_id}/links`),
       ])
       const links = linksRes.links || []
       setAllLinks(links)
-      setClassLinks(links.filter(l => (fresh.link_ids || []).includes(l.id)))
+      setClassLinks(links)
       onUpdate(fresh)
     } catch (e) {
       console.error(e)

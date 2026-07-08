@@ -109,6 +109,26 @@ async def get_class(class_id: str, user: dict = Depends(get_confirmed_user)):
     return cls
 
 
+@router.get("/{class_id}/links")
+async def get_class_links(class_id: str, user: dict = Depends(get_confirmed_user)):
+    require_teacher(user)
+    cls = await motor_db.classes.find_one({"class_id": class_id}, {"_id": 0, "teacher_id": 1, "org_id": 1, "link_ids": 1})
+    if not cls:
+        raise HTTPException(status_code=404, detail="Class not found")
+    if user.get("role") == "teacher" and cls["teacher_id"] != user["user_id"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+    if user.get("role") in ("school_admin", "district_admin") and cls.get("org_id") != user.get("org_id"):
+        raise HTTPException(status_code=403, detail="Access denied")
+    link_ids = cls.get("link_ids") or []
+    if not link_ids:
+        return {"links": []}
+    links = await motor_db.links.find(
+        {"id": {"$in": link_ids}},
+        {"_id": 0}
+    ).to_list(None)
+    return {"links": links}
+
+
 @router.put("/{class_id}")
 async def update_class(class_id: str, body: UpdateClassRequest, user: dict = Depends(get_confirmed_user)):
     require_teacher(user)
