@@ -1103,7 +1103,7 @@ function ClassDetail({ cls, onBack, onUpdate, onViewStudent }) {
         {/* Integrations tab */}
         {classTab === 'integrations' && <div className="detail-section-card detail-section-card--full">
           <div className="detail-section-header">
-            <span className="detail-section-label">Integrations</span>
+            <span className="detail-section-label">Google Classroom</span>
             {gcConnected && cls.gc_course_id && (
               <span className="gc-connected-badge">Connected</span>
             )}
