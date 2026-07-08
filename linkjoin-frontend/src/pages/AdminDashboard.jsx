@@ -683,7 +683,7 @@ function ClassDetail({ cls, onBack, onUpdate, onViewStudent }) {
             <div className="detail-section-header">
               <span className="detail-section-label">Links</span>
               <span className="detail-section-count">{classLinks.length}</span>
-              <button className="admin-btn" onClick={() => { setEditingLink(null); setShowLinkModal(true) }}>
+              <button className="detail-section-add-btn" onClick={() => { setEditingLink(null); setShowLinkModal(true) }}>
                 + Add
               </button>
             </div>

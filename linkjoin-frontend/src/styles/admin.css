@@ -263,16 +263,16 @@
 }
 
 .detail-section-add-btn {
-  background: rgba(255,255,255,0.07);
-  border: 1px solid rgba(255,255,255,0.13);
-  color: rgba(255,255,255,0.85);
+  background: #2b8fd8;
+  border: none;
+  color: #fff;
   border-radius: 5px;
   padding: 3px 10px;
   font: 600 11px Montserrat, sans-serif;
   cursor: pointer;
   transition: background 0.15s;
 }
-.detail-section-add-btn:hover { background: rgba(255,255,255,0.13); }
+.detail-section-add-btn:hover { background: #1e7bbf; }
 
 .detail-section-body {
   padding: 14px 16px;
