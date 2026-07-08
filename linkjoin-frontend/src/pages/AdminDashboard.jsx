@@ -978,21 +978,18 @@ function ClassDetail({ cls, onBack, onUpdate, onViewStudent }) {
                             <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
                               {s.flags.map(f => {
                                 const iv = interventionFor(s.student_email, f)
-                                const isTardy = f === 'repeat_tardy'
-                                const flagClass = isTardy ? 'iv-flag--tardy' : 'iv-flag--attendance'
-                                const flagLabel = isTardy ? 'Tardy' : 'Attendance'
+                                const flagClass = f === 'repeat_tardy' ? 'iv-flag--tardy' : 'iv-flag--attendance'
                                 if (iv) {
-                                  const statusLabel = iv.status === 'open' ? 'Open' : iv.status === 'in_progress' ? 'In progress' : 'Resolved'
                                   return (
                                     <button key={f} className={`iv-status-pill ${flagClass}`}
                                       onClick={() => setExpandedCase(expandedCase === iv.intervention_id ? null : iv.intervention_id)}>
-                                      {flagLabel} · {statusLabel}
+                                      {iv.status === 'open' ? 'Open' : iv.status === 'in_progress' ? 'In progress' : 'Resolved'}
                                     </button>
                                   )
                                 }
                                 return (
                                   <button key={f} className={`iv-open-btn ${flagClass}`} onClick={() => openCase(s.student_email, f)}>
-                                    {flagLabel} · Open case
+                                    Open case
                                   </button>
                                 )
                               })}
