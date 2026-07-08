@@ -269,10 +269,23 @@ async def get_class_patterns(class_id: str, user: dict = Depends(get_confirmed_u
 
     results = []
     for email, records in by_student.items():
-        total = len(records)
+        # Deduplicate: one record per calendar date, keeping the best (least late) open
+        best_by_date: dict[str, dict] = {}
+        for r in records:
+            date_str = (
+                r["opened_at"].strftime("%Y-%m-%d") if isinstance(r.get("opened_at"), datetime)
+                else str(r.get("opened_at", ""))[:10]
+            )
+            existing = best_by_date.get(date_str)
+            if existing is None or r.get("minutes_late", 0) < existing.get("minutes_late", 0):
+                best_by_date[date_str] = r
+        deduped = list(best_by_date.values())
+        joined_dates = set(best_by_date.keys())
+
+        total = len(deduped)
         # Exclude excused records from tardy count only (still count toward total)
         tardy = sum(
-            1 for r in records
+            1 for r in deduped
             if r.get("minutes_late", 0) > tardy_threshold and not r.get("excused")
         )
         on_time = total - tardy
@@ -287,11 +300,6 @@ async def get_class_patterns(class_id: str, user: dict = Depends(get_confirmed_u
         attendance_rate = min(total / effective_expected, 1.0) if effective_expected > 0 else 1.0
 
         # Compute which expected dates the student has no record for
-        joined_dates = {
-            r["opened_at"].strftime("%Y-%m-%d") if isinstance(r.get("opened_at"), datetime)
-            else str(r.get("opened_at", ""))[:10]
-            for r in records
-        }
         missed_dates = sorted(expected_dates_set - joined_dates - student_excused_dates)
         excused_absence_dates = sorted(student_excused_dates)
 
