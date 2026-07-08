@@ -2104,7 +2104,7 @@ function OrgInterventionList({ onBack, initialExpanded = null }) {
     <div>
       <div className="iv-toolbar">
         <input
-          className="admin-input admin-search-input"
+          className="iv-search-input"
           value={search}
           onChange={e => setSearch(e.target.value)}
           placeholder="Search by name, email, category, or class…"
