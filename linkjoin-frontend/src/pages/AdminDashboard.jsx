@@ -43,7 +43,7 @@ function DayBadge({ day }) {
 
 // ─── Student Profile ─────────────────────────────────────────────────────────
 
-function StudentProfile({ userId, onBack, onOpenClass }) {
+function StudentProfile({ userId, onBack, onOpenClass, onOpenIntervention }) {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [err, setErr] = useState(null)
@@ -170,8 +170,8 @@ function StudentProfile({ userId, onBack, onOpenClass }) {
               {data.interventions.map(iv => (
                 <div
                   key={iv.intervention_id}
-                  className={`sp-iv-row${onOpenClass && iv.class_id ? ' sp-iv-row--link' : ''}`}
-                  onClick={() => iv.class_id && onOpenClass?.(iv.class_id)}
+                  className={`sp-iv-row${onOpenIntervention ? ' sp-iv-row--link' : ''}`}
+                  onClick={() => onOpenIntervention?.(iv.intervention_id)}
                 >
                   <div className="sp-iv-left">
                     <span className={`iv-status-pill iv-status-pill--${iv.status}`}>
@@ -184,7 +184,7 @@ function StudentProfile({ userId, onBack, onOpenClass }) {
                       {iv.flag_type === 'repeat_tardy' ? 'Repeat tardy' : 'Low attendance'}
                     </span>
                     {iv.notes?.length > 0 && <span className="sp-iv-notes">{iv.notes.length} note{iv.notes.length !== 1 ? 's' : ''}</span>}
-                    {onOpenClass && iv.class_id && <span className="sp-row-chevron">›</span>}
+                    {onOpenIntervention && <span className="sp-row-chevron">›</span>}
                   </div>
                 </div>
               ))}
@@ -2035,12 +2035,12 @@ function TeacherView() {
 
 // ─── Org Intervention List ────────────────────────────────────────────────────
 
-function OrgInterventionList({ onBack }) {
+function OrgInterventionList({ onBack, initialExpanded = null }) {
   const [interventions, setInterventions] = useState([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState('active')
   const [search, setSearch] = useState('')
-  const [expandedCase, setExpandedCase] = useState(null)
+  const [expandedCase, setExpandedCase] = useState(initialExpanded)
   const [noteInputs, setNoteInputs] = useState({})
   const [assignedDrafts, setAssignedDrafts] = useState({})
   const [assignedSaved, setAssignedSaved] = useState({})
@@ -2217,8 +2217,10 @@ function SchoolAdminView() {
   const { orgId } = useAuth()
   const classMatch = useMatch('/admin/class/:classId')
   const studentMatch = useMatch('/admin/students/:userId')
+  const interventionMatch = useMatch('/admin/interventions/:interventionId')
   const urlClassId = classMatch?.params?.classId ?? null
   const urlUserId = studentMatch?.params?.userId ?? null
+  const urlInterventionId = interventionMatch?.params?.interventionId ?? null
 
   const [classes, setClasses] = useState([])
   const [loading, setLoading] = useState(true)
@@ -2303,8 +2305,13 @@ function SchoolAdminView() {
         userId={urlUserId}
         onBack={() => navigate(-1)}
         onOpenClass={classId => navigate(`/admin/class/${classId}`)}
+        onOpenIntervention={ivId => navigate(`/admin/interventions/${ivId}`)}
       />
     )
+  }
+
+  if (urlInterventionId) {
+    return <OrgInterventionList initialExpanded={urlInterventionId} onBack={() => navigate(-1)} />
   }
 
   if (loading) return <div className="admin-spinner-wrap"><div className="admin-spinner" /></div>
