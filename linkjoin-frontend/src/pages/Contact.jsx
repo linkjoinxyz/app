@@ -97,7 +97,7 @@ export default function Contact() {
               </div>
 
               {status === 'error' && (
-                <p className="ct-error">Something went wrong. Please try again or email us directly at seth@linkjoin.xyz.</p>
+                <p className="ct-error">Something went wrong. Please try again.</p>
               )}
 
               <button type="submit" className="ct-submit" disabled={status === 'sending'}>

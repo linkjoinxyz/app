@@ -97,7 +97,7 @@ export default function NewAttendance() {
             </p>
             <div className="sc-hero-actions">
               <Link to="/signup" className="sc-btn-primary">Get started free</Link>
-              <a href="mailto:seth@linkjoin.xyz" className="sc-btn-ghost">Request a demo</a>
+              <Link to="/demo" className="sc-btn-ghost">Request a demo</Link>
             </div>
           </div>
           <div className="sc-att-hero-visual">
@@ -714,7 +714,7 @@ export default function NewAttendance() {
           </div>
           <div className="sc-na-cta-split-actions">
             <Link to="/signup" className="sc-na-cta-split-primary">Get started free</Link>
-            <a href="mailto:seth@linkjoin.xyz" className="sc-na-cta-split-ghost">Request a demo →</a>
+            <Link to="/demo" className="sc-na-cta-split-ghost">Request a demo →</Link>
             <p className="sc-na-cta-split-note">Export CSV any time. No lock-in.</p>
           </div>
         </div>

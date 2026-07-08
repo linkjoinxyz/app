@@ -63,7 +63,7 @@ export default function Subprocessors() {
           <section className="pp-section">
             <h2>Questions</h2>
             <p>
-              To request the full list of Subprocessors, object to a new Subprocessor, or ask questions about our data processing practices, contact <a href="mailto:seth@linkjoin.xyz" className="pp-link">seth@linkjoin.xyz</a>.
+              To request the full list of Subprocessors, object to a new Subprocessor, or ask questions about our data processing practices, <a href="/contact" className="pp-link">contact us</a>.
             </p>
           </section>
         </div>

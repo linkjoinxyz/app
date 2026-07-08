@@ -4,7 +4,7 @@ import { useAuth } from './context/AuthContext.jsx'
 
 function ScrollToTop() {
   const { pathname } = useLocation()
-  useEffect(() => { window.scrollTo(0, 0) }, [pathname])
+  useEffect(() => { window.scrollTo({ top: 0, behavior: 'instant' }) }, [pathname])
   return null
 }
 import Home from './pages/Home.jsx'
@@ -33,6 +33,7 @@ import School from './pages/School.jsx'
 import SchoolAttendance from './pages/SchoolAttendance.jsx'
 import NewAttendance from './pages/NewAttendance.jsx'
 import SchoolDashboards from './pages/SchoolDashboards.jsx'
+import Demo from './pages/Demo.jsx'
 import StudentProfile from './pages/StudentProfile.jsx'
 import History from './pages/History.jsx'
 
@@ -81,6 +82,7 @@ export default function App() {
       <Route path="/attendance" element={<Navigate to="/schools/attendance" replace />} />
       <Route path="/schools/new-attendance" element={<Navigate to="/schools/attendance" replace />} />
       <Route path="/schools/dashboards" element={<SchoolDashboards />} />
+      <Route path="/demo" element={<Demo />} />
       <Route path="/admin" element={<TeacherRoute><AdminDashboard /></TeacherRoute>} />
       <Route path="/settings" element={<PrivateRoute><Settings /></PrivateRoute>} />
       <Route path="/history" element={<PrivateRoute><History /></PrivateRoute>} />

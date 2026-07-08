@@ -92,7 +92,7 @@ export default function School() {
         </p>
         <div className="sc-hero-actions">
           <Link to="/signup" className="sc-btn-primary">Get started</Link>
-          <a href="mailto:seth@linkjoin.xyz" className="sc-btn-ghost">Request a demo</a>
+          <Link to="/demo" className="sc-btn-ghost">Request a demo</Link>
         </div>
       </section>
 
@@ -403,7 +403,7 @@ export default function School() {
         </p>
         <div className="sc-cta-actions">
           <Link to="/signup" className="sc-btn-primary">Get started</Link>
-          <a href="mailto:seth@linkjoin.xyz" className="sc-btn-ghost">Request a demo</a>
+          <Link to="/demo" className="sc-btn-ghost">Request a demo</Link>
         </div>
       </section>
 

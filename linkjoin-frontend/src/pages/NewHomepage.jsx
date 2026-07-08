@@ -15,7 +15,7 @@ const FAQ_ITEMS = [
   },
   {
     q: 'Why are my meetings not opening?',
-    a: 'The most common cause is blocked pop-ups. Enable pop-ups for your browser and confirm the toggle on your link is blue (active). Still having trouble? Reach out at seth@linkjoin.xyz.',
+    a: 'The most common cause is blocked pop-ups. Enable pop-ups for your browser and confirm the toggle on your link is blue (active). Still having trouble? Visit our contact page.',
   },
   {
     q: 'How do I enable pop-ups in Chrome?',
@@ -677,8 +677,7 @@ export default function NewHomepage() {
         <div data-rid="faq-left" className={rc('faq-left', 'nh-faq-left')}>
           <h2 className="nh-faq-h2">Got questions?<br />We've got answers.</h2>
           <p className="nh-faq-sub">
-            Anything else? Email us at{' '}
-            <a href="mailto:seth@linkjoin.xyz" className="nh-link">seth@linkjoin.xyz</a>
+            Anything else? <Link to="/contact" className="nh-link">Contact us</Link>
           </p>
         </div>
 

@@ -136,13 +136,13 @@ export default function PrivacySchools() {
           <section className="pp-section">
             <h2>10. Your Rights</h2>
             <p>
-              <strong>Schools</strong> may at any time request access to, correction of, or deletion of student data by emailing <a href="mailto:seth@linkjoin.xyz" className="pp-link">seth@linkjoin.xyz</a>. We will respond within 30 days.
+              <strong>Schools</strong> may at any time request access to, correction of, or deletion of student data by <a href="/contact" className="pp-link">contacting us</a>. We will respond within 30 days.
             </p>
             <p>
               <strong>Parents and eligible students</strong> exercise FERPA rights through the School. If a School directs us to provide, correct, or delete student records on behalf of a parent or eligible student, we will do so within 30 days of the School's written request.
             </p>
             <p>
-              <strong>California residents</strong> may have additional rights under SOPIPA and the California Consumer Privacy Act. Contact us at <a href="mailto:seth@linkjoin.xyz" className="pp-link">seth@linkjoin.xyz</a> to exercise these rights.
+              <strong>California residents</strong> may have additional rights under SOPIPA and the California Consumer Privacy Act. <a href="/contact" className="pp-link">Contact us</a> to exercise these rights.
             </p>
           </section>
 
@@ -158,7 +158,7 @@ export default function PrivacySchools() {
             <p>
               For questions about this policy, FERPA data requests, or to report a privacy concern, contact:
             </p>
-            <p><a href="mailto:seth@linkjoin.xyz" className="pp-link">seth@linkjoin.xyz</a></p>
+            <p><a href="/contact" className="pp-link">Contact us</a></p>
             <p>
               For schools that have not yet signed a Data Processing Agreement, visit <a href="/dpa" className="pp-link">linkjoin.xyz/dpa</a>.
             </p>

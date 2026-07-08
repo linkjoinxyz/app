@@ -103,7 +103,7 @@ export default function BreachPolicy() {
             <p>
               To report a suspected security incident or vulnerability, or to ask questions about this policy, contact:
             </p>
-            <p><a href="mailto:seth@linkjoin.xyz" className="pp-link">seth@linkjoin.xyz</a></p>
+            <p><a href="/contact" className="pp-link">Contact us</a></p>
             <p>
               Schools with a signed Data Processing Agreement should use the privacy contact address specified in that agreement. We treat all security reports as confidential.
             </p>

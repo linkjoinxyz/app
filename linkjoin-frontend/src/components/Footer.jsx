@@ -6,7 +6,7 @@ export default function Footer() {
       <div className="column-container">
         <div className="footer-column">
           <p className="title">Contact</p>
-          <a href="mailto:seth@linkjoin.xyz">seth@linkjoin.xyz</a>
+          <Link to="/contact">Contact us</Link>
           <p style={{ margin: 0 }}>(925) 360-3457</p>
         </div>
         <div className="footer-column">

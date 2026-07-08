@@ -1,3 +1,4 @@
+import { useNavigate } from 'react-router-dom'
 import PublicHeader from '../components/PublicHeader.jsx'
 import PublicFooter from '../components/PublicFooter.jsx'
 import '../styles/pricing.css'
@@ -37,6 +38,7 @@ function PlanCard({ badge, name, price, sub, description, features, cta, onClick
 }
 
 export default function Pricing() {
+  const navigate = useNavigate()
   return (
     <div className="pricing-root">
       <PublicHeader />
@@ -77,7 +79,7 @@ export default function Pricing() {
               'Dedicated support',
             ]}
             cta="Get in touch"
-            onClick={() => window.open('https://mail.google.com/mail/u/0/?fs=1&to=seth@linkjoin.xyz&tf=cm')}
+            onClick={() => navigate('/contact')}
           />
         </div>
       </main>

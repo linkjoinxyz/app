@@ -95,7 +95,7 @@ export default function Privacy() {
             <p>
               If you have questions or concerns about this Privacy Policy, please contact us at:
             </p>
-            <p><a href="mailto:seth@linkjoin.xyz" className="pp-link">seth@linkjoin.xyz</a></p>
+            <p><a href="/contact" className="pp-link">Contact us</a></p>
           </section>
         </div>
       </main>

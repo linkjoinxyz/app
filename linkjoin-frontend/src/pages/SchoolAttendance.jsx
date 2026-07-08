@@ -78,7 +78,7 @@ export default function SchoolAttendance() {
             </p>
             <div className="sc-hero-actions">
               <Link to="/signup" className="sc-btn-primary">Get started free</Link>
-              <a href="mailto:seth@linkjoin.xyz" className="sc-btn-ghost">Request a demo</a>
+              <Link to="/demo" className="sc-btn-ghost">Request a demo</Link>
             </div>
           </div>
           <div className="sc-att-hero-visual">
@@ -623,7 +623,7 @@ export default function SchoolAttendance() {
         <p className="sc-cta-sub">Set up takes minutes. The first class auto-logs itself.</p>
         <div className="sc-cta-actions">
           <Link to="/signup" className="sc-btn-primary">Get started free</Link>
-          <a href="mailto:seth@linkjoin.xyz" className="sc-btn-ghost">Request a demo</a>
+          <Link to="/demo" className="sc-btn-ghost">Request a demo</Link>
         </div>
         <p className="sc-cta-note">↓ Export CSV any time. No lock-in.</p>
       </section>

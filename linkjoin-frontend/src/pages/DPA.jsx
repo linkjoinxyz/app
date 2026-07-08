@@ -18,7 +18,7 @@ export default function DPA() {
               This Data Processing Agreement ("DPA") is entered into between LinkJoin ("Provider") and the educational institution executing this agreement ("School" or "LEA"). This DPA governs Provider's processing of Student Data on behalf of the School and supplements any separate subscription or service agreement between the parties.
             </p>
             <p>
-              To execute this agreement, contact <a href="mailto:seth@linkjoin.xyz" className="pp-link">seth@linkjoin.xyz</a>. Schools that have signed this DPA are authorized to deploy LinkJoin to students and staff.
+              To execute this agreement, <a href="/contact" className="pp-link">contact us</a>. Schools that have signed this DPA are authorized to deploy LinkJoin to students and staff.
             </p>
           </section>
 
@@ -157,7 +157,7 @@ export default function DPA() {
               <li>Audit Provider's compliance with this DPA upon reasonable notice, no more than once per calendar year.</li>
             </ul>
             <p>
-              To exercise these rights, contact <a href="mailto:seth@linkjoin.xyz" className="pp-link">seth@linkjoin.xyz</a>.
+              To exercise these rights, <a href="/contact" className="pp-link">contact us</a>.
             </p>
           </section>
 
@@ -188,7 +188,7 @@ export default function DPA() {
           <section className="pp-section">
             <h2>Execute This Agreement</h2>
             <p>
-              To sign this DPA on behalf of your school or district, email <a href="mailto:seth@linkjoin.xyz" className="pp-link">seth@linkjoin.xyz</a> with the subject line "DPA Request" and include your institution name, your name and title, and the email address that should appear on the executed agreement. We will return a countersigned copy within 3 business days.
+              To sign this DPA on behalf of your school or district, use our <a href="/contact" className="pp-link">contact form</a> with the subject "DPA Request" and include your institution name, your name and title, and the email address that should appear on the executed agreement. We will return a countersigned copy within 3 business days.
             </p>
           </section>
         </div>
