@@ -612,7 +612,6 @@ const [showDeleted, setShowDeleted] = useState(false)
             <div className="modal-title">Deleted Links</div>
             {deletedLinks.length === 0 ? (
               <div className="modal-deleted-empty">
-                <img src="/images/no-links-made.svg" alt="Empty trash" />
                 <div>No deleted links</div>
               </div>
             ) : (
