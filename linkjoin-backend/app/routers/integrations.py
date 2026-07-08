@@ -464,10 +464,15 @@ async def _run_clever_sync(org_id: str) -> dict:
         if not access_token:
             raise HTTPException(status_code=400, detail="Clever token unavailable")
 
-    sections_raw = await _clever_get_all(access_token, "/sections")
-    # v3.0 uses /users?role=teacher and /users?role=student (not /teachers or /students)
-    teachers_raw = await _clever_get_all(access_token, "/users", {"role": "teacher"})
-    students_raw = await _clever_get_all(access_token, "/users", {"role": "student"})
+    try:
+        sections_raw = await _clever_get_all(access_token, "/sections")
+        # v3.0 uses /users?role=teacher and /users?role=student (not /teachers or /students)
+        teachers_raw = await _clever_get_all(access_token, "/users", {"role": "teacher"})
+        students_raw = await _clever_get_all(access_token, "/users", {"role": "student"})
+    except httpx.HTTPStatusError as e:
+        raise HTTPException(status_code=502, detail=f"Clever API error {e.response.status_code}: {e.response.text[:200]}")
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Clever API error: {type(e).__name__}: {str(e)}")
 
     teacher_map: dict[str, str] = {}
     for t in teachers_raw:
@@ -766,9 +771,14 @@ async def _run_oneroster_sync(org_id: str) -> dict:
     # Re-fetch token for each sync (tokens are short-lived, ~1 hour)
     token = await _or_get_token(base_url, client_id, client_secret)
 
-    classes_raw = await _or_get_all(base_url, token, "/classes")
-    enrollments_raw = await _or_get_all(base_url, token, "/enrollments")
-    users_raw = await _or_get_all(base_url, token, "/users")
+    try:
+        classes_raw = await _or_get_all(base_url, token, "/classes")
+        enrollments_raw = await _or_get_all(base_url, token, "/enrollments")
+        users_raw = await _or_get_all(base_url, token, "/users")
+    except httpx.HTTPStatusError as e:
+        raise HTTPException(status_code=502, detail=f"OneRoster API error {e.response.status_code}: {e.response.text[:200]}")
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"OneRoster API error: {type(e).__name__}: {str(e)}")
 
     # Build user lookup: sourcedId → {email, role}
     user_map: dict[str, dict] = {}
