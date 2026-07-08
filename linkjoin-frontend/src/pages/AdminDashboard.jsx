@@ -901,7 +901,7 @@ function ClassDetail({ cls, onBack, onUpdate }) {
         {classTab === 'integrations' && <div className="detail-section-card detail-section-card--full">
           <div className="detail-section-header">
             <span className="detail-section-label">Integrations</span>
-            {cls.gc_course_id && (
+            {gcConnected && cls.gc_course_id && (
               <span className="gc-connected-badge">Connected</span>
             )}
           </div>
