@@ -1589,7 +1589,7 @@ function CleverRosterCard({ orgId }) {
 
   return (
     <div className="alert-settings-card" style={{ marginTop: 16 }}>
-      <div className="org-settings-section-title">Roster Sync</div>
+      <div className="org-settings-section-title">Clever</div>
       <div className="alert-settings-body">
         {status === null ? (
           <div className="admin-spinner-wrap--inline" style={{ display: 'flex', padding: '16px 0' }}><div className="admin-spinner" /></div>
@@ -1636,15 +1636,15 @@ const ADMIN_SEARCH_INDEX = [
   { label: 'Teachers', hint: 'View and manage teacher classes', tab: 'teachers', scroll: null, keywords: ['staff', 'class', 'roster'] },
   { label: 'Interventions', hint: 'At-risk students and open cases', tab: 'interventions', scroll: null, keywords: ['at-risk', 'flag', 'case', 'counselor'] },
   { label: 'Meeting Open Log', hint: 'History of all meeting opens', tab: 'log', scroll: null, keywords: ['history', 'log', 'meeting', 'open'] },
-  { label: 'Organization Settings', hint: 'School name, alerts, calendar, integrations', tab: 'org', scroll: null, keywords: ['settings', 'school', 'config'] },
+  { label: 'Organization Settings', hint: 'School name, alerts, academic calendar', tab: 'org', scroll: null, keywords: ['settings', 'school', 'config'] },
   { label: 'Notification Display Name', hint: 'School name shown in absence alert texts and emails', tab: 'org', scroll: 'admin-section-display-name', keywords: ['brand', 'school name', 'sms', 'email', 'text'] },
   { label: 'Alert Settings', hint: 'Tardy threshold, attendance rate flags, minimum sessions', tab: 'org', scroll: 'admin-section-alerts', keywords: ['tardy', 'threshold', 'flag', 'absent', 'rate', 'minutes', 'sessions'] },
   { label: 'Academic Calendar', hint: 'Holidays, snow days, and blackout dates', tab: 'org', scroll: 'admin-section-calendar', keywords: ['holiday', 'blackout', 'snow day', 'days off', 'calendar'] },
   { label: 'Import Calendar URL', hint: 'Auto-import holidays from iCal / Google Calendar', tab: 'org', scroll: 'admin-section-ical', keywords: ['ical', 'ics', 'google calendar', 'import', 'url', 'subscribe'] },
   { label: 'Summer Break', hint: 'Set summer start and end dates', tab: 'org', scroll: 'admin-section-summer', keywords: ['summer', 'break', 'vacation', 'end of year', 'start of year'] },
-  { label: 'Clever Roster Sync', hint: 'Connect Clever to import student rosters', tab: 'org', scroll: 'admin-section-roster', keywords: ['clever', 'roster', 'sync', 'students', 'sis'] },
-  { label: 'OneRoster Sync', hint: 'Connect PowerSchool, Infinite Campus, or Skyward via OneRoster', tab: 'org', scroll: 'admin-section-oneroster', keywords: ['oneroster', 'one roster', 'powerschool', 'infinite campus', 'skyward', 'sis', 'roster'] },
-  { label: 'Canvas LMS', hint: 'Configure Canvas gradebook sync for teachers', tab: 'org', scroll: 'admin-section-canvas', keywords: ['canvas', 'lms', 'gradebook', 'instructure', 'grades', 'lms sync'] },
+  { label: 'Clever', hint: 'Connect Clever to import student rosters', tab: 'integrations', scroll: 'admin-section-roster', keywords: ['clever', 'roster', 'sync', 'students', 'sis'] },
+  { label: 'OneRoster', hint: 'Connect PowerSchool, Infinite Campus, or Skyward via OneRoster', tab: 'integrations', scroll: 'admin-section-oneroster', keywords: ['oneroster', 'one roster', 'powerschool', 'infinite campus', 'skyward', 'sis', 'roster'] },
+  { label: 'Canvas', hint: 'Configure Canvas gradebook sync for teachers', tab: 'integrations', scroll: 'admin-section-canvas', keywords: ['canvas', 'lms', 'gradebook', 'instructure', 'grades', 'lms sync'] },
 ]
 
 function AdminSearch({ extraIndex, onClose, onNavigate }) {
@@ -1778,7 +1778,7 @@ function OneRosterCard({ orgId }) {
 
   return (
     <div className="alert-settings-card" style={{ marginTop: 16 }}>
-      <div className="org-settings-section-title">OneRoster Sync</div>
+      <div className="org-settings-section-title">OneRoster</div>
       <div className="alert-settings-body">
         {!status.connected ? (
           <>
@@ -1885,7 +1885,7 @@ function CanvasConfigCard({ orgId }) {
 
   return (
     <div className="alert-settings-card" style={{ marginTop: 16 }}>
-      <div className="org-settings-section-title">Canvas LMS</div>
+      <div className="org-settings-section-title">Canvas</div>
       <div className="alert-settings-body">
         <p className="clever-connect-desc">
           {status.configured
@@ -1956,6 +1956,13 @@ function OrgSettingsTab({ orgId, brandName, setBrandName, brandSaved, saveBrandN
       </div>
       <div id="admin-section-alerts"><AlertSettingsCard orgId={orgId} /></div>
       <div id="admin-section-calendar"><AcademicCalendarCard orgId={orgId} /></div>
+    </div>
+  )
+}
+
+function OrgIntegrationsTab({ orgId }) {
+  return (
+    <div className="org-settings-root">
       <div id="admin-section-roster">
         <CleverRosterCard orgId={orgId} />
         <div id="admin-section-oneroster"><OneRosterCard orgId={orgId} /></div>
@@ -2366,6 +2373,7 @@ function SchoolAdminView() {
         </button>
         <button className={`admin-tab${activeTab === 'log' ? ' admin-tab--active' : ''}`} onClick={() => setActiveTab('log')}>Meeting Open Log</button>
         <button className={`admin-tab${activeTab === 'org' ? ' admin-tab--active' : ''}`} onClick={() => setActiveTab('org')}>Organization</button>
+        <button className={`admin-tab${activeTab === 'integrations' ? ' admin-tab--active' : ''}`} onClick={() => setActiveTab('integrations')}>Integrations</button>
         <button className="admin-tab admin-search-trigger" onClick={() => setSearchOpen(true)} title="Search (⌘K)">
           <span className="admin-search-trigger-icon">⌕</span>
           <span className="admin-search-trigger-label">Search</span>
@@ -2376,6 +2384,7 @@ function SchoolAdminView() {
       {activeTab === 'interventions' && <OrgInterventionList onBack={() => setActiveTab('teachers')} />}
       {activeTab === 'log' && <HistoryPanel />}
       {activeTab === 'org' && <OrgSettingsTab orgId={orgId} brandName={brandName} setBrandName={setBrandName} brandSaved={brandSaved} saveBrandName={saveBrandName} />}
+      {activeTab === 'integrations' && <OrgIntegrationsTab orgId={orgId} />}
       {activeTab === 'teachers' && <>
       <div className="admin-search-row">
         <input
