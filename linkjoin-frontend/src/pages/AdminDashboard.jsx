@@ -244,6 +244,7 @@ function ClassDetail({ cls, onBack, onUpdate, onViewStudent }) {
   const [expandedCase, setExpandedCase] = useState(navState?.expandedCase ?? null)
   const [noteInputs, setNoteInputs] = useState({})
   const [classTab, setClassTab] = useState(navState?.tab ?? 'links')
+  const [detailLoading, setDetailLoading] = useState(true)
   const [assignedDrafts, setAssignedDrafts] = useState({})
   const [assignedSaved, setAssignedSaved] = useState({})
   const [addInput, setAddInput] = useState('')
@@ -324,7 +325,8 @@ function ClassDetail({ cls, onBack, onUpdate, onViewStudent }) {
       if (gcStatus.connected) {
         apiGet('/integrations/google/courses').then(r => setGcCourses(r.courses || [])).catch(() => {})
       }
-    }).catch(() => {})
+      setDetailLoading(false)
+    }).catch(() => { setDetailLoading(false) })
   }, [cls.class_id])
 
   async function handleGcConnect() {
@@ -667,6 +669,10 @@ function ClassDetail({ cls, onBack, onUpdate, onViewStudent }) {
       </div>
 
       <div className="detail-tab-body">
+
+        {detailLoading ? (
+          <div className="admin-spinner-wrap"><div className="admin-spinner" /></div>
+        ) : <>
 
         {/* Links tab */}
         {classTab === 'links' && (
@@ -1210,6 +1216,8 @@ function ClassDetail({ cls, onBack, onUpdate, onViewStudent }) {
             </div>
           </div>
         )}
+
+        </>}
 
       </div>
     </div>
