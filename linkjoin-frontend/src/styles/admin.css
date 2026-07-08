@@ -2016,6 +2016,7 @@
   flex-direction: column;
   gap: 12px;
   margin-bottom: 10px;
+  max-width: 480px;
 }
 .or-field {
   display: flex;
