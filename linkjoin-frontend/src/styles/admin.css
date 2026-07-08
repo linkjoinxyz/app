@@ -559,10 +559,140 @@
   padding: 8px 0;
 }
 
+@keyframes admin-spin {
+  to { transform: rotate(360deg); }
+}
+
+.admin-spinner {
+  display: inline-block;
+  width: 20px;
+  height: 20px;
+  border: 2px solid rgba(255,255,255,0.1);
+  border-top-color: rgba(255,255,255,0.45);
+  border-radius: 50%;
+  animation: admin-spin 0.7s linear infinite;
+}
+
+.admin-spinner-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 0;
+}
+
+.admin-spinner-wrap--inline {
+  padding: 24px 0;
+  justify-content: flex-start;
+}
+
 .admin-error {
   color: #ff6b6b;
   font-size: 13px;
   margin-top: 6px;
+}
+
+/* ── Student Profile ─────────────────────────────────────────────────────── */
+
+.sp-student-link {
+  background: none;
+  border: none;
+  padding: 0;
+  color: rgba(255,255,255,0.85);
+  font-size: inherit;
+  font-family: inherit;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-color: rgba(255,255,255,0.25);
+}
+.sp-student-link:hover { color: #fff; text-decoration-color: rgba(255,255,255,0.6); }
+
+.sp-hero {
+  position: relative;
+  display: flex; flex-direction: column; align-items: center;
+  gap: 12px; padding: 20px 0 24px;
+}
+.sp-hero .detail-back-btn { position: absolute; top: 20px; left: 0; }
+.sp-avatar {
+  width: 64px; height: 64px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 22px; font-weight: 700; color: #fff; flex-shrink: 0;
+}
+.sp-hero-info { text-align: center; }
+.sp-name { font-size: 20px; font-weight: 700; color: #fff; }
+.sp-email { font-size: 13px; color: rgba(255,255,255,0.45); margin-top: 2px; }
+.sp-badges { display: flex; gap: 6px; justify-content: center; margin-top: 8px; flex-wrap: wrap; }
+.sp-badge {
+  font-size: 11px; font-weight: 600; padding: 2px 8px;
+  border-radius: 20px; letter-spacing: 0.03em;
+}
+.sp-badge--ok   { background: rgba(72,197,120,0.15); color: #48c578; border: 1px solid rgba(72,197,120,0.3); }
+.sp-badge--warn { background: rgba(240,192,64,0.15);  color: #f0c040; border: 1px solid rgba(240,192,64,0.3); }
+.sp-badge--flag { background: rgba(255,107,107,0.15); color: #ff6b6b; border: 1px solid rgba(255,107,107,0.3); }
+
+.sp-body { padding: 0 4px; display: flex; flex-direction: column; gap: 28px; }
+
+.sp-stats-row {
+  display: grid; grid-template-columns: repeat(4, 1fr);
+  border-top: 1px solid rgba(255,255,255,0.08);
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+.sp-stat {
+  padding: 16px 12px; text-align: center;
+}
+.sp-stat + .sp-stat { border-left: 1px solid rgba(255,255,255,0.08); }
+.sp-stat-val { font-size: 22px; font-weight: 700; color: #fff; line-height: 1; }
+.sp-stat-label { font-size: 11px; color: rgba(255,255,255,0.4); margin-top: 4px; text-transform: uppercase; letter-spacing: 0.05em; }
+
+.sp-section-title {
+  font-size: 11px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.1em; color: rgba(255,255,255,0.4); margin-bottom: 10px;
+}
+.sp-section-sub { font-weight: 400; text-transform: none; letter-spacing: 0; font-size: 11px; }
+
+.sp-contact-card {
+  padding: 12px 0; display: flex; flex-direction: column; gap: 8px;
+  border-top: 1px solid rgba(255,255,255,0.08);
+}
+.sp-contact-row { display: flex; gap: 12px; align-items: center; font-size: 13px; }
+.sp-contact-key { color: rgba(255,255,255,0.4); width: 48px; flex-shrink: 0; }
+.sp-link { color: #4db8ff; text-decoration: none; }
+.sp-link:hover { text-decoration: underline; }
+
+.sp-class-list { display: flex; flex-direction: column; gap: 6px; }
+.sp-class-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+.sp-class-list .sp-class-row:first-child { border-top: 1px solid rgba(255,255,255,0.06); }
+.sp-class-name { font-size: 14px; font-weight: 600; color: #fff; }
+.sp-class-meta { display: flex; gap: 10px; font-size: 12px; color: rgba(255,255,255,0.4); margin-top: 2px; }
+.sp-class-stats { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.sp-class-stat-label { font-size: 12px; color: rgba(255,255,255,0.45); }
+.sp-class-stat-warn  { font-size: 12px; color: #f0c040; }
+
+.sp-iv-list { display: flex; flex-direction: column; gap: 6px; }
+.sp-iv-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+.sp-iv-list .sp-iv-row:first-child { border-top: 1px solid rgba(255,255,255,0.06); }
+.sp-iv-left  { display: flex; align-items: center; gap: 8px; }
+.sp-iv-right { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.sp-iv-class { font-size: 13px; color: rgba(255,255,255,0.7); }
+.sp-iv-notes { font-size: 11px; color: rgba(255,255,255,0.35); }
+
+.sp-att-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.sp-att-table th { text-align: left; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: rgba(255,255,255,0.35); padding: 0 8px 8px; }
+.sp-att-table td { padding: 7px 8px; border-top: 1px solid rgba(255,255,255,0.05); }
+.sp-att-date { color: rgba(255,255,255,0.5); white-space: nowrap; }
+.sp-att-class { color: rgba(255,255,255,0.75); }
+
+@media (max-width: 600px) {
+  .sp-stats-row { grid-template-columns: repeat(2, 1fr); }
+  .sp-class-row { flex-direction: column; align-items: flex-start; }
 }
 
 /* New class button */

@@ -41,9 +41,189 @@ function DayBadge({ day }) {
   )
 }
 
+// ─── Student Profile ─────────────────────────────────────────────────────────
+
+function StudentProfile({ userId, onBack }) {
+  const [data, setData] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [err, setErr] = useState(null)
+
+  useEffect(() => {
+    setLoading(true)
+    apiGet(`/users/student/${userId}`)
+      .then(d => setData(d))
+      .catch(() => setErr('Could not load student profile.'))
+      .finally(() => setLoading(false))
+  }, [userId])
+
+  if (loading) return <div className="admin-spinner-wrap"><div className="admin-spinner" /></div>
+  if (err || !data) return <div className="admin-error" style={{ padding: 40 }}>{err || 'Not found'}</div>
+
+  const totalSessions = data.classes.reduce((s, c) => s + c.sessions, 0)
+  const totalTardy = data.classes.reduce((s, c) => s + c.tardy, 0)
+  const activeInterventions = data.interventions.length
+
+  const initials = data.name
+    ? data.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()
+    : data.email[0].toUpperCase()
+  const palette = avatarPalette(data.email)
+
+  return (
+    <div className="detail-root">
+      <div className="sp-hero">
+        <button className="detail-back-btn" onClick={onBack}>
+          <img src="/images/arrow-left.svg" alt="back" style={{ width: 18, height: 18, display: 'block' }} />
+        </button>
+        <div className="sp-avatar" style={{ background: palette.bg, border: `2px solid ${palette.border}` }}>
+          {initials}
+        </div>
+        <div className="sp-hero-info">
+          <div className="sp-name">{data.name || data.email}</div>
+          {data.name && <div className="sp-email">{data.email}</div>}
+          <div className="sp-badges">
+            <span className={`sp-badge ${data.confirmed ? 'sp-badge--ok' : 'sp-badge--warn'}`}>
+              {data.confirmed ? 'Account active' : 'Unconfirmed'}
+            </span>
+            {activeInterventions > 0 && (
+              <span className="sp-badge sp-badge--flag">{activeInterventions} open intervention{activeInterventions !== 1 ? 's' : ''}</span>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div className="sp-body">
+        {/* Stats row */}
+        <div className="sp-stats-row">
+          <div className="sp-stat">
+            <div className="sp-stat-val">{totalSessions}</div>
+            <div className="sp-stat-label">Total sessions</div>
+          </div>
+          <div className="sp-stat">
+            <div className="sp-stat-val">{totalSessions > 0 ? Math.round(((totalSessions - totalTardy) / totalSessions) * 100) : '—'}{totalSessions > 0 ? '%' : ''}</div>
+            <div className="sp-stat-label">On-time rate</div>
+          </div>
+          <div className="sp-stat">
+            <div className="sp-stat-val">{data.classes.length}</div>
+            <div className="sp-stat-label">Classes</div>
+          </div>
+          <div className="sp-stat">
+            <div className="sp-stat-val" style={{ color: activeInterventions > 0 ? '#f0c040' : 'inherit' }}>{activeInterventions}</div>
+            <div className="sp-stat-label">Open interventions</div>
+          </div>
+        </div>
+
+        {/* Parent contact */}
+        {(data.parent.name || data.parent.email || data.parent.phone) && (
+          <div className="sp-section">
+            <div className="sp-section-title">Family contact</div>
+            <div className="sp-contact-card">
+              {data.parent.name && <div className="sp-contact-row"><span className="sp-contact-key">Name</span><span>{data.parent.name}</span></div>}
+              {data.parent.email && <div className="sp-contact-row"><span className="sp-contact-key">Email</span><a href={`mailto:${data.parent.email}`} className="sp-link">{data.parent.email}</a></div>}
+              {data.parent.phone && <div className="sp-contact-row"><span className="sp-contact-key">Phone</span><span>+{data.parent.phone_country} {data.parent.phone}</span></div>}
+            </div>
+          </div>
+        )}
+
+        {/* Classes */}
+        {data.classes.length > 0 && (
+          <div className="sp-section">
+            <div className="sp-section-title">Classes</div>
+            <div className="sp-class-list">
+              {data.classes.map(c => {
+                const pct = c.sessions > 0 ? Math.round(((c.sessions - c.tardy) / c.sessions) * 100) : null
+                return (
+                  <div key={c.class_id} className="sp-class-row">
+                    <div className="sp-class-info">
+                      <div className="sp-class-name">{c.class_name}</div>
+                      <div className="sp-class-meta">
+                        {c.teacher_name && <span>{c.teacher_name}</span>}
+                        {c.days?.length > 0 && <span>{c.days.join(' · ')}</span>}
+                        {c.time && <span>{c.time}</span>}
+                      </div>
+                    </div>
+                    <div className="sp-class-stats">
+                      <span className="sp-class-stat-label">{c.sessions} sessions</span>
+                      {c.tardy > 0 && <span className="sp-class-stat-warn">{c.tardy} tardy</span>}
+                      {pct !== null && (
+                        <div className="att-rate-bar" style={{ width: 60 }}>
+                          <div className="att-rate-fill" style={{ width: `${pct}%`, background: pct >= 80 ? '#48c578' : pct >= 50 ? '#f0c040' : '#ff6b6b' }} />
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Interventions */}
+        {data.interventions.length > 0 && (
+          <div className="sp-section">
+            <div className="sp-section-title">Open interventions</div>
+            <div className="sp-iv-list">
+              {data.interventions.map(iv => (
+                <div key={iv.intervention_id} className="sp-iv-row">
+                  <div className="sp-iv-left">
+                    <span className={`iv-status-pill iv-status-pill--${iv.status}`}>
+                      {iv.status === 'open' ? 'Open' : iv.status === 'in_progress' ? 'In progress' : iv.status}
+                    </span>
+                    <span className="sp-iv-class">{iv.class_name}</span>
+                  </div>
+                  <div className="sp-iv-right">
+                    <span className={`att-badge ${iv.flag_type === 'repeat_tardy' ? 'att-late' : 'att-slightly-late'}`}>
+                      {iv.flag_type === 'repeat_tardy' ? 'Repeat tardy' : 'Low attendance'}
+                    </span>
+                    {iv.notes?.length > 0 && <span className="sp-iv-notes">{iv.notes.length} note{iv.notes.length !== 1 ? 's' : ''}</span>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Recent attendance */}
+        {data.recent_attendance.length > 0 && (
+          <div className="sp-section">
+            <div className="sp-section-title">Recent attendance <span className="sp-section-sub">(last 90 days)</span></div>
+            <table className="sp-att-table">
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Class</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.recent_attendance.map((r, i) => {
+                  const late = r.minutes_late > 0
+                  const excused = r.excused
+                  const label = excused ? 'Excused' : late ? `${r.minutes_late}m late` : 'On time'
+                  const color = excused ? 'rgba(255,255,255,0.4)' : late ? '#f0c040' : '#48c578'
+                  return (
+                    <tr key={i}>
+                      <td className="sp-att-date">{r.opened_at?.slice(0, 10)}</td>
+                      <td className="sp-att-class">{r.class_name}</td>
+                      <td><span style={{ color, fontSize: 12 }}>{label}</span></td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {data.recent_attendance.length === 0 && data.classes.length === 0 && (
+          <div className="admin-empty" style={{ padding: '40px 0' }}>No attendance data yet.</div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // ─── Class Detail (teacher view) ─────────────────────────────────────────────
 
-function ClassDetail({ cls, onBack, onUpdate }) {
+function ClassDetail({ cls, onBack, onUpdate, onViewStudent }) {
   const [students, setStudents] = useState([])
   const [allLinks, setAllLinks] = useState([])
   const [classLinks, setClassLinks] = useState([])
@@ -545,7 +725,9 @@ function ClassDetail({ cls, onBack, onUpdate }) {
                   {students.map(s => (
                     <React.Fragment key={s.user_id}>
                       <tr>
-                        <td>{s.username}</td>
+                        <td>
+                          <button className="sp-student-link" onClick={() => onViewStudent?.(s.user_id)}>{s.username}</button>
+                        </td>
                         <td>
                           <button className="roster-contact-btn" onClick={() => {
                             const next = expandedContact === s.user_id ? null : s.user_id
@@ -711,7 +893,11 @@ function ClassDetail({ cls, onBack, onUpdate }) {
                       return (
                         <tr key={i} className={hasFlags ? 'pattern-row--flagged' : ''}>
                           <td className="att-email">
-                            <div>{s.student_email}</div>
+                            <div>
+                              {s.student_user_id
+                                ? <button className="sp-student-link" onClick={() => onViewStudent?.(s.student_user_id)}>{s.student_email}</button>
+                                : s.student_email}
+                            </div>
                             {hasAbsencesToExcuse && (
                               <div className="att-excuse-dates">
                                 <span className="att-excuse-label">Absences:</span>
@@ -1385,7 +1571,7 @@ function CleverRosterCard({ orgId }) {
       <div className="org-settings-section-title">Roster Sync</div>
       <div className="alert-settings-body">
         {status === null ? (
-          <div className="admin-empty">Loading...</div>
+          <div className="admin-spinner-wrap--inline" style={{ display: 'flex', padding: '16px 0' }}><div className="admin-spinner" /></div>
         ) : !status.connected ? (
           <div className="clever-connect-state">
             <p className="clever-hint">
@@ -1765,6 +1951,7 @@ function TeacherView() {
   const navigate = useNavigate()
   const [classes, setClasses] = useState([])
   const [selected, setSelected] = useState(null)
+  const [studentId, setStudentId] = useState(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -1776,7 +1963,11 @@ function TeacherView() {
     if (selected?.class_id === fresh.class_id) setSelected(fresh)
   }
 
-  if (loading) return <div style={{ color: 'rgba(255,255,255,0.4)', marginTop: 40 }}>Loading...</div>
+  if (loading) return <div className="admin-spinner-wrap"><div className="admin-spinner" /></div>
+
+  if (studentId) {
+    return <StudentProfile userId={studentId} onBack={() => setStudentId(null)} />
+  }
 
   if (selected) {
     return (
@@ -1784,6 +1975,7 @@ function TeacherView() {
         cls={selected}
         onBack={() => setSelected(null)}
         onUpdate={handleUpdate}
+        onViewStudent={id => setStudentId(id)}
       />
     )
   }
@@ -1897,7 +2089,7 @@ function OrgInterventionList({ onBack }) {
         </div>
       </div>
 
-      {loading && <div style={{ color: 'rgba(255,255,255,0.4)', marginTop: 24 }}>Loading...</div>}
+      {loading && <div className="admin-spinner-wrap admin-spinner-wrap--inline"><div className="admin-spinner" /></div>}
       {!loading && visible.length === 0 && (
         <div className="admin-empty" style={{ marginTop: 24 }}>{q ? 'No matches.' : 'No interventions found.'}</div>
       )}
@@ -2081,7 +2273,13 @@ function SchoolAdminView() {
     return acc
   }, {})
 
-  if (loading) return <div style={{ color: 'rgba(255,255,255,0.4)', marginTop: 40 }}>Loading...</div>
+  const [studentId, setStudentId] = useState(null)
+
+  if (loading) return <div className="admin-spinner-wrap"><div className="admin-spinner" /></div>
+
+  if (studentId) {
+    return <StudentProfile userId={studentId} onBack={() => setStudentId(null)} />
+  }
 
   if (selected) {
     return (
@@ -2093,6 +2291,7 @@ function SchoolAdminView() {
             ? { ...fresh, teacher_email: c.teacher_email, teacher_name: c.teacher_name }
             : c
         ))}
+        onViewStudent={id => setStudentId(id)}
       />
     )
   }

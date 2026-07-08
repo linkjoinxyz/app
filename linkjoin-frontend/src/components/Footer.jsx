@@ -10,12 +10,13 @@ export default function Footer() {
           <p style={{ margin: 0 }}>(925) 360-3457</p>
         </div>
         <div className="footer-column">
-          <p className="title">Pages</p>
+          <p className="title">Product</p>
           <Link to="/login">Login</Link>
           <Link to="/signup">Signup</Link>
           <Link to="/pricing">Pricing</Link>
           <Link to="/meetings">Meetings</Link>
           <Link to="/bookmarks">Bookmarks</Link>
+          <Link to="/schools">Schools</Link>
           <Link to="/privacy">Privacy Policy</Link>
         </div>
       </div>

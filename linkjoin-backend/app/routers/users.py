@@ -1,5 +1,7 @@
 import nh3
 import mistune
+from collections import defaultdict
+from datetime import datetime, timezone, timedelta
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from app.auth import get_confirmed_user, get_current_user
@@ -231,6 +233,122 @@ async def get_parent_contact(student_user_id: str, user: dict = Depends(get_conf
     if student.get("org_id") != user.get("org_id"):
         raise HTTPException(status_code=403, detail="Student not in your organization")
     return student
+
+
+@router.get("/student/{user_id}")
+async def get_student_profile(user_id: str, user: dict = Depends(get_confirmed_user)):
+    role = user.get("role", "")
+    if role not in ("teacher", "school_admin", "district_admin"):
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    student = await motor_db.login.find_one(
+        {"user_id": user_id},
+        {"_id": 0, "user_id": 1, "username": 1, "name": 1, "role": 1, "org_id": 1,
+         "confirmed": 1, "parent_phone": 1, "parent_phone_country": 1,
+         "parent_email": 1, "parent_name": 1, "created_at": 1},
+    )
+    if not student:
+        raise HTTPException(status_code=404, detail="Student not found")
+
+    # Teachers may only view students in their own classes
+    if role == "teacher":
+        teacher_classes = await motor_db.classes.find(
+            {"teacher_id": user["user_id"]}, {"student_ids": 1}
+        ).to_list(None)
+        allowed_ids = {uid for cls in teacher_classes for uid in (cls.get("student_ids") or [])}
+        if user_id not in allowed_ids:
+            raise HTTPException(status_code=403, detail="Student not in your classes")
+    else:
+        if student.get("org_id") != user.get("org_id"):
+            raise HTTPException(status_code=403, detail="Student not in your organization")
+
+    email = student["username"]
+
+    # Enrolled classes
+    enrolled_classes = await motor_db.classes.find(
+        {"student_ids": user_id},
+        {"_id": 0, "class_id": 1, "name": 1, "days": 1, "time": 1, "teacher_id": 1},
+    ).to_list(None)
+
+    # Resolve teacher names
+    teacher_ids = list({c["teacher_id"] for c in enrolled_classes if c.get("teacher_id")})
+    teacher_map = {}
+    for tid in teacher_ids:
+        t = await motor_db.login.find_one({"user_id": tid}, {"name": 1, "username": 1})
+        if t:
+            teacher_map[tid] = t.get("name") or t.get("username", "")
+
+    for c in enrolled_classes:
+        c["teacher_name"] = teacher_map.get(c.get("teacher_id"), "")
+
+    # Attendance records (last 90 days)
+    cutoff = datetime.now(timezone.utc) - timedelta(days=90)
+    records = []
+    async for r in motor_db.attendance.find(
+        {"student_email": email, "opened_at": {"$gte": cutoff}},
+        {"_id": 0, "class_id": 1, "class_name": 1, "opened_at": 1, "minutes_late": 1, "excused": 1, "excuse_reason": 1}
+    ).sort("opened_at", -1).limit(100):
+        if isinstance(r.get("opened_at"), datetime):
+            r["opened_at"] = r["opened_at"].isoformat()
+        records.append(r)
+
+    # Per-class attendance summary
+    tardy_threshold = 5
+    by_class: dict[str, list] = defaultdict(list)
+    for r in records:
+        by_class[r["class_id"]].append(r)
+
+    class_summaries = []
+    for c in enrolled_classes:
+        cid = c["class_id"]
+        recs = by_class.get(cid, [])
+        total = len(recs)
+        tardy = sum(1 for r in recs if r.get("minutes_late", 0) > tardy_threshold and not r.get("excused"))
+        class_summaries.append({
+            "class_id": cid,
+            "class_name": c["name"],
+            "teacher_name": c.get("teacher_name", ""),
+            "days": c.get("days", []),
+            "time": c.get("time", ""),
+            "sessions": total,
+            "on_time": total - tardy,
+            "tardy": tardy,
+        })
+
+    # Active interventions
+    interventions = await motor_db.interventions.find(
+        {"student_email": email, "status": {"$ne": "resolved"}},
+        {"_id": 0, "intervention_id": 1, "class_name": 1, "flag_type": 1,
+         "status": 1, "created_at": 1, "updated_at": 1, "notes": 1, "assigned_to": 1},
+    ).to_list(None)
+    for iv in interventions:
+        for field in ("created_at", "updated_at"):
+            if isinstance(iv.get(field), datetime):
+                iv[field] = iv[field].isoformat()
+        for note in iv.get("notes") or []:
+            if isinstance(note.get("created_at"), datetime):
+                note["created_at"] = note["created_at"].isoformat()
+
+    created_at = student.get("created_at")
+    if isinstance(created_at, datetime):
+        created_at = created_at.isoformat()
+
+    return {
+        "user_id": student["user_id"],
+        "email": email,
+        "name": student.get("name") or "",
+        "confirmed": student.get("confirmed", False),
+        "joined_at": created_at,
+        "parent": {
+            "name": student.get("parent_name") or "",
+            "email": student.get("parent_email") or "",
+            "phone": student.get("parent_phone") or "",
+            "phone_country": student.get("parent_phone_country") or "1",
+        },
+        "classes": class_summaries,
+        "recent_attendance": records[:30],
+        "interventions": interventions,
+    }
 
 
 @router.delete("/me")

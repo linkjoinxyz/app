@@ -736,6 +736,7 @@ export default function NewHomepage() {
             <Link to="/meetings">Meetings</Link>
             <Link to="/bookmarks">Bookmarks</Link>
             <Link to="/pricing">Pricing</Link>
+            <Link to="/schools">Schools</Link>
           </div>
           <div className="nh-footer-col">
             <p className="nh-footer-col-title">Account</p>

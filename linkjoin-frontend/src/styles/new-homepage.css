@@ -1950,6 +1950,6 @@ html:has(.nh-root) { scrollbar-color: rgba(255,255,255,0.15) transparent; }
 
 @media (max-width: 680px) {
   .nh-schools-card { flex-direction: column; gap: 40px; }
-  .nh-schools-img { width: 100%; max-width: 360px; }
+  .nh-schools-img { display: none; }
   .nh-schools-stripe { padding-left: 24px; }
 }

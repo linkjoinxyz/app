@@ -259,10 +259,12 @@ async def get_class_patterns(class_id: str, user: dict = Depends(get_confirmed_u
 
     # Resolve enrolled students from roster
     enrolled_emails: set[str] = set()
+    email_to_user_id: dict[str, str] = {}
     for uid in cls.get("student_ids") or []:
-        u = await motor_db.login.find_one({"user_id": uid}, {"_id": 0, "username": 1})
+        u = await motor_db.login.find_one({"user_id": uid}, {"_id": 0, "username": 1, "user_id": 1})
         if u:
             enrolled_emails.add(u["username"])
+            email_to_user_id[u["username"]] = u["user_id"]
             by_student.setdefault(u["username"], [])
 
     results = []
@@ -301,6 +303,7 @@ async def get_class_patterns(class_id: str, user: dict = Depends(get_confirmed_u
 
         results.append({
             "student_email": email,
+            "student_user_id": email_to_user_id.get(email),
             "enrolled": email in enrolled_emails,
             "sessions": total,
             "on_time": on_time,

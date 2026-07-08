@@ -23,6 +23,7 @@ export default function PublicFooter() {
           <Link to="/meetings">Meetings</Link>
           <Link to="/bookmarks">Bookmarks</Link>
           <Link to="/pricing">Pricing</Link>
+          <Link to="/schools">Schools</Link>
         </div>
         <div className="pf-col">
           <p className="pf-col-title">Account</p>
