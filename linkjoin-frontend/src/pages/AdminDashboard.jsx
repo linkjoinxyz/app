@@ -84,9 +84,9 @@ function StudentProfile({ userId, onBack, onOpenClass, onOpenIntervention }) {
           <div className="sp-name">{data.name || data.email}</div>
           {data.name && <div className="sp-email">{data.email}</div>}
           <div className="sp-badges">
-            <span className={`sp-badge ${data.confirmed ? 'sp-badge--ok' : 'sp-badge--warn'}`}>
-              {data.confirmed ? 'Account active' : 'Unconfirmed'}
-            </span>
+            {!data.confirmed && (
+              <span className="sp-badge sp-badge--warn">Unconfirmed</span>
+            )}
             {activeInterventions > 0 && (
               <span className="sp-badge sp-badge--flag">{activeInterventions} open intervention{activeInterventions !== 1 ? 's' : ''}</span>
             )}
