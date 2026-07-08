@@ -861,7 +861,12 @@ function ClassDetail({ cls, onBack, onUpdate, onViewStudent }) {
                     }
                     return (
                       <tr key={i} className={r.excused ? 'att-row--excused' : ''}>
-                        <td className="att-email">{r.student_email}</td>
+                        <td className="att-email">{(() => {
+                          const s = students.find(s => s.username === r.student_email)
+                          return s
+                            ? <button className="sp-student-link" onClick={() => onViewStudent?.(s.user_id)}>{r.student_email}</button>
+                            : r.student_email
+                        })()}</td>
                         <td className="att-time">{dateStr} {timeStr}</td>
                         <td>
                           <span className={`att-badge ${statusClass}`}>{statusLabel}</span>
