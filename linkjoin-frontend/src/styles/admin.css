@@ -32,7 +32,7 @@
 .admin-log-link {
   background: none;
   border: none;
-  color: rgba(43,143,216,0.65);
+  color: #2b8fd8;
   font: 500 12px Montserrat, sans-serif;
   cursor: pointer;
   padding: 0;
@@ -51,7 +51,7 @@
 
 .class-card {
   background: #0C1E30;
-  border: 1px solid rgba(43,143,216,0.22);
+  border: 1px solid rgba(255,255,255,0.09);
   border-radius: 10px;
   overflow: hidden;
   cursor: pointer;
@@ -59,7 +59,7 @@
 }
 
 .class-card:hover {
-  border-color: rgba(43,143,216,0.55);
+  border-color: #2b8fd8;
 }
 
 .class-card-header {
@@ -263,8 +263,8 @@
 }
 
 .detail-section-add-btn {
-  background: rgba(43,143,216,0.18);
-  border: 1px solid rgba(43,143,216,0.38);
+  background: rgba(255,255,255,0.07);
+  border: 1px solid rgba(255,255,255,0.13);
   color: rgba(255,255,255,0.85);
   border-radius: 5px;
   padding: 3px 10px;
@@ -272,7 +272,7 @@
   cursor: pointer;
   transition: background 0.15s;
 }
-.detail-section-add-btn:hover { background: rgba(43,143,216,0.32); }
+.detail-section-add-btn:hover { background: rgba(255,255,255,0.13); }
 
 .detail-section-body {
   padding: 14px 16px;
@@ -300,7 +300,7 @@
   transition: background 0.12s;
 }
 .detail-link-picker-row:last-child { border-bottom: none; }
-.detail-link-picker-row:hover { background: rgba(43,143,216,0.15); }
+.detail-link-picker-row:hover { background: rgba(255,255,255,0.06); }
 
 @media (max-width: 700px) {
   .detail-sections { grid-template-columns: 1fr; }
@@ -493,12 +493,12 @@
   transition: border-color 0.15s;
 }
 
-.admin-input:focus { border-color: rgba(43,143,216,0.6); }
+.admin-input:focus { border-color: #2b8fd8; }
 .admin-input::placeholder { color: rgba(255,255,255,0.3); }
 
 .admin-btn {
-  background: rgba(43,143,216,0.2);
-  border: 1px solid rgba(43,143,216,0.45);
+  background: rgba(43,143,216,0.45);
+  border: 1px solid rgba(43,143,216,0.75);
   color: #fff;
   border-radius: 6px;
   padding: 8px 16px;
@@ -510,7 +510,7 @@
   white-space: nowrap;
 }
 
-.admin-btn:hover { background: rgba(43,143,216,0.35); }
+.admin-btn:hover { background: rgba(43,143,216,0.6); }
 .admin-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
 /* Link pills */
@@ -525,8 +525,8 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  background: rgba(43,143,216,0.12);
-  border: 1px solid rgba(43,143,216,0.3);
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.13);
   border-radius: 20px;
   padding: 4px 10px 4px 12px;
   font-size: 12px;
@@ -535,8 +535,8 @@
   transition: background 0.15s, border-color 0.15s;
 }
 .class-link-pill:hover {
-  background: rgba(43,143,216,0.22);
-  border-color: rgba(43,143,216,0.5);
+  background: rgba(255,255,255,0.11);
+  border-color: rgba(255,255,255,0.25);
 }
 
 .class-link-pill button {
@@ -705,20 +705,21 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  background: rgba(43,143,216,0.15);
-  border: 1px dashed rgba(43,143,216,0.4);
+  background: rgba(255,255,255,0.03);
+  border: 1px dashed rgba(255,255,255,0.15);
   border-radius: 10px;
   padding: 18px 20px;
-  color: rgba(255,255,255,0.6);
+  color: rgba(255,255,255,0.5);
   font-size: 14px;
   font-family: inherit;
   cursor: pointer;
   width: 100%;
-  transition: background 0.15s, color 0.15s;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
 }
 
 .new-class-btn:hover {
-  background: rgba(43,143,216,0.25);
+  background: rgba(255,255,255,0.07);
+  border-color: rgba(255,255,255,0.28);
   color: #fff;
 }
 
@@ -736,7 +737,7 @@
 
 .admin-modal {
   background: #0C1E30;
-  border: 1px solid rgba(43,143,216,0.3);
+  border: 1px solid rgba(255,255,255,0.12);
   border-radius: 12px;
   padding: 28px;
   width: 100%;
@@ -971,7 +972,7 @@
 
 .alert-settings-input {
   background: rgba(255,255,255,0.06);
-  border: 1px solid rgba(43,143,216,0.25);
+  border: 1px solid rgba(255,255,255,0.12);
   border-radius: 6px;
   color: #fff;
   font-family: 'Montserrat', sans-serif;
@@ -983,7 +984,7 @@
 
 .alert-settings-input:focus {
   outline: none;
-  border-color: rgba(43,143,216,0.6);
+  border-color: #2b8fd8;
 }
 .alert-settings-input[type="number"]::-webkit-inner-spin-button,
 .alert-settings-input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
@@ -1013,9 +1014,9 @@
 /* ── Academic Calendar Card ── */
 .cal-badge {
   font-size: 11px;
-  color: rgba(43,143,216,0.9);
-  background: rgba(43,143,216,0.12);
-  border: 1px solid rgba(43,143,216,0.25);
+  color: #2b8fd8;
+  background: rgba(43,143,216,0.2);
+  border: 1px solid rgba(43,143,216,0.45);
   border-radius: 4px;
   padding: 1px 7px;
   margin-left: 8px;
@@ -1144,8 +1145,8 @@
 /* ── Export button ── */
 .detail-export-btn {
   margin-left: auto;
-  background: rgba(43,143,216,0.12);
-  border: 1px solid rgba(43,143,216,0.3);
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.12);
   color: rgba(255,255,255,0.7);
   border-radius: 6px;
   padding: 4px 12px;
@@ -1154,7 +1155,7 @@
   transition: background 0.15s;
   white-space: nowrap;
 }
-.detail-export-btn:hover { background: rgba(43,143,216,0.22); color: #fff; }
+.detail-export-btn:hover { background: rgba(255,255,255,0.1); color: #fff; }
 .detail-export-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
 @media (max-width: 600px) {
@@ -1313,13 +1314,13 @@
   transition: background 0.1s;
 }
 .admin-search-result--active {
-  background: rgba(43,143,216,0.15);
+  background: rgba(43,143,216,0.25);
 }
 .admin-search-result:hover {
   background: rgba(255,255,255,0.06);
 }
 .admin-search-result--active:hover {
-  background: rgba(43,143,216,0.15);
+  background: rgba(43,143,216,0.25);
 }
 
 .admin-search-result-label {
@@ -1472,16 +1473,16 @@
 /* "Open case" button in Patterns table */
 .iv-open-btn {
   font: 600 11px Montserrat, sans-serif;
-  background: rgba(43,143,216,0.12);
-  border: 1px solid rgba(43,143,216,0.3);
-  color: rgba(43,143,216,0.9);
+  background: rgba(43,143,216,0.25);
+  border: 1px solid rgba(43,143,216,0.5);
+  color: #2b8fd8;
   border-radius: 5px;
   padding: 3px 8px;
   cursor: pointer;
   white-space: nowrap;
   transition: background 0.12s;
 }
-.iv-open-btn:hover { background: rgba(43,143,216,0.22); }
+.iv-open-btn:hover { background: rgba(43,143,216,0.4); }
 
 /* Detail panel */
 .iv-detail {
@@ -1532,7 +1533,7 @@
   min-width: 180px;
   transition: border-color 0.12s;
 }
-.iv-input:focus { border-color: rgba(43,143,216,0.5); }
+.iv-input:focus { border-color: #2b8fd8; }
 .iv-input::placeholder { color: rgba(255,255,255,0.22); }
 
 /* Notes */
@@ -1601,8 +1602,8 @@
 }
 
 .iv-add-note-btn {
-  background: rgba(43,143,216,0.15);
-  border: 1px solid rgba(43,143,216,0.32);
+  background: rgba(255,255,255,0.07);
+  border: 1px solid rgba(255,255,255,0.13);
   color: #fff;
   border-radius: 7px;
   padding: 7px 14px;
@@ -1611,7 +1612,7 @@
   white-space: nowrap;
   transition: background 0.12s;
 }
-.iv-add-note-btn:hover { background: rgba(43,143,216,0.28); }
+.iv-add-note-btn:hover { background: rgba(255,255,255,0.12); }
 .iv-add-note-btn:disabled { opacity: 0.35; cursor: not-allowed; }
 
 .iv-input-row {
@@ -1621,8 +1622,8 @@
 }
 
 .iv-save-btn {
-  background: rgba(43,143,216,0.15);
-  border: 1px solid rgba(43,143,216,0.3);
+  background: rgba(255,255,255,0.07);
+  border: 1px solid rgba(255,255,255,0.13);
   border-radius: 7px;
   padding: 7px 12px;
   color: #fff;
@@ -1632,7 +1633,7 @@
   flex-shrink: 0;
   transition: background 0.12s, border-color 0.12s, color 0.12s;
 }
-.iv-save-btn:hover { background: rgba(43,143,216,0.28); }
+.iv-save-btn:hover { background: rgba(255,255,255,0.12); }
 .iv-save-btn--saved {
   background: rgba(72,197,120,0.15);
   border-color: rgba(72,197,120,0.3);
@@ -1662,7 +1663,7 @@
   transition: border-color 0.15s, background 0.15s;
 }
 .iv-search-input:focus {
-  border-color: rgba(43,143,216,0.6);
+  border-color: #2b8fd8;
   background: rgba(255,255,255,0.09);
 }
 .iv-search-input::placeholder { color: rgba(255,255,255,0.35); }
@@ -1684,17 +1685,17 @@
   transition: background 0.12s, color 0.12s;
 }
 .iv-filter-btn--active {
-  background: rgba(43,143,216,0.15);
-  border-color: rgba(43,143,216,0.35);
-  color: rgba(43,143,216,0.9);
+  background: rgba(43,143,216,0.3);
+  border-color: rgba(43,143,216,0.6);
+  color: #2b8fd8;
 }
 .iv-filter-btn:hover:not(.iv-filter-btn--active) { background: rgba(255,255,255,0.09); }
 
 /* Excused attendance */
 .att-excused {
-  background: rgba(43,143,216,0.13);
-  color: rgba(43,143,216,0.9);
-  border: 1px solid rgba(43,143,216,0.28);
+  background: rgba(43,143,216,0.25);
+  color: #2b8fd8;
+  border: 1px solid rgba(43,143,216,0.5);
 }
 .att-row--excused td { opacity: 0.5; }
 .att-row--excused .att-badge.att-excused { opacity: 1; }
@@ -1740,17 +1741,17 @@
   transition: border-color 0.12s, color 0.12s;
 }
 .att-date-pill:hover {
-  border-color: rgba(43,143,216,0.5);
-  color: rgba(43,143,216,0.85);
+  border-color: #2b8fd8;
+  color: #2b8fd8;
 }
 .att-date-pill--excused {
-  background: rgba(43,143,216,0.12);
-  border-color: rgba(43,143,216,0.3);
-  color: rgba(43,143,216,0.85);
-}
-.att-date-pill--excused:hover {
   background: rgba(43,143,216,0.2);
   border-color: rgba(43,143,216,0.5);
+  color: #2b8fd8;
+}
+.att-date-pill--excused:hover {
+  background: rgba(43,143,216,0.35);
+  border-color: #2b8fd8;
 }
 
 /* ── Google Classroom integration ──────────────────────────────────────────── */
@@ -1903,7 +1904,7 @@
 .roster-contact-btn {
   background: none;
   border: none;
-  color: rgba(43,143,216,0.75);
+  color: #2b8fd8;
   cursor: pointer;
   font: 600 11px Montserrat, sans-serif;
   padding: 2px 6px;
