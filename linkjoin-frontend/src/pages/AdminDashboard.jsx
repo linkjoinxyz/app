@@ -769,14 +769,12 @@ function ClassDetail({ cls, onBack, onUpdate, onViewStudent }) {
                               <input className="admin-input" placeholder="Parent name (e.g. Mrs. Johnson)"
                                 value={(parentContacts[s.user_id] || {}).parent_name || ''}
                                 onChange={e => updateContactField(s.user_id, 'parent_name', e.target.value)} />
-                              <div style={{ display: 'flex', gap: 6 }}>
-                                <input className="admin-input" placeholder="Country code" style={{ width: 72 }}
-                                  value={(parentContacts[s.user_id] || {}).parent_phone_country || '1'}
-                                  onChange={e => updateContactField(s.user_id, 'parent_phone_country', e.target.value)} />
-                                <input className="admin-input" placeholder="Parent phone"
-                                  value={(parentContacts[s.user_id] || {}).parent_phone || ''}
-                                  onChange={e => updateContactField(s.user_id, 'parent_phone', e.target.value)} />
-                              </div>
+                              <input className="admin-input" placeholder="Country code" style={{ width: 72 }}
+                                value={(parentContacts[s.user_id] || {}).parent_phone_country || '1'}
+                                onChange={e => updateContactField(s.user_id, 'parent_phone_country', e.target.value)} />
+                              <input className="admin-input" placeholder="Parent phone"
+                                value={(parentContacts[s.user_id] || {}).parent_phone || ''}
+                                onChange={e => updateContactField(s.user_id, 'parent_phone', e.target.value)} />
                               <input className="admin-input" placeholder="Parent email" type="email"
                                 value={(parentContacts[s.user_id] || {}).parent_email || ''}
                                 onChange={e => updateContactField(s.user_id, 'parent_email', e.target.value)} />
