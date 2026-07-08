@@ -7,6 +7,7 @@ import HeaderModern from '../components/HeaderModern.jsx'
 import countryCodes from '../../public/country_codes.json'
 import '../styles/settings.css'
 import '../styles/admin.css'
+import '../styles/modal.css'
 
 const OPEN_EARLY_OPTIONS = [0, 1, 2, 3, 5, 10, 15]
 const SORT_OPTIONS = ['None', 'Day & Time', 'Upcoming']
@@ -50,6 +51,8 @@ export default function Settings() {
 
   const [user, setUser] = useState(null)
   const [toast, setToast] = useState(null)
+  const [showDeleted, setShowDeleted] = useState(false)
+  const [deletedLinks, setDeletedLinks] = useState([])
 
   // Profile fields
   const [name, setName] = useState('')
@@ -447,7 +450,11 @@ export default function Settings() {
 
             <div className="settings-row settings-row--last">
               <div className="settings-row-label">Deleted Links</div>
-              <button className="settings-btn" onClick={() => navigate('/meetings', { state: { showDeleted: true } })}>
+              <button className="settings-btn" onClick={async () => {
+                const data = await apiGet('/links').catch(() => ({}))
+                setDeletedLinks(data['deleted-links'] || [])
+                setShowDeleted(true)
+              }}>
                 View
               </button>
             </div>
@@ -546,6 +553,41 @@ export default function Settings() {
       </div>
     </div>
 
+    {showDeleted && (
+      <div className="modal-overlay" onClick={() => setShowDeleted(false)}>
+        <div className="modal-card" onClick={e => e.stopPropagation()}>
+          <img src="/images/arrow-left.svg" className="modal-back" alt="back" onClick={() => setShowDeleted(false)} />
+          <div className="modal-title">Deleted Links</div>
+          {deletedLinks.length === 0 ? (
+            <div className="modal-deleted-empty">
+              <div>No deleted links</div>
+            </div>
+          ) : (
+            <div className="modal-deleted-list">
+              {deletedLinks.map(l => (
+                <div key={l.id} className="modal-deleted-row">
+                  <div className="modal-deleted-name">{l.name}</div>
+                  <div className="modal-deleted-actions">
+                    <button className="modal-action-btn" onClick={async () => {
+                      setDeletedLinks(prev => prev.filter(x => x.id !== l.id))
+                      await apiPost(`/links/${l.id}/restore?type=link`).catch(() => {
+                        setDeletedLinks(prev => [...prev, l])
+                      })
+                    }}>Restore</button>
+                    <button className="modal-action-btn modal-action-btn-danger" onClick={async () => {
+                      setDeletedLinks(prev => prev.filter(x => x.id !== l.id))
+                      await apiDelete(`/links/${l.id}?permanent=true&type=link`).catch(() => {
+                        setDeletedLinks(prev => [...prev, l])
+                      })
+                    }}>Delete</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    )}
     </>
   )
 }
