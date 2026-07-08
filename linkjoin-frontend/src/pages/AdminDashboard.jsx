@@ -1838,6 +1838,7 @@ function OneRosterCard({ orgId }) {
               <span className={`gc-sync-label${syncResult && !syncResult.ok ? ' gc-sync-label--err' : ''}`}>{syncLabel()}</span>
               <button className="gc-sync-btn" onClick={handleSync} disabled={syncing}>{syncing ? 'Syncing…' : 'Sync now'}</button>
             </div>
+            <p className="gc-hint">Students are added by email and claim their account on first login.</p>
             <button className="gc-disconnect-btn" onClick={handleDisconnect}>Disconnect</button>
           </div>
         )}
