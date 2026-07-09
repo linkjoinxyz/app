@@ -11,7 +11,7 @@ function NavLink({ to, active, children, onClick }) {
 }
 
 export default function HeaderModern({ onSettings, onAdd, page = 'links' }) {
-  const { logout, role } = useAuth()
+  const { logout, role, isAdmin } = useAuth()
   const isTeacher = TEACHER_ROLES.has(role)
   const navigate = useNavigate()
   const [menuOpen, setMenuOpen] = useState(false)
@@ -33,6 +33,7 @@ export default function HeaderModern({ onSettings, onAdd, page = 'links' }) {
         {isTeacher && <NavLink to="/admin" active={page === 'admin'}>Admin</NavLink>}
         {!isTeacher && <NavLink to="/profile" active={page === 'profile'}>Profile</NavLink>}
         <NavLink to="/settings" active={page === 'settings'}>Settings</NavLink>
+        {isAdmin && <NavLink to="/platform" active={page === 'platform'}>Platform</NavLink>}
         <button className="hm-nav-link" onClick={handleLogout}>Log Out</button>
         {onAdd && <button className="hm-add-btn" onClick={onAdd} aria-label="Add meeting">+</button>}
       </nav>
@@ -48,6 +49,7 @@ export default function HeaderModern({ onSettings, onAdd, page = 'links' }) {
           {isTeacher && <NavLink to="/admin" active={page === 'admin'} onClick={() => setMenuOpen(false)}>Admin</NavLink>}
           {!isTeacher && <NavLink to="/profile" active={page === 'profile'} onClick={() => setMenuOpen(false)}>Profile</NavLink>}
           <NavLink to="/settings" active={page === 'settings'} onClick={() => setMenuOpen(false)}>Settings</NavLink>
+          {isAdmin && <NavLink to="/platform" active={page === 'platform'} onClick={() => setMenuOpen(false)}>Platform</NavLink>}
           <button onClick={handleLogout}>Log Out</button>
         </div>
       )}
