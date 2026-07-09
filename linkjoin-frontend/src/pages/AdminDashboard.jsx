@@ -1069,7 +1069,6 @@ function ClassDetail({ cls, onBack, onUpdate, onViewStudent }) {
                                 placeholder="staff email"
                                 value={assignedDrafts[iv.intervention_id] ?? (iv.assigned_to || '')}
                                 onChange={e => setAssignedDrafts(p => ({ ...p, [iv.intervention_id]: e.target.value }))}
-                                onBlur={e => updateCase(iv.intervention_id, { assigned_to: e.target.value || null })}
                               />
                               <button
                                 className={`iv-save-btn${assignedSaved[iv.intervention_id] ? ' iv-save-btn--saved' : ''}`}
@@ -2103,7 +2102,6 @@ function IvDetailPanel({ iv, updateCase, addNote, deleteNote, noteInputs, setNot
               placeholder="staff email"
               value={assignedDrafts[iv.intervention_id] ?? (iv.assigned_to || '')}
               onChange={e => setAssignedDrafts(p => ({ ...p, [iv.intervention_id]: e.target.value }))}
-              onBlur={e => updateCase(iv.intervention_id, { assigned_to: e.target.value || null })}
             />
             <button
               className={`iv-save-btn${assignedSaved[iv.intervention_id] ? ' iv-save-btn--saved' : ''}`}
