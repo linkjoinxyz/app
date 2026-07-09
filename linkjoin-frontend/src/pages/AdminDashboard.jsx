@@ -2096,6 +2096,7 @@ function TeacherView() {
 
 function IvDetailPanel({ iv, updateCase, addNote, deleteNote, noteInputs, setNoteInputs, assignedDrafts, setAssignedDrafts, assignedSaved, setAssignedSaved, studentProfile }) {
   const classSummary = studentProfile?.classes?.find(c => c.class_id === iv.class_id)
+  const attendanceRow = studentProfile?._attendanceRow
   const parent = studentProfile?.parent
 
   return (
@@ -2117,16 +2118,22 @@ function IvDetailPanel({ iv, updateCase, addNote, deleteNote, noteInputs, setNot
             </div>
           </div>
 
-          {classSummary && (
+          {(classSummary || attendanceRow) && (
             <div className="iv-mine-section">
-              <div className="iv-mine-section-title">Attendance (last 90 days) — {classSummary.class_name}</div>
+              <div className="iv-mine-section-title">Attendance — {classSummary?.class_name || iv.class_name}</div>
               <div className="iv-mine-fields">
-                <div className="iv-mine-field"><span className="iv-mine-label">Sessions attended</span><span className="iv-mine-value">{classSummary.sessions}</span></div>
-                <div className="iv-mine-field"><span className="iv-mine-label">On time</span><span className="iv-mine-value">{classSummary.on_time}</span></div>
-                <div className="iv-mine-field"><span className="iv-mine-label">Tardy</span><span className="iv-mine-value" style={{ color: classSummary.tardy > 0 ? '#ff6b6b' : 'inherit' }}>{classSummary.tardy}</span></div>
-              </div>
-              <div style={{ marginTop: 8, fontSize: 11, color: 'rgba(255,255,255,0.3)' }}>
-                Attendance rate is based on expected sessions from the class schedule.
+                {attendanceRow && <div className="iv-mine-field"><span className="iv-mine-label">Expected</span><span className="iv-mine-value">{attendanceRow.effective_expected}</span></div>}
+                <div className="iv-mine-field"><span className="iv-mine-label">Attended</span><span className="iv-mine-value">{attendanceRow?.sessions ?? classSummary?.sessions}</span></div>
+                {attendanceRow && (
+                  <div className="iv-mine-field">
+                    <span className="iv-mine-label">Rate</span>
+                    <span className="iv-mine-value" style={{ color: attendanceRow.attendance_rate < 0.75 ? '#f0c040' : 'inherit' }}>
+                      {Math.round(attendanceRow.attendance_rate * 100)}%
+                    </span>
+                  </div>
+                )}
+                <div className="iv-mine-field"><span className="iv-mine-label">On time</span><span className="iv-mine-value">{attendanceRow?.on_time ?? classSummary?.on_time}</span></div>
+                <div className="iv-mine-field"><span className="iv-mine-label">Tardy</span><span className="iv-mine-value" style={{ color: (attendanceRow?.tardy ?? classSummary?.tardy ?? 0) > 0 ? '#ff6b6b' : 'inherit' }}>{attendanceRow?.tardy ?? classSummary?.tardy}</span></div>
               </div>
             </div>
           )}
@@ -2229,15 +2236,19 @@ function OrgInterventionList({ onBack, initialExpanded = null }) {
     apiGet(`/interventions${qs}`).then(ivs => setInterventions(Array.isArray(ivs) ? ivs : [])).finally(() => setLoading(false))
   }, [filter])
 
-  // Load full student profiles when a mine-tab card is expanded
+  // Load full student profiles + attendance stats when a mine-tab card is expanded
   useEffect(() => {
     if (filter !== 'mine' || !expandedCase) return
     const iv = interventions.find(x => x.intervention_id === expandedCase)
     if (!iv) return
     const uid = iv.student_user_id
     if (!uid || studentProfiles[uid] !== undefined) return
-    apiGet(`/users/student/${uid}`).then(data => {
-      setStudentProfiles(p => ({ ...p, [uid]: data }))
+    Promise.all([
+      apiGet(`/users/student/${uid}`),
+      apiGet(`/attendance/class/${iv.class_id}/patterns?student_email=${encodeURIComponent(iv.student_email)}`),
+    ]).then(([profile, patterns]) => {
+      const studentRow = (patterns?.students || []).find(s => s.student_email === iv.student_email)
+      setStudentProfiles(p => ({ ...p, [uid]: { ...profile, _attendanceRow: studentRow || null } }))
     }).catch(() => {
       setStudentProfiles(p => ({ ...p, [uid]: null }))
     })
@@ -2322,10 +2333,9 @@ function OrgInterventionList({ onBack, initialExpanded = null }) {
                 >
                   <div className="iv-mine-header-left">
                     <span className="iv-student-name">{iv.student_name || iv.student_email}</span>
-                    {iv.student_name && <span className="iv-student-email">{iv.student_email}</span>}
+                    <span className="iv-student-email">{iv.student_name ? iv.student_email : ''}{iv.student_name && iv.class_name ? ' · ' : ''}{iv.class_name}</span>
                   </div>
                   <div className="iv-mine-header-right">
-                    <span className="iv-class-chip">{iv.class_name}</span>
                     <span className={`att-badge ${iv.flag_type === 'repeat_tardy' ? 'att-late' : 'att-slightly-late'}`}>
                       {iv.flag_type === 'repeat_tardy' ? 'Repeat tardy' : 'Low attendance'}
                     </span>

@@ -211,7 +211,7 @@ async def excuse_attendance_record(record_id: str, body: ExcuseBody, user: dict 
 
 
 @router.get("/class/{class_id}/patterns")
-async def get_class_patterns(class_id: str, user: dict = Depends(get_confirmed_user)):
+async def get_class_patterns(class_id: str, student_email: str | None = Query(default=None), user: dict = Depends(get_confirmed_user)):
     require_teacher(user)
 
     cls = await motor_db.classes.find_one({"class_id": class_id})
@@ -287,6 +287,8 @@ async def get_class_patterns(class_id: str, user: dict = Depends(get_confirmed_u
 
     results = []
     for email, records in by_student.items():
+        if student_email and email != student_email:
+            continue
         # Deduplicate: one record per calendar date, keeping the best (least late) open
         best_by_date: dict[str, dict] = {}
         for r in records:
