@@ -41,7 +41,7 @@ async def create_org(body: CreateOrgRequest, _: None = Depends(_check_token)):
         "parent_org_id": body.parent_org_id,
     }
     await motor_db.orgs.insert_one(doc)
-    return {"org_id": org_id, "name": body.name}
+    return {"org_id": org_id, "name": body.name, "type": body.type}
 
 
 @router.get("/{org_id}")
