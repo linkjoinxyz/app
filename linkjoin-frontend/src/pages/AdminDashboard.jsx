@@ -2593,6 +2593,13 @@ function SchoolAdminView() {
     acc[tid].push(cls)
     return acc
   }, {})
+  // Include teachers who have no classes yet
+  orgTeachers.forEach(t => {
+    if (!byTeacher[t.user_id]) {
+      byTeacher[t.user_id] = []
+      teacherLabels[t.user_id] = { name: t.name || '', email: t.username || '', avatar: '' }
+    }
+  })
 
   if (urlUserId) {
     return (
@@ -2625,9 +2632,6 @@ function SchoolAdminView() {
   }
 
   const q = search.trim().toLowerCase()
-  const teacherIdsWithClasses = new Set(Object.keys(byTeacher))
-  const classlessTeachers = orgTeachers.filter(t => !teacherIdsWithClasses.has(t.user_id))
-
   const filteredTeachers = Object.entries(byTeacher).filter(([tid]) => {
     if (!q) return true
     const info = teacherLabels[tid] || {}
@@ -2797,16 +2801,6 @@ function SchoolAdminView() {
         )}
       </div>
 
-      {classlessTeachers.length > 0 && (
-        <div className="teacher-pending-invites" style={{ marginTop: 24 }}>
-          <div className="teacher-pending-label">No classes assigned</div>
-          {classlessTeachers.map(t => (
-            <div key={t.user_id} className="teacher-pending-row">
-              <span className="teacher-pending-email">{t.username}</span>
-            </div>
-          ))}
-        </div>
-      )}
       </>}
 
     </>
