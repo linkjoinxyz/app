@@ -151,6 +151,8 @@ async def update_intervention(intervention_id: str, body: dict, user: dict = Dep
         return _clean(doc)
 
     updates["updated_at"] = _now()
+    if updates.get("status") == "resolved":
+        updates["resolved_at"] = updates["updated_at"]
     await motor_db.interventions.update_one(
         {"intervention_id": intervention_id}, {"$set": updates}
     )

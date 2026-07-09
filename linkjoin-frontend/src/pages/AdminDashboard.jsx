@@ -962,9 +962,9 @@ function ClassDetail({ cls, onBack, onUpdate, onViewStudent }) {
                           <td className="att-stat-cell">{s.on_time}</td>
                           <td className="att-stat-cell">{s.tardy > 0 ? <span style={{ color: s.tardy / (s.sessions || 1) >= 0.33 ? '#ff6b6b' : '#f0c040' }}>{s.tardy}</span> : '—'}</td>
                           <td>
-                            {s.flags.length > 0 ? (
+                            {(s.flags.length > 0 || (s.reopen_flags || []).length > 0) ? (
                               <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-                                {s.flags.map(f => (
+                                {[...s.flags, ...(s.reopen_flags || [])].map(f => (
                                   <span key={f} className={`att-badge ${f === 'repeat_tardy' ? 'att-late' : 'att-slightly-late'}`}>
                                     {f === 'repeat_tardy' ? 'Repeat tardy' : 'Low attendance'}
                                   </span>
@@ -993,6 +993,13 @@ function ClassDetail({ cls, onBack, onUpdate, onViewStudent }) {
                                   </button>
                                 )
                               })}
+                              {(s.reopen_flags || []).map(f => (
+                                <button key={`reopen-${f}`}
+                                  className={`iv-open-btn ${f === 'repeat_tardy' ? 'iv-flag--tardy' : 'iv-flag--attendance'}`}
+                                  onClick={() => openCase(s.student_email, f)}>
+                                  Reopen case
+                                </button>
+                              ))}
                             </div>
                           </td>
                         </tr>

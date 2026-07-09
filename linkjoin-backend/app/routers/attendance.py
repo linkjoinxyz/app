@@ -268,6 +268,23 @@ async def get_class_patterns(class_id: str, user: dict = Depends(get_confirmed_u
             email_to_user_id[u["username"]] = u["user_id"]
             by_student.setdefault(u["username"], [])
 
+    # Build intervention state per (student_email, flag_type):
+    #   active_iv_keys  — has an open/in_progress intervention → use normal flag logic
+    #   resolved_iv_ts  — most recent resolved_at timestamp → use post-resolution logic
+    active_iv_keys: set[tuple[str, str]] = set()
+    resolved_iv_ts: dict[tuple[str, str], datetime] = {}
+    async for iv in motor_db.interventions.find(
+        {"class_id": class_id},
+        {"student_email": 1, "flag_type": 1, "status": 1, "resolved_at": 1, "updated_at": 1},
+    ):
+        key = (iv["student_email"], iv["flag_type"])
+        if iv["status"] != "resolved":
+            active_iv_keys.add(key)
+        else:
+            ts = iv.get("resolved_at") or iv.get("updated_at")
+            if ts and (key not in resolved_iv_ts or ts > resolved_iv_ts[key]):
+                resolved_iv_ts[key] = ts
+
     results = []
     for email, records in by_student.items():
         # Deduplicate: one record per calendar date, keeping the best (least late) open
@@ -304,10 +321,42 @@ async def get_class_patterns(class_id: str, user: dict = Depends(get_confirmed_u
         excused_absence_dates = sorted(student_excused_dates)
 
         flags = []
-        if total >= min_sessions and tardy_rate >= tardy_rate_flag:
-            flags.append("repeat_tardy")
-        if effective_expected >= min_sessions and attendance_rate < attendance_rate_flag:
-            flags.append("low_attendance")
+        reopen_flags = []
+        for flag_type in ("repeat_tardy", "low_attendance"):
+            key = (email, flag_type)
+            if key in active_iv_keys:
+                # Active intervention: flag normally so frontend can show status pill
+                if flag_type == "repeat_tardy":
+                    if total >= min_sessions and tardy_rate >= tardy_rate_flag:
+                        flags.append(flag_type)
+                else:
+                    if effective_expected >= min_sessions and attendance_rate < attendance_rate_flag:
+                        flags.append(flag_type)
+            elif (resolved_at := resolved_iv_ts.get(key)):
+                # Resolved intervention: suppress normal flag; check post-resolution stats
+                post = [r for r in deduped
+                        if isinstance(r.get("opened_at"), datetime) and r["opened_at"] > resolved_at]
+                post_total = len(post)
+                if flag_type == "repeat_tardy":
+                    post_tardy = sum(1 for r in post
+                                     if r.get("minutes_late", 0) > tardy_threshold and not r.get("excused"))
+                    post_tardy_rate = post_tardy / post_total if post_total > 0 else 0.0
+                    if post_total >= min_sessions and post_tardy_rate >= tardy_rate_flag:
+                        reopen_flags.append(flag_type)
+                else:
+                    resolved_date = resolved_at.strftime("%Y-%m-%d")
+                    post_expected = sum(1 for d in expected_dates if d > resolved_date)
+                    post_rate = min(post_total / post_expected, 1.0) if post_expected > 0 else 1.0
+                    if post_expected >= min_sessions and post_rate < attendance_rate_flag:
+                        reopen_flags.append(flag_type)
+            else:
+                # No intervention: normal flagging
+                if flag_type == "repeat_tardy":
+                    if total >= min_sessions and tardy_rate >= tardy_rate_flag:
+                        flags.append(flag_type)
+                else:
+                    if effective_expected >= min_sessions and attendance_rate < attendance_rate_flag:
+                        flags.append(flag_type)
 
         results.append({
             "student_email": email,
@@ -322,10 +371,11 @@ async def get_class_patterns(class_id: str, user: dict = Depends(get_confirmed_u
             "missed_dates": missed_dates,
             "excused_absence_dates": excused_absence_dates,
             "flags": flags,
+            "reopen_flags": reopen_flags,
         })
 
     # Flagged students first, then by attendance rate ascending (most absent first)
-    results.sort(key=lambda x: (not bool(x["flags"]), x["attendance_rate"]))
+    results.sort(key=lambda x: (not bool(x["flags"] or x["reopen_flags"]), x["attendance_rate"]))
 
     return {
         "expected_count": expected_count,
