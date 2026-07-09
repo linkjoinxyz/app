@@ -400,9 +400,6 @@ export default function OrgDetail() {
             >
               {saving ? 'Saving...' : 'Save changes'}
             </button>
-            <button className="pa-btn pa-btn--ghost co-cancel-btn" onClick={() => navigate('/platform')}>
-              Back
-            </button>
           </div>
         </div>
       </div>
