@@ -2094,9 +2094,61 @@ function TeacherView() {
 
 // ─── Intervention case detail panel (shared between standard and My views) ────
 
-function IvDetailPanel({ iv, updateCase, addNote, deleteNote, noteInputs, setNoteInputs, assignedDrafts, setAssignedDrafts, assignedSaved, setAssignedSaved, parentContact }) {
+function IvDetailPanel({ iv, updateCase, addNote, deleteNote, noteInputs, setNoteInputs, assignedDrafts, setAssignedDrafts, assignedSaved, setAssignedSaved, studentProfile }) {
+  const classSummary = studentProfile?.classes?.find(c => c.class_id === iv.class_id)
+  const parent = studentProfile?.parent
+
   return (
     <div className="iv-detail">
+
+      {studentProfile === undefined && (
+        <div className="iv-mine-section" style={{ color: 'rgba(255,255,255,0.3)', fontSize: 13 }}>Loading student info…</div>
+      )}
+
+      {studentProfile && (
+        <>
+          <div className="iv-mine-section">
+            <div className="iv-mine-section-title">Student</div>
+            <div className="iv-mine-fields">
+              <div className="iv-mine-field"><span className="iv-mine-label">Email</span><span className="iv-mine-value">{studentProfile.email}</span></div>
+              {studentProfile.joined_at && (
+                <div className="iv-mine-field"><span className="iv-mine-label">Joined</span><span className="iv-mine-value">{new Date(studentProfile.joined_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</span></div>
+              )}
+            </div>
+          </div>
+
+          {classSummary && (
+            <div className="iv-mine-section">
+              <div className="iv-mine-section-title">Attendance — {classSummary.class_name}</div>
+              <div className="iv-mine-fields">
+                <div className="iv-mine-field"><span className="iv-mine-label">Sessions</span><span className="iv-mine-value">{classSummary.sessions}</span></div>
+                <div className="iv-mine-field"><span className="iv-mine-label">On time</span><span className="iv-mine-value">{classSummary.on_time}</span></div>
+                <div className="iv-mine-field"><span className="iv-mine-label">Tardy</span><span className="iv-mine-value" style={{ color: classSummary.tardy > 0 ? '#ff6b6b' : 'inherit' }}>{classSummary.tardy}</span></div>
+                {classSummary.sessions > 0 && (
+                  <div className="iv-mine-field">
+                    <span className="iv-mine-label">Attendance rate</span>
+                    <span className="iv-mine-value">{Math.round((classSummary.on_time / classSummary.sessions) * 100)}%</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          <div className="iv-mine-section">
+            <div className="iv-mine-section-title">Parent contact</div>
+            {(parent?.name || parent?.email || parent?.phone) ? (
+              <div className="iv-mine-fields">
+                {parent.name && <div className="iv-mine-field"><span className="iv-mine-label">Name</span><span className="iv-mine-value">{parent.name}</span></div>}
+                {parent.email && <div className="iv-mine-field"><span className="iv-mine-label">Email</span><a className="iv-mine-value iv-mine-link" href={`mailto:${parent.email}`}>{parent.email}</a></div>}
+                {parent.phone && <div className="iv-mine-field"><span className="iv-mine-label">Phone</span><span className="iv-mine-value">+{parent.phone_country || '1'} {parent.phone}</span></div>}
+              </div>
+            ) : (
+              <div className="iv-mine-value" style={{ color: 'rgba(255,255,255,0.3)' }}>No parent contact on file.</div>
+            )}
+          </div>
+        </>
+      )}
+
       <div className="iv-detail-controls">
         <div className="iv-control-group">
           <label className="iv-control-label">Status</label>
@@ -2131,17 +2183,7 @@ function IvDetailPanel({ iv, updateCase, addNote, deleteNote, noteInputs, setNot
           </div>
         </div>
       </div>
-      {parentContact && (
-        <div className="iv-mine-section">
-          <div className="iv-mine-section-title">Parent contact</div>
-          {parentContact.name && <div className="iv-mine-field"><span className="iv-mine-label">Name</span><span className="iv-mine-value">{parentContact.name}</span></div>}
-          {parentContact.email && <div className="iv-mine-field"><span className="iv-mine-label">Email</span><span className="iv-mine-value">{parentContact.email}</span></div>}
-          {parentContact.phone && <div className="iv-mine-field"><span className="iv-mine-label">Phone</span><span className="iv-mine-value">{parentContact.phone_country ? `+${parentContact.phone_country} ` : ''}{parentContact.phone}</span></div>}
-          {!parentContact.name && !parentContact.email && !parentContact.phone && (
-            <div className="iv-mine-value" style={{ color: 'rgba(255,255,255,0.3)' }}>No parent contact on file.</div>
-          )}
-        </div>
-      )}
+
       <div className="iv-notes">
         {(iv.notes || []).length === 0 && <div className="iv-no-notes">No notes yet.</div>}
         {(iv.notes || []).map(note => (
@@ -2179,7 +2221,7 @@ function OrgInterventionList({ onBack, initialExpanded = null }) {
   const [noteInputs, setNoteInputs] = useState({})
   const [assignedDrafts, setAssignedDrafts] = useState({})
   const [assignedSaved, setAssignedSaved] = useState({})
-  const [parentContacts, setParentContacts] = useState({})
+  const [studentProfiles, setStudentProfiles] = useState({})
 
   useEffect(() => {
     setLoading(true)
@@ -2190,20 +2232,19 @@ function OrgInterventionList({ onBack, initialExpanded = null }) {
     apiGet(`/interventions${qs}`).then(ivs => setInterventions(Array.isArray(ivs) ? ivs : [])).finally(() => setLoading(false))
   }, [filter])
 
-  // Load parent contacts for My Interventions
+  // Load full student profiles when a mine-tab card is expanded
   useEffect(() => {
-    if (filter !== 'mine') return
-    interventions.forEach(iv => {
-      const uid = iv.student_user_id
-      if (uid && !parentContacts[uid]) {
-        apiGet(`/users/parent-contact/${uid}`).then(data => {
-          setParentContacts(p => ({ ...p, [uid]: data }))
-        }).catch(() => {
-          setParentContacts(p => ({ ...p, [uid]: {} }))
-        })
-      }
-    })
-  }, [interventions, filter])
+    if (filter !== 'mine' || !expandedCase) return
+    const iv = interventions.find(x => x.intervention_id === expandedCase)
+    const uid = iv?.student_user_id
+    if (uid && !studentProfiles[uid]) {
+      apiGet(`/users/student/${uid}`).then(data => {
+        setStudentProfiles(p => ({ ...p, [uid]: data }))
+      }).catch(() => {
+        setStudentProfiles(p => ({ ...p, [uid]: null }))
+      })
+    }
+  }, [expandedCase, filter, interventions])
 
   async function updateCase(ivId, updates) {
     try {
@@ -2297,7 +2338,7 @@ function OrgInterventionList({ onBack, initialExpanded = null }) {
                     <span className="iv-chevron">{expanded ? '▾' : '▸'}</span>
                   </div>
                 </button>
-                {expanded && <IvDetailPanel iv={iv} {...detailProps} parentContact={parentContacts[iv.student_user_id]} />}
+                {expanded && <IvDetailPanel iv={iv} {...detailProps} studentProfile={studentProfiles[iv.student_user_id]} />}
               </div>
             )
           })}

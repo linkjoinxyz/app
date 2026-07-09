@@ -1819,6 +1819,10 @@ button.iv-status-pill { cursor: pointer; }
   flex-shrink: 0;
 }
 .iv-mine-value { color: #e8edf2; }
+.iv-mine-link { color: #2b8fd8; text-decoration: none; }
+.iv-mine-link:hover { text-decoration: underline; }
+.iv-mine-fields { display: flex; flex-direction: column; gap: 2px; }
+.iv-mine-label { width: 110px; flex-shrink: 0; }
 
 /* Excused attendance */
 .att-excused {
