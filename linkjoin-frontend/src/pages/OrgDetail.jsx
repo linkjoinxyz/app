@@ -82,6 +82,11 @@ export default function OrgDetail() {
   const [memberBusy, setMemberBusy] = useState({})
   const [memberErr, setMemberErr] = useState('')
 
+  const [inviteEmail, setInviteEmail] = useState('')
+  const [inviting, setInviting] = useState(false)
+  const [inviteErr, setInviteErr] = useState('')
+  const [inviteOk, setInviteOk] = useState(false)
+
   useEffect(() => {
     Promise.all([
       apiGet(`/admin/orgs/${orgId}`),
@@ -181,6 +186,25 @@ export default function OrgDetail() {
       setMemberErr(e?.message || 'Remove failed')
     }
     setMemberBusy(b => ({ ...b, [member.user_id]: false }))
+  }
+
+  async function sendInvite(e) {
+    e.preventDefault()
+    const email = inviteEmail.trim().toLowerCase()
+    if (!email) return
+    setInviting(true); setInviteErr(''); setInviteOk(false)
+    try {
+      await apiFetch('/invites', {
+        method: 'POST',
+        body: JSON.stringify({ type: 'school_admin', org_id: orgId, email }),
+      })
+      setInviteEmail('')
+      setInviteOk(true)
+      setTimeout(() => setInviteOk(false), 3000)
+    } catch (e) {
+      setInviteErr(e?.message || 'Invite failed')
+    }
+    setInviting(false)
   }
 
   if (loading) {
@@ -384,6 +408,25 @@ export default function OrgDetail() {
                 <span className="co-summary-label">Members</span>
                 <span className="co-summary-val">{members.length}</span>
               </div>
+            </div>
+
+            <div className="co-sidebar-card">
+              <div className="co-sidebar-title">Invite school admin</div>
+              <form onSubmit={sendInvite}>
+                <input
+                  className="pa-input"
+                  type="email"
+                  value={inviteEmail}
+                  onChange={e => setInviteEmail(e.target.value)}
+                  placeholder="principal@school.edu"
+                  style={{ marginBottom: 10 }}
+                />
+                {inviteErr && <div className="pa-error" style={{ marginBottom: 8 }}>{inviteErr}</div>}
+                {inviteOk && <div className="pa-success" style={{ marginBottom: 8 }}>Invite sent</div>}
+                <button className="pa-btn co-submit-btn" type="submit" disabled={inviting || !inviteEmail.trim()}>
+                  {inviting ? 'Sending...' : 'Send invite'}
+                </button>
+              </form>
             </div>
 
             {saveErr && <div className="pa-error">{saveErr}</div>}
