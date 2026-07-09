@@ -2242,6 +2242,22 @@ button.iv-status-pill { cursor: pointer; }
   flex: 1;
 }
 
+.teacher-pending-rescind {
+  background: none;
+  border: 1px solid rgba(255,80,80,0.3);
+  border-radius: 5px;
+  color: rgba(255,100,100,0.7);
+  font-size: 11px;
+  padding: 3px 8px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.teacher-pending-rescind:hover {
+  border-color: rgba(255,80,80,0.6);
+  color: #ff6464;
+  background: rgba(255,80,80,0.06);
+}
+
 /* ── Student join code (ClassDetail) ─────────────────────────────────────── */
 
 .detail-section-divider {

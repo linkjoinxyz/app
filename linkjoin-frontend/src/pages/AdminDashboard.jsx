@@ -2548,15 +2548,24 @@ function SchoolAdminView() {
     if (!inviteEmail.trim()) return
     setInviting(true); setInviteResult(null)
     try {
-      await apiPost('/invites', { type: 'teacher', email: inviteEmail.trim().toLowerCase() })
+      const inv = await apiPost('/invites', { type: 'teacher', email: inviteEmail.trim().toLowerCase() })
       setInviteResult({ ok: true, msg: `Invite sent to ${inviteEmail.trim()}` })
-      setPendingInvites(prev => [...prev, { email: inviteEmail.trim(), status: 'pending', type: 'teacher' }])
+      setPendingInvites(prev => [...prev, inv])
       setInviteEmail('')
       setTimeout(() => { setInviteResult(null); setShowInviteTeacher(false) }, 2500)
     } catch (e) {
       setInviteResult({ ok: false, msg: e?.message || 'Failed to send invite' })
     }
     setInviting(false)
+  }
+
+  async function rescindInvite(token) {
+    try {
+      await apiDelete(`/invites/${token}`)
+      setPendingInvites(prev => prev.filter(iv => iv.token !== token))
+    } catch (e) {
+      // silently ignore -- invite may have already been used
+    }
   }
 
   const teacherLabels = {}
@@ -2691,9 +2700,14 @@ function SchoolAdminView() {
         <div className="teacher-pending-invites">
           <div className="teacher-pending-label">Pending invites</div>
           {pendingInvites.map((iv, i) => (
-            <div key={i} className="teacher-pending-row">
+            <div key={iv.token || i} className="teacher-pending-row">
               <span className="teacher-pending-email">{iv.email}</span>
               <span className="iv-status-pill iv-status-pill--open">Pending</span>
+              {iv.token && (
+                <button className="teacher-pending-rescind" onClick={() => rescindInvite(iv.token)}>
+                  Rescind
+                </button>
+              )}
             </div>
           ))}
         </div>
