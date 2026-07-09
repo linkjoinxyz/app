@@ -2148,7 +2148,7 @@ function IvDetailPanel({ iv, updateCase, addNote, deleteNote, noteInputs, setNot
                 {parent.phone && <div className="iv-mine-field"><span className="iv-mine-label">Phone</span><span className="iv-mine-value">+{parent.phone_country || '1'} {parent.phone}</span></div>}
               </div>
             ) : (
-              <div className="iv-mine-value" style={{ color: 'rgba(255,255,255,0.3)' }}>No parent contact on file.</div>
+              <div className="iv-mine-field" style={{ color: 'rgba(255,255,255,0.3)', fontSize: 13 }}>No parent contact on file.</div>
             )}
           </div>
         </>
