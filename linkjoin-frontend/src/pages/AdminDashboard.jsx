@@ -1146,7 +1146,7 @@ function ClassDetail({ cls, onBack, onUpdate, onViewStudent }) {
                 <p className="gc-prompt-text">Connect your Google account to sync attendance scores directly to your Google Classroom gradebook.</p>
                 <button className="gc-connect-btn" onClick={handleGcConnect} disabled={gcConnecting}>
                   {gcConnecting ? 'Connecting...' : (
-                    <><span className="gc-g">G</span> Connect Google Classroom</>
+                    <><img src="/images/google-logo.svg" alt="" className="gc-logo-icon" /> Connect Google Classroom</>
                   )}
                 </button>
               </div>
@@ -1163,7 +1163,7 @@ function ClassDetail({ cls, onBack, onUpdate, onViewStudent }) {
             ) : (
               <div className="gc-connected">
                 <div className="gc-course-row">
-                  <span className="gc-course-icon"><span className="gc-g">G</span></span>
+                  <span className="gc-course-icon"><img src="/images/google-logo.svg" alt="Google" className="gc-logo-icon" /></span>
                   <div className="gc-course-info">
                     <div className="gc-course-name">Google Classroom</div>
                     <div className="gc-course-meta">{cls.gc_course_name}</div>
