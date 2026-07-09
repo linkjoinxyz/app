@@ -13,13 +13,20 @@ const US_STATES = [
 ]
 
 const TIMEZONES = [
-  'America/New_York',
-  'America/Chicago',
-  'America/Denver',
-  'America/Phoenix',
-  'America/Los_Angeles',
-  'America/Anchorage',
-  'Pacific/Honolulu',
+  { value: 'America/New_York',       label: 'Eastern Time (America/New_York)' },
+  { value: 'America/Chicago',        label: 'Central Time (America/Chicago)' },
+  { value: 'America/Denver',         label: 'Mountain Time (America/Denver)' },
+  { value: 'America/Phoenix',        label: 'Mountain Time – no DST (America/Phoenix)' },
+  { value: 'America/Los_Angeles',    label: 'Pacific Time (America/Los_Angeles)' },
+  { value: 'America/Anchorage',      label: 'Alaska Time (America/Anchorage)' },
+  { value: 'Pacific/Honolulu',       label: 'Hawaii Time (Pacific/Honolulu)' },
+  { value: 'America/Puerto_Rico',    label: 'Atlantic Time (America/Puerto_Rico)' },
+  { value: 'Europe/London',          label: 'Greenwich Mean Time (Europe/London)' },
+  { value: 'Europe/Paris',           label: 'Central European Time (Europe/Paris)' },
+  { value: 'Asia/Tokyo',             label: 'Japan Standard Time (Asia/Tokyo)' },
+  { value: 'Asia/Shanghai',          label: 'China Standard Time (Asia/Shanghai)' },
+  { value: 'Asia/Kolkata',           label: 'India Standard Time (Asia/Kolkata)' },
+  { value: 'Australia/Sydney',       label: 'Australian Eastern Time (Australia/Sydney)' },
 ]
 
 const GRADE_OPTIONS = ['Pre-K','K','1','2','3','4','5','6','7','8','9','10','11','12']
@@ -214,7 +221,7 @@ export default function CreateOrg() {
               <Field label="Timezone">
                 <select className="pa-input" value={form.timezone} onChange={e => set('timezone', e.target.value)}>
                   <option value="">Select timezone</option>
-                  {TIMEZONES.map(tz => <option key={tz} value={tz}>{tz.replace('America/', '').replace('Pacific/', 'Pacific/').replace(/_/g, ' ')}</option>)}
+                  {TIMEZONES.map(tz => <option key={tz.value} value={tz.value}>{tz.label}</option>)}
                 </select>
               </Field>
 
