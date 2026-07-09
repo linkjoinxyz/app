@@ -2081,9 +2081,86 @@ function TeacherView() {
   )
 }
 
+// ─── Intervention case detail panel (shared between standard and My views) ────
+
+function IvDetailPanel({ iv, updateCase, addNote, deleteNote, noteInputs, setNoteInputs, assignedDrafts, setAssignedDrafts, assignedSaved, setAssignedSaved, parentContact }) {
+  return (
+    <div className="iv-detail">
+      <div className="iv-detail-controls">
+        <div className="iv-control-group">
+          <label className="iv-control-label">Status</label>
+          <select className="iv-select" value={iv.status} onChange={e => updateCase(iv.intervention_id, { status: e.target.value })}>
+            <option value="open">Open</option>
+            <option value="in_progress">In progress</option>
+            <option value="resolved">Resolved</option>
+          </select>
+        </div>
+        <div className="iv-control-group">
+          <label className="iv-control-label">Assigned to</label>
+          <div className="iv-input-row">
+            <input
+              className="iv-input"
+              placeholder="staff email"
+              value={assignedDrafts[iv.intervention_id] ?? (iv.assigned_to || '')}
+              onChange={e => setAssignedDrafts(p => ({ ...p, [iv.intervention_id]: e.target.value }))}
+              onBlur={e => updateCase(iv.intervention_id, { assigned_to: e.target.value || null })}
+            />
+            <button
+              className={`iv-save-btn${assignedSaved[iv.intervention_id] ? ' iv-save-btn--saved' : ''}`}
+              onClick={async () => {
+                const val = assignedDrafts[iv.intervention_id] !== undefined
+                  ? assignedDrafts[iv.intervention_id]
+                  : (iv.assigned_to || '')
+                await updateCase(iv.intervention_id, { assigned_to: val || null })
+                setAssignedSaved(p => ({ ...p, [iv.intervention_id]: true }))
+                setTimeout(() => setAssignedSaved(p => ({ ...p, [iv.intervention_id]: false })), 2000)
+              }}
+            >
+              {assignedSaved[iv.intervention_id] ? '✓ Saved' : 'Save'}
+            </button>
+          </div>
+        </div>
+      </div>
+      {parentContact && (
+        <div className="iv-mine-section">
+          <div className="iv-mine-section-title">Parent contact</div>
+          {parentContact.name && <div className="iv-mine-field"><span className="iv-mine-label">Name</span><span className="iv-mine-value">{parentContact.name}</span></div>}
+          {parentContact.email && <div className="iv-mine-field"><span className="iv-mine-label">Email</span><span className="iv-mine-value">{parentContact.email}</span></div>}
+          {parentContact.phone && <div className="iv-mine-field"><span className="iv-mine-label">Phone</span><span className="iv-mine-value">{parentContact.phone_country ? `+${parentContact.phone_country} ` : ''}{parentContact.phone}</span></div>}
+          {!parentContact.name && !parentContact.email && !parentContact.phone && (
+            <div className="iv-mine-value" style={{ color: 'rgba(255,255,255,0.3)' }}>No parent contact on file.</div>
+          )}
+        </div>
+      )}
+      <div className="iv-notes">
+        {(iv.notes || []).length === 0 && <div className="iv-no-notes">No notes yet.</div>}
+        {(iv.notes || []).map(note => (
+          <div key={note.note_id} className="iv-note">
+            <div className="iv-note-header">
+              <span className="iv-note-author">{note.author_email}</span>
+              <span className="iv-note-date">{new Date(note.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span>
+              <button className="iv-note-delete" onClick={() => deleteNote(iv.intervention_id, note.note_id)} title="Delete">&#x2715;</button>
+            </div>
+            <div className="iv-note-text">{note.text}</div>
+          </div>
+        ))}
+      </div>
+      <div className="iv-add-note">
+        <input className="iv-input iv-note-input" placeholder="Add a note..."
+          value={noteInputs[iv.intervention_id] || ''}
+          onChange={e => setNoteInputs(p => ({ ...p, [iv.intervention_id]: e.target.value }))}
+          onKeyDown={e => e.key === 'Enter' && !e.shiftKey && addNote(iv.intervention_id)} />
+        <button className="iv-add-note-btn" disabled={!(noteInputs[iv.intervention_id] || '').trim()}
+          onClick={() => addNote(iv.intervention_id)}>Add</button>
+      </div>
+    </div>
+  )
+}
+
 // ─── Org Intervention List ────────────────────────────────────────────────────
 
 function OrgInterventionList({ onBack, initialExpanded = null }) {
+  const { email: currentUserEmail } = useAuth()
   const [interventions, setInterventions] = useState([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState('active')
@@ -2092,12 +2169,52 @@ function OrgInterventionList({ onBack, initialExpanded = null }) {
   const [noteInputs, setNoteInputs] = useState({})
   const [assignedDrafts, setAssignedDrafts] = useState({})
   const [assignedSaved, setAssignedSaved] = useState({})
+  const [toast, setToast] = useState(null)
+  const [parentContacts, setParentContacts] = useState({})
+
+  // Check for unseen assignments on mount
+  useEffect(() => {
+    apiGet('/interventions?mine=true&unseen=true').then(ivs => {
+      if (Array.isArray(ivs) && ivs.length > 0) {
+        setToast(ivs.length)
+      }
+    }).catch(() => {})
+  }, [])
 
   useEffect(() => {
     setLoading(true)
-    const qs = filter === 'all' ? '?status=all' : filter === 'resolved' ? '?status=resolved' : ''
+    const qs = filter === 'mine' ? '?mine=true'
+      : filter === 'all' ? '?status=all'
+      : filter === 'resolved' ? '?status=resolved'
+      : ''
     apiGet(`/interventions${qs}`).then(ivs => setInterventions(Array.isArray(ivs) ? ivs : [])).finally(() => setLoading(false))
   }, [filter])
+
+  // Load parent contacts for My Interventions
+  useEffect(() => {
+    if (filter !== 'mine') return
+    interventions.forEach(iv => {
+      const uid = iv.student_user_id
+      if (uid && !parentContacts[uid]) {
+        apiGet(`/users/parent-contact/${uid}`).then(data => {
+          setParentContacts(p => ({ ...p, [uid]: data }))
+        }).catch(() => {
+          setParentContacts(p => ({ ...p, [uid]: {} }))
+        })
+      }
+    })
+  }, [interventions, filter])
+
+  function dismissToast() {
+    setToast(null)
+    apiPost('/interventions/acknowledge-mine', {}).catch(() => {})
+  }
+
+  function goToMine() {
+    setFilter('mine')
+    setExpandedCase(null)
+    dismissToast()
+  }
 
   async function updateCase(ivId, updates) {
     try {
@@ -2138,8 +2255,22 @@ function OrgInterventionList({ onBack, initialExpanded = null }) {
       )
     : interventions
 
+  const detailProps = { updateCase, addNote, deleteNote, noteInputs, setNoteInputs, assignedDrafts, setAssignedDrafts, assignedSaved, setAssignedSaved }
+
   return (
     <div>
+      {toast !== null && (
+        <div className="iv-toast">
+          <div className="iv-toast-body">
+            You have {toast} new intervention assignment{toast !== 1 ? 's' : ''}.
+          </div>
+          <div className="iv-toast-actions">
+            <button className="iv-toast-view" onClick={goToMine}>View</button>
+            <button className="iv-toast-dismiss" onClick={dismissToast}>&#x2715;</button>
+          </div>
+        </div>
+      )}
+
       <div className="iv-toolbar">
         <input
           className="iv-search-input"
@@ -2148,10 +2279,10 @@ function OrgInterventionList({ onBack, initialExpanded = null }) {
           placeholder="Search by name, email, category, or class…"
         />
         <div className="iv-filter-row">
-          {['active', 'resolved', 'all'].map(f => (
+          {['active', 'mine', 'resolved', 'all'].map(f => (
             <button key={f} className={`iv-filter-btn${filter === f ? ' iv-filter-btn--active' : ''}`}
               onClick={() => { setFilter(f); setExpandedCase(null) }}>
-              {f === 'active' ? 'Open / In progress' : f === 'resolved' ? 'Resolved' : 'All'}
+              {f === 'active' ? 'Open / In progress' : f === 'mine' ? 'My interventions' : f === 'resolved' ? 'Resolved' : 'All'}
             </button>
           ))}
         </div>
@@ -2159,99 +2290,68 @@ function OrgInterventionList({ onBack, initialExpanded = null }) {
 
       {loading && <div className="admin-spinner-wrap admin-spinner-wrap--inline"><div className="admin-spinner" /></div>}
       {!loading && visible.length === 0 && (
-        <div className="admin-empty" style={{ marginTop: 24 }}>{q ? 'No matches.' : 'No interventions found.'}</div>
+        <div className="admin-empty" style={{ marginTop: 24 }}>
+          {q ? 'No matches.' : filter === 'mine' ? 'No cases are assigned to you.' : 'No interventions found.'}
+        </div>
       )}
 
-      <div className="iv-list" style={{ marginTop: 12 }}>
-        {visible.map(iv => (
-          <div key={iv.intervention_id} className="iv-item">
-            <button
-              className={`iv-row${expandedCase === iv.intervention_id ? ' iv-row--active' : ''}`}
-              onClick={() => setExpandedCase(expandedCase === iv.intervention_id ? null : iv.intervention_id)}
-            >
-              <div className="iv-row-left">
-                <span className="iv-student-name">{iv.student_name || iv.student_email}</span>
-                {iv.student_name && <span className="iv-student-email">{iv.student_email}</span>}
-                <span className="iv-class-chip">{iv.class_name}</span>
-                <span className={`att-badge ${iv.flag_type === 'repeat_tardy' ? 'att-late' : 'att-slightly-late'}`} style={{ marginLeft: 4 }}>
-                  {iv.flag_type === 'repeat_tardy' ? 'Repeat tardy' : 'Low attendance'}
-                </span>
-              </div>
-              <div className="iv-row-right">
-                {iv.assigned_to && <span className="iv-assigned">{iv.assigned_to}</span>}
-                {(iv.notes || []).length > 0 && (
-                  <span className="iv-note-count">{iv.notes.length} note{iv.notes.length !== 1 ? 's' : ''}</span>
-                )}
-                <span className={`iv-status-pill iv-status-pill--${iv.status}`}>
-                  {iv.status === 'open' ? 'Open' : iv.status === 'in_progress' ? 'In progress' : 'Resolved'}
-                </span>
-                <span className="iv-chevron">{expandedCase === iv.intervention_id ? '▾' : '▸'}</span>
-              </div>
-            </button>
-
-            {expandedCase === iv.intervention_id && (
-              <div className="iv-detail">
-                <div className="iv-detail-controls">
-                  <div className="iv-control-group">
-                    <label className="iv-control-label">Status</label>
-                    <select className="iv-select" value={iv.status} onChange={e => updateCase(iv.intervention_id, { status: e.target.value })}>
-                      <option value="open">Open</option>
-                      <option value="in_progress">In progress</option>
-                      <option value="resolved">Resolved</option>
-                    </select>
-                  </div>
-                  <div className="iv-control-group">
-                    <label className="iv-control-label">Assigned to</label>
-                    <div className="iv-input-row">
-                      <input
-                        className="iv-input"
-                        placeholder="staff email"
-                        value={assignedDrafts[iv.intervention_id] ?? (iv.assigned_to || '')}
-                        onChange={e => setAssignedDrafts(p => ({ ...p, [iv.intervention_id]: e.target.value }))}
-                        onBlur={e => updateCase(iv.intervention_id, { assigned_to: e.target.value || null })}
-                      />
-                      <button
-                        className={`iv-save-btn${assignedSaved[iv.intervention_id] ? ' iv-save-btn--saved' : ''}`}
-                        onClick={async () => {
-                          const val = assignedDrafts[iv.intervention_id] !== undefined
-                            ? assignedDrafts[iv.intervention_id]
-                            : (iv.assigned_to || '')
-                          await updateCase(iv.intervention_id, { assigned_to: val || null })
-                          setAssignedSaved(p => ({ ...p, [iv.intervention_id]: true }))
-                          setTimeout(() => setAssignedSaved(p => ({ ...p, [iv.intervention_id]: false })), 2000)
-                        }}
-                      >
-                        {assignedSaved[iv.intervention_id] ? '✓ Saved' : 'Save'}
-                      </button>
-                    </div>
-                  </div>
+      {filter === 'mine' ? (
+        <div className="iv-mine-list" style={{ marginTop: 12 }}>
+          {visible.map(iv => (
+            <div key={iv.intervention_id} className="iv-mine-card">
+              <div className="iv-mine-header">
+                <div className="iv-mine-header-left">
+                  <span className="iv-student-name">{iv.student_name || iv.student_email}</span>
+                  {iv.student_name && <span className="iv-student-email">{iv.student_email}</span>}
                 </div>
-                <div className="iv-notes">
-                  {(iv.notes || []).length === 0 && <div className="iv-no-notes">No notes yet.</div>}
-                  {(iv.notes || []).map(note => (
-                    <div key={note.note_id} className="iv-note">
-                      <div className="iv-note-header">
-                        <span className="iv-note-author">{note.author_email}</span>
-                        <span className="iv-note-date">{new Date(note.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span>
-                        <button className="iv-note-delete" onClick={() => deleteNote(iv.intervention_id, note.note_id)} title="Delete">&#x2715;</button>
-                      </div>
-                      <div className="iv-note-text">{note.text}</div>
-                    </div>
-                  ))}
-                </div>
-                <div className="iv-add-note">
-                  <input className="iv-input iv-note-input" placeholder="Add a note..."
-                    value={noteInputs[iv.intervention_id] || ''}
-                    onChange={e => setNoteInputs(p => ({ ...p, [iv.intervention_id]: e.target.value }))}
-                    onKeyDown={e => e.key === 'Enter' && !e.shiftKey && addNote(iv.intervention_id)} />
-                  <button className="iv-add-note-btn" disabled={!(noteInputs[iv.intervention_id] || '').trim()}
-                    onClick={() => addNote(iv.intervention_id)}>Add</button>
+                <div className="iv-mine-header-right">
+                  <span className="iv-class-chip">{iv.class_name}</span>
+                  <span className={`att-badge ${iv.flag_type === 'repeat_tardy' ? 'att-late' : 'att-slightly-late'}`}>
+                    {iv.flag_type === 'repeat_tardy' ? 'Repeat tardy' : 'Low attendance'}
+                  </span>
+                  <span className={`iv-status-pill iv-status-pill--${iv.status}`}>
+                    {iv.status === 'open' ? 'Open' : 'In progress'}
+                  </span>
                 </div>
               </div>
-            )}
-          </div>
-        ))}
-      </div>
+              <IvDetailPanel iv={iv} {...detailProps} parentContact={parentContacts[iv.student_user_id]} />
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="iv-list" style={{ marginTop: 12 }}>
+          {visible.map(iv => (
+            <div key={iv.intervention_id} className="iv-item">
+              <button
+                className={`iv-row${expandedCase === iv.intervention_id ? ' iv-row--active' : ''}`}
+                onClick={() => setExpandedCase(expandedCase === iv.intervention_id ? null : iv.intervention_id)}
+              >
+                <div className="iv-row-left">
+                  <span className="iv-student-name">{iv.student_name || iv.student_email}</span>
+                  {iv.student_name && <span className="iv-student-email">{iv.student_email}</span>}
+                  <span className="iv-class-chip">{iv.class_name}</span>
+                  <span className={`att-badge ${iv.flag_type === 'repeat_tardy' ? 'att-late' : 'att-slightly-late'}`} style={{ marginLeft: 4 }}>
+                    {iv.flag_type === 'repeat_tardy' ? 'Repeat tardy' : 'Low attendance'}
+                  </span>
+                </div>
+                <div className="iv-row-right">
+                  {iv.assigned_to && <span className="iv-assigned">{iv.assigned_to}</span>}
+                  {(iv.notes || []).length > 0 && (
+                    <span className="iv-note-count">{iv.notes.length} note{iv.notes.length !== 1 ? 's' : ''}</span>
+                  )}
+                  <span className={`iv-status-pill iv-status-pill--${iv.status}`}>
+                    {iv.status === 'open' ? 'Open' : iv.status === 'in_progress' ? 'In progress' : 'Resolved'}
+                  </span>
+                  <span className="iv-chevron">{expandedCase === iv.intervention_id ? '▾' : '▸'}</span>
+                </div>
+              </button>
+              {expandedCase === iv.intervention_id && (
+                <IvDetailPanel iv={iv} {...detailProps} parentContact={null} />
+              )}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

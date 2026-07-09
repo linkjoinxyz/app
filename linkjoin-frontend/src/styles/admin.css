@@ -1705,6 +1705,113 @@
 }
 .iv-filter-btn:hover:not(.iv-filter-btn--active) { background: rgba(255,255,255,0.09); }
 
+/* Toast notification */
+@keyframes iv-slide-in {
+  from { opacity: 0; transform: translateX(24px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+.iv-toast {
+  position: fixed;
+  top: 72px;
+  right: 24px;
+  z-index: 9000;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: #0d1a2a;
+  border: 1px solid rgba(43,143,216,0.5);
+  border-radius: 10px;
+  padding: 14px 16px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+  animation: iv-slide-in 0.25s ease;
+  max-width: 340px;
+}
+.iv-toast-body {
+  color: #e8edf2;
+  font-size: 13px;
+  flex: 1;
+}
+.iv-toast-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.iv-toast-view {
+  background: #2b8fd8;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 5px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.iv-toast-view:hover { background: #237dc4; }
+.iv-toast-dismiss {
+  background: none;
+  border: none;
+  color: rgba(255,255,255,0.4);
+  font-size: 14px;
+  cursor: pointer;
+  padding: 2px 4px;
+  transition: color 0.15s;
+}
+.iv-toast-dismiss:hover { color: rgba(255,255,255,0.8); }
+
+/* My Interventions card layout */
+.iv-mine-list { display: flex; flex-direction: column; gap: 16px; }
+.iv-mine-card {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.iv-mine-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 20px 12px;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+.iv-mine-header-left {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.iv-mine-header-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.iv-mine-section {
+  border-top: 1px solid rgba(255,255,255,0.06);
+  padding: 14px 20px;
+}
+.iv-mine-section-title {
+  color: rgba(255,255,255,0.4);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 10px;
+}
+.iv-mine-field {
+  display: flex;
+  gap: 10px;
+  font-size: 13px;
+  padding: 3px 0;
+}
+.iv-mine-label {
+  color: rgba(255,255,255,0.35);
+  width: 56px;
+  flex-shrink: 0;
+}
+.iv-mine-value { color: #e8edf2; }
+
 /* Excused attendance */
 .att-excused {
   background: rgba(43,143,216,0.25);
