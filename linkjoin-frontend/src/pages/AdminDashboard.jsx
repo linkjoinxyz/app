@@ -2012,6 +2012,7 @@ function TeacherView() {
 
   const [classes, setClasses] = useState([])
   const [loading, setLoading] = useState(true)
+  const [activeTab, setActiveTab] = useState('classes')
 
   useEffect(() => {
     apiGet('/classes').then(cls => setClasses(cls)).finally(() => setLoading(false))
@@ -2049,33 +2050,44 @@ function TeacherView() {
 
   return (
     <>
-      <div className="admin-section-header">
-        <div className="admin-section-title">My Classes</div>
-        <button className="admin-log-link" onClick={() => navigate('/history')}>Meeting Open Log →</button>
-      </div>
-      <div className="class-grid">
-        {classes.map(cls => (
-          <div key={cls.class_id} className="class-card" onClick={() => navigate(`/admin/class/${cls.class_id}`)}>
-            {(cls.time || cls.days?.length > 0) && (
-              <div className="class-card-header">
-                {cls.time && <span className="class-card-time">{formatTime(cls.time)}</span>}
-                {cls.days?.length > 0 && (
-                  <div className="class-card-days">
-                    {cls.days.map(d => <DayBadge key={d} day={d} />)}
-                  </div>
-                )}
-              </div>
-            )}
-            <div className="class-card-body">
-              <div className="class-card-name">{cls.name}</div>
-              <div className="class-card-stats">
-                <div className="class-card-stat"><span>{(cls.student_ids || []).length}</span> students</div>
-                <div className="class-card-stat"><span>{(cls.link_ids || []).length}</span> links</div>
-              </div>
-            </div>
-          </div>
+      <div className="admin-tabs">
+        {[['classes', 'Classes'], ['log', 'Open Log'], ['interventions', 'Interventions']].map(([key, label]) => (
+          <button key={key} className={`admin-tab${activeTab === key ? ' admin-tab--active' : ''}`}
+            onClick={() => setActiveTab(key)}>
+            {label}
+          </button>
         ))}
       </div>
+
+      {activeTab === 'classes' && (
+        <div className="class-grid" style={{ marginTop: 20 }}>
+          {classes.map(cls => (
+            <div key={cls.class_id} className="class-card" onClick={() => navigate(`/admin/class/${cls.class_id}`)}>
+              {(cls.time || cls.days?.length > 0) && (
+                <div className="class-card-header">
+                  {cls.time && <span className="class-card-time">{formatTime(cls.time)}</span>}
+                  {cls.days?.length > 0 && (
+                    <div className="class-card-days">
+                      {cls.days.map(d => <DayBadge key={d} day={d} />)}
+                    </div>
+                  )}
+                </div>
+              )}
+              <div className="class-card-body">
+                <div className="class-card-name">{cls.name}</div>
+                <div className="class-card-stats">
+                  <div className="class-card-stat"><span>{(cls.student_ids || []).length}</span> students</div>
+                  <div className="class-card-stat"><span>{(cls.link_ids || []).length}</span> links</div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {activeTab === 'log' && <HistoryPanel />}
+
+      {activeTab === 'interventions' && <OrgInterventionList />}
     </>
   )
 }
