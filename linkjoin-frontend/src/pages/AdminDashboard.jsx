@@ -2170,10 +2170,10 @@ function IvDetailPanel({ iv, updateCase, addNote, deleteNote, noteInputs, setNot
 // ─── Org Intervention List ────────────────────────────────────────────────────
 
 function OrgInterventionList({ onBack, initialExpanded = null }) {
-  const { email: currentUserEmail } = useAuth()
+  const { email: currentUserEmail, role } = useAuth()
   const [interventions, setInterventions] = useState([])
   const [loading, setLoading] = useState(true)
-  const [filter, setFilter] = useState('active')
+  const [filter, setFilter] = useState(role === 'teacher' ? 'mine' : 'active')
   const [search, setSearch] = useState('')
   const [expandedCase, setExpandedCase] = useState(initialExpanded)
   const [noteInputs, setNoteInputs] = useState({})
@@ -2256,7 +2256,7 @@ function OrgInterventionList({ onBack, initialExpanded = null }) {
           placeholder="Search by name, email, category, or class…"
         />
         <div className="iv-filter-row">
-          {['active', 'mine', 'resolved', 'all'].map(f => (
+          {['mine', 'active', 'resolved', 'all'].map(f => (
             <button key={f} className={`iv-filter-btn${filter === f ? ' iv-filter-btn--active' : ''}`}
               onClick={() => { setFilter(f); setExpandedCase(null) }}>
               {f === 'active' ? 'Open / In progress' : f === 'mine' ? 'My interventions' : f === 'resolved' ? 'Resolved' : 'All'}
