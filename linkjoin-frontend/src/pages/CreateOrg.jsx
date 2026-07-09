@@ -59,7 +59,6 @@ function Field({ label, hint, children, half }) {
 
 export default function CreateOrg() {
   const navigate = useNavigate()
-  const [adminToken, setAdminToken] = useState(() => sessionStorage.getItem('pa_tok') || '')
   const [existingOrgs, setExistingOrgs] = useState([])
 
   const [form, setForm] = useState({
@@ -103,7 +102,6 @@ export default function CreateOrg() {
 
   async function submit() {
     if (!form.name.trim()) { setErr('Name is required'); return }
-    if (!adminToken.trim()) { setErr('Admin token is required'); return }
     setSaving(true); setErr('')
     try {
       const payload = {
@@ -124,15 +122,12 @@ export default function CreateOrg() {
       const org = await apiFetch('/orgs', {
         method: 'POST',
         body: JSON.stringify(payload),
-        headers: { 'X-Admin-Token': adminToken },
       })
-      sessionStorage.setItem('pa_tok', adminToken)
 
       if (form.admin_email.trim()) {
         await apiFetch('/invites', {
           method: 'POST',
           body: JSON.stringify({ type: 'school_admin', org_id: org.org_id, email: form.admin_email.trim().toLowerCase() }),
-          headers: { 'X-Admin-Token': adminToken },
         })
       }
 
@@ -273,12 +268,6 @@ export default function CreateOrg() {
           </div>
 
           <div className="co-sidebar">
-            <div className="co-sidebar-card">
-              <div className="co-sidebar-title">Admin token</div>
-              <div className="co-sidebar-desc">Required to create organizations. This is the <code>X-Admin-Token</code> from your backend config.</div>
-              <input className="pa-input" type="password" value={adminToken} onChange={e => setAdminToken(e.target.value)} placeholder="Token" autoComplete="off" />
-            </div>
-
             <div className="co-sidebar-card co-sidebar-summary">
               <div className="co-sidebar-title">Summary</div>
               <div className="co-summary-row">
@@ -311,7 +300,7 @@ export default function CreateOrg() {
 
             {err && <div className="pa-error">{err}</div>}
 
-            <button className="pa-btn co-submit-btn" onClick={submit} disabled={saving || !form.name.trim() || !adminToken.trim()}>
+            <button className="pa-btn co-submit-btn" onClick={submit} disabled={saving || !form.name.trim()}>
               {saving ? 'Creating...' : 'Create organization'}
             </button>
             <button className="pa-btn pa-btn--ghost co-cancel-btn" onClick={() => navigate('/platform')}>

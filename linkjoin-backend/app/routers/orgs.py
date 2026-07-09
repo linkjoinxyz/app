@@ -1,8 +1,11 @@
 import secrets
 from datetime import date, timedelta
+from typing import Optional
 import httpx
 from icalendar import Calendar
 from fastapi import APIRouter, Depends, HTTPException, Header
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from jose import JWTError, jwt
 from app.auth import get_confirmed_user
 from app.database import motor_db
 from app.config import get_settings
@@ -22,11 +25,27 @@ _NO_SCHOOL_KEYWORDS = {
 
 router = APIRouter(prefix="/orgs", tags=["orgs"])
 _settings = get_settings()
+_bearer = HTTPBearer(auto_error=False)
 
 
-def _check_token(x_admin_token: str | None = Header(default=None)) -> None:
-    if not _settings.add_accounts_token or x_admin_token != _settings.add_accounts_token:
-        raise HTTPException(status_code=403, detail="Invalid admin token")
+async def _check_token(
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(_bearer),
+    x_admin_token: str | None = Header(default=None),
+) -> None:
+    if _settings.add_accounts_token and x_admin_token == _settings.add_accounts_token:
+        return
+    if credentials:
+        try:
+            payload = jwt.decode(credentials.credentials, _settings.jwt_secret, algorithms=[_settings.jwt_algorithm])
+            email = payload.get("sub")
+            if email:
+                from app.database import motor_db as _db
+                user = await _db.login.find_one({"username": email}, {"admin": 1})
+                if user and user.get("admin") == "true":
+                    return
+        except JWTError:
+            pass
+    raise HTTPException(status_code=403, detail="Admin token or platform admin account required")
 
 
 @router.post("", status_code=201)
