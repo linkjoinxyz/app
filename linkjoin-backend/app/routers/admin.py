@@ -76,6 +76,66 @@ async def set_user_role(user_id: str, body: dict, user: dict = Depends(get_confi
     return {"message": "Role updated"}
 
 
+@router.get("/orgs/{org_id}")
+async def get_org_detail(org_id: str, user: dict = Depends(get_confirmed_user)):
+    if user.get("admin") != "true":
+        raise HTTPException(status_code=403, detail="Platform admin access required")
+    org = await motor_db.orgs.find_one({"org_id": org_id}, {"_id": 0})
+    if not org:
+        raise HTTPException(status_code=404, detail="Org not found")
+    members = []
+    async for u in motor_db.login.find({"org_id": org_id}, {"password": 0, "_id": 0}):
+        members.append(u)
+    return {**org, "members": members}
+
+
+@router.patch("/orgs/{org_id}")
+async def update_org_detail(org_id: str, body: dict, user: dict = Depends(get_confirmed_user)):
+    if user.get("admin") != "true":
+        raise HTTPException(status_code=403, detail="Platform admin access required")
+    org = await motor_db.orgs.find_one({"org_id": org_id}, {"_id": 0, "org_id": 1})
+    if not org:
+        raise HTTPException(status_code=404, detail="Org not found")
+    allowed = {"name", "type", "address", "city", "state", "zip_code", "website",
+               "phone", "timezone", "grade_levels", "school_year_start", "school_year_end", "parent_org_id"}
+    updates = {k: v for k, v in body.items() if k in allowed}
+    if not updates:
+        return {"message": "Nothing to update"}
+    await motor_db.orgs.update_one({"org_id": org_id}, {"$set": updates})
+    await log_audit(user["username"], "admin.update_org", detail={"org_id": org_id, "fields": list(updates.keys())})
+    return {"message": "Updated"}
+
+
+@router.patch("/orgs/{org_id}/members/{user_id}/role")
+async def update_member_role(org_id: str, user_id: str, body: dict, user: dict = Depends(get_confirmed_user)):
+    if user.get("admin") != "true":
+        raise HTTPException(status_code=403, detail="Platform admin access required")
+    role = body.get("role")
+    if role not in ("student", "teacher", "school_admin", "district_admin"):
+        raise HTTPException(status_code=422, detail="Invalid role")
+    target = await motor_db.login.find_one({"user_id": user_id, "org_id": org_id})
+    if not target:
+        raise HTTPException(status_code=404, detail="Member not found in this org")
+    await motor_db.login.update_one({"user_id": user_id}, {"$set": {"role": role}})
+    await log_audit(user["username"], "admin.update_member_role", detail={"org_id": org_id, "target_user_id": user_id, "role": role})
+    return {"message": "Updated"}
+
+
+@router.delete("/orgs/{org_id}/members/{user_id}")
+async def remove_member(org_id: str, user_id: str, user: dict = Depends(get_confirmed_user)):
+    if user.get("admin") != "true":
+        raise HTTPException(status_code=403, detail="Platform admin access required")
+    target = await motor_db.login.find_one({"user_id": user_id, "org_id": org_id})
+    if not target:
+        raise HTTPException(status_code=404, detail="Member not found in this org")
+    await motor_db.login.update_one(
+        {"user_id": user_id},
+        {"$set": {"account_type": "personal", "role": None, "org_id": None}},
+    )
+    await log_audit(user["username"], "admin.remove_member", detail={"org_id": org_id, "target_user_id": user_id})
+    return {"message": "Removed"}
+
+
 @router.get("/orgs")
 async def list_all_orgs(user: dict = Depends(get_confirmed_user)):
     if user.get("admin") != "true":

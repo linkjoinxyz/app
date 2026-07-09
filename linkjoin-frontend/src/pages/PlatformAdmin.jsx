@@ -30,11 +30,11 @@ function OrgsTab() {
       ) : orgs.length === 0 ? (
         <div className="pa-empty">No organizations yet. Create one to get started.</div>
       ) : (
-        <table className="pa-table">
+        <table className="pa-table pa-table--clickable">
           <thead><tr><th>Name</th><th>Type</th><th>Org ID</th></tr></thead>
           <tbody>
             {orgs.map(o => (
-              <tr key={o.org_id}>
+              <tr key={o.org_id} onClick={() => navigate(`/platform/orgs/${o.org_id}`)}>
                 <td>{o.name}</td>
                 <td><span className="pa-type-badge">{o.type}</span></td>
                 <td className="pa-mono">{o.org_id}</td>
