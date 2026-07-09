@@ -2803,7 +2803,6 @@ function SchoolAdminView() {
           {classlessTeachers.map(t => (
             <div key={t.user_id} className="teacher-pending-row">
               <span className="teacher-pending-email">{t.username}</span>
-              <span className="iv-status-pill iv-status-pill--open">Teacher</span>
             </div>
           ))}
         </div>
