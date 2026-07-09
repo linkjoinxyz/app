@@ -119,7 +119,7 @@ async def create_invite(
         # Revoke existing active join codes for this class
         await motor_db.invites.update_many(
             {"class_id": class_id, "type": "student_class", "status": "pending"},
-            {"$set": {"status": "revoked"}},
+            {"$set": {"status": "rescinded"}},
         )
 
     expiry_days = _CLASS_EXPIRY_DAYS if invite_type == "student_class" else _ADMIN_EXPIRY_DAYS
@@ -298,5 +298,5 @@ async def revoke_invite(token: str, user: dict = Depends(get_confirmed_user)):
         raise HTTPException(status_code=404, detail="Invite not found")
     if invite.get("org_id") != user.get("org_id") and user.get("admin") != "true":
         raise HTTPException(status_code=403, detail="Access denied")
-    await motor_db.invites.update_one({"token": token}, {"$set": {"status": "revoked"}})
-    await log_audit(user["username"], "invite.revoke", detail={"token": token})
+    await motor_db.invites.update_one({"token": token}, {"$set": {"status": "rescinded"}})
+    await log_audit(user["username"], "invite.rescind", detail={"token": token})
