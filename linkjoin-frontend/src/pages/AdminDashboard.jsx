@@ -2112,6 +2112,7 @@ function IvDetailPanel({ iv, updateCase, addNote, deleteNote, noteInputs, setNot
             <div className="iv-mine-section-title">Student</div>
             <div className="iv-mine-fields">
               <div className="iv-mine-field"><span className="iv-mine-label">Email</span><span className="iv-mine-value">{studentProfile.email}</span></div>
+              {iv.class_name && <div className="iv-mine-field"><span className="iv-mine-label">Class</span><span className="iv-mine-value">{iv.class_name}</span></div>}
               {studentProfile.joined_at && (
                 <div className="iv-mine-field"><span className="iv-mine-label">Joined</span><span className="iv-mine-value">{new Date(studentProfile.joined_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</span></div>
               )}
