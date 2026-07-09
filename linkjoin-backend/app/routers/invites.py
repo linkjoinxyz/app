@@ -1,7 +1,7 @@
 import secrets
 from datetime import datetime, timezone, timedelta
 from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException
-from app.auth import create_token, get_confirmed_user
+from app.auth import create_token, get_confirmed_user, get_current_user
 from app.config import get_settings
 from app.database import motor_db
 from app.email_service import send_email
@@ -184,8 +184,11 @@ async def list_invites(user: dict = Depends(get_confirmed_user)):
 
     async for inv in motor_db.invites.find(query, {"_id": 0}).sort("created_at", -1).limit(200):
         expires = inv.get("expires_at")
-        if expires and inv.get("status") == "pending" and now > expires:
-            inv["status"] = "expired"
+        if expires:
+            if expires.tzinfo is None:
+                expires = expires.replace(tzinfo=timezone.utc)
+            if inv.get("status") == "pending" and now > expires:
+                inv["status"] = "expired"
         out.append(_serialize(inv))
     return out
 
@@ -198,9 +201,12 @@ async def get_invite(token: str):
 
     now = datetime.now(timezone.utc)
     expires = invite.get("expires_at")
-    if expires and now > expires:
-        await motor_db.invites.update_one({"token": token}, {"$set": {"status": "expired"}})
-        raise HTTPException(status_code=410, detail="Invite has expired")
+    if expires:
+        if expires.tzinfo is None:
+            expires = expires.replace(tzinfo=timezone.utc)
+        if now > expires:
+            await motor_db.invites.update_one({"token": token}, {"$set": {"status": "expired"}})
+            raise HTTPException(status_code=410, detail="Invite has expired")
 
     if invite.get("status") != "pending":
         raise HTTPException(status_code=410, detail=f"Invite is {invite.get('status', 'invalid')}")
@@ -223,16 +229,19 @@ async def get_invite(token: str):
 
 
 @router.post("/{token}/accept")
-async def accept_invite(token: str, body: dict, user: dict = Depends(get_confirmed_user)):
+async def accept_invite(token: str, body: dict, user: dict = Depends(get_current_user)):
     invite = await motor_db.invites.find_one({"token": token})
     if not invite:
         raise HTTPException(status_code=404, detail="Invite not found")
 
     now = datetime.now(timezone.utc)
     expires = invite.get("expires_at")
-    if expires and now > expires:
-        await motor_db.invites.update_one({"token": token}, {"$set": {"status": "expired"}})
-        raise HTTPException(status_code=410, detail="Invite has expired")
+    if expires:
+        if expires.tzinfo is None:
+            expires = expires.replace(tzinfo=timezone.utc)
+        if now > expires:
+            await motor_db.invites.update_one({"token": token}, {"$set": {"status": "expired"}})
+            raise HTTPException(status_code=410, detail="Invite has expired")
 
     if invite.get("status") != "pending":
         raise HTTPException(status_code=410, detail=f"Invite is {invite.get('status', 'invalid')}")
@@ -245,7 +254,7 @@ async def accept_invite(token: str, body: dict, user: dict = Depends(get_confirm
 
     await motor_db.login.update_one(
         {"username": user["username"]},
-        {"$set": {"account_type": "institutional", "role": invite["role"], "org_id": invite["org_id"]}},
+        {"$set": {"account_type": "institutional", "role": invite["role"], "org_id": invite["org_id"], "confirmed": "true"}},
     )
 
     if invite.get("class_id"):
@@ -272,7 +281,7 @@ async def accept_invite(token: str, body: dict, user: dict = Depends(get_confirm
         "access_token": new_token,
         "token_type": "bearer",
         "email": user["username"],
-        "confirmed": user.get("confirmed") == "true",
+        "confirmed": True,
         "account_type": "institutional",
         "role": invite["role"],
         "org_id": invite["org_id"],
