@@ -208,6 +208,20 @@ async def list_interventions(
             filt["status"] = {"$ne": "resolved"}
 
     docs = await motor_db.interventions.find(filt).sort("updated_at", -1).limit(200).to_list(None)
+
+    # Backfill student_user_id for legacy docs that predate the field
+    for doc in docs:
+        if not doc.get("student_user_id") and doc.get("student_email"):
+            student = await motor_db.login.find_one(
+                {"username": doc["student_email"]}, {"user_id": 1}
+            )
+            if student and student.get("user_id"):
+                doc["student_user_id"] = student["user_id"]
+                await motor_db.interventions.update_one(
+                    {"intervention_id": doc["intervention_id"]},
+                    {"$set": {"student_user_id": student["user_id"]}},
+                )
+
     return [_clean(d) for d in docs]
 
 

@@ -2101,7 +2101,7 @@ function IvDetailPanel({ iv, updateCase, addNote, deleteNote, noteInputs, setNot
   return (
     <div className="iv-detail">
 
-      {studentProfile === undefined && (
+      {iv.student_user_id && studentProfile === undefined && (
         <div className="iv-mine-section" style={{ color: 'rgba(255,255,255,0.3)', fontSize: 13 }}>Loading student info…</div>
       )}
 
@@ -2236,15 +2236,15 @@ function OrgInterventionList({ onBack, initialExpanded = null }) {
   useEffect(() => {
     if (filter !== 'mine' || !expandedCase) return
     const iv = interventions.find(x => x.intervention_id === expandedCase)
-    const uid = iv?.student_user_id
-    if (uid && !studentProfiles[uid]) {
-      apiGet(`/users/student/${uid}`).then(data => {
-        setStudentProfiles(p => ({ ...p, [uid]: data }))
-      }).catch(() => {
-        setStudentProfiles(p => ({ ...p, [uid]: null }))
-      })
-    }
-  }, [expandedCase, filter, interventions])
+    if (!iv) return
+    const uid = iv.student_user_id
+    if (!uid || studentProfiles[uid] !== undefined) return
+    apiGet(`/users/student/${uid}`).then(data => {
+      setStudentProfiles(p => ({ ...p, [uid]: data }))
+    }).catch(() => {
+      setStudentProfiles(p => ({ ...p, [uid]: null }))
+    })
+  }, [expandedCase, filter, interventions, studentProfiles])
 
   async function updateCase(ivId, updates) {
     try {
