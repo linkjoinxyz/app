@@ -74,3 +74,44 @@ async def set_user_role(user_id: str, body: dict, user: dict = Depends(get_confi
     await motor_db.login.update_one({"user_id": user_id}, {"$set": updates})
     await log_audit(user["username"], "admin.set_role", detail={"target_user_id": user_id, **updates})
     return {"message": "Role updated"}
+
+
+@router.get("/orgs")
+async def list_all_orgs(user: dict = Depends(get_confirmed_user)):
+    if user.get("admin") != "true":
+        raise HTTPException(status_code=403, detail="Platform admin access required")
+    orgs = []
+    async for org in motor_db.orgs.find({}, {"_id": 0}):
+        orgs.append(org)
+    return orgs
+
+
+@router.get("/users/search")
+async def search_users(q: str = "", user: dict = Depends(get_confirmed_user)):
+    if user.get("admin") != "true":
+        raise HTTPException(status_code=403, detail="Platform admin access required")
+    if not q.strip():
+        raise HTTPException(status_code=422, detail="q is required")
+    results = []
+    async for u in motor_db.login.find(
+        {"username": {"$regex": q.strip(), "$options": "i"}},
+        {"password": 0, "_id": 0},
+    ).limit(20):
+        results.append(u)
+    return results
+
+
+@router.patch("/users/{user_id}/platform-admin")
+async def set_platform_admin(user_id: str, body: dict, user: dict = Depends(get_confirmed_user)):
+    if user.get("admin") != "true":
+        raise HTTPException(status_code=403, detail="Platform admin access required")
+    enabled = body.get("enabled", False)
+    target = await motor_db.login.find_one({"user_id": user_id})
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+    await motor_db.login.update_one(
+        {"user_id": user_id},
+        {"$set": {"admin": "true" if enabled else "false"}},
+    )
+    await log_audit(user["username"], "admin.set_platform_admin", detail={"target_user_id": user_id, "enabled": enabled})
+    return {"message": "Updated"}

@@ -1,0 +1,223 @@
+.pa-header {
+  margin-bottom: 28px;
+}
+
+.pa-header-title {
+  font-size: 22px;
+  font-weight: 700;
+  color: #e8edf2;
+  letter-spacing: -0.3px;
+}
+
+.pa-header-sub {
+  font-size: 13px;
+  color: rgba(255,255,255,0.35);
+  margin-top: 4px;
+}
+
+.pa-section {
+  margin-top: 24px;
+}
+
+.pa-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.pa-section-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #e8edf2;
+}
+
+.pa-btn {
+  background: #2b8fd8;
+  color: #fff;
+  border: none;
+  border-radius: 7px;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 8px 16px;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.pa-btn:hover:not(:disabled) { opacity: 0.9; }
+.pa-btn:disabled { opacity: 0.5; cursor: default; }
+
+.pa-btn--ghost {
+  background: rgba(255,255,255,0.06);
+  color: rgba(255,255,255,0.7);
+}
+
+.pa-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+
+.pa-label {
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: rgba(255,255,255,0.4);
+}
+
+.pa-input {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 7px;
+  padding: 9px 12px;
+  font-size: 14px;
+  color: #e8edf2;
+  outline: none;
+  width: 100%;
+  box-sizing: border-box;
+  transition: border-color 0.15s;
+}
+
+.pa-input:focus { border-color: rgba(43,143,216,0.5); }
+
+.pa-search-row {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.pa-search-input { flex: 1; }
+
+.pa-error {
+  font-size: 13px;
+  color: #f87171;
+  background: rgba(239,68,68,0.08);
+  border-radius: 6px;
+  padding: 8px 12px;
+  margin-bottom: 12px;
+}
+
+.pa-success {
+  font-size: 13px;
+  color: #4ade80;
+  background: rgba(74,222,128,0.08);
+  border-radius: 6px;
+  padding: 8px 12px;
+  margin-bottom: 12px;
+}
+
+.pa-empty {
+  color: rgba(255,255,255,0.35);
+  font-size: 14px;
+  padding: 24px 0;
+}
+
+.pa-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.pa-table th {
+  text-align: left;
+  color: rgba(255,255,255,0.35);
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 0 0 10px;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+
+.pa-table td {
+  padding: 12px 0;
+  color: rgba(255,255,255,0.8);
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  vertical-align: middle;
+}
+
+.pa-table tr:last-child td { border-bottom: none; }
+
+.pa-mono { font-family: monospace; font-size: 12px; }
+.pa-dim { color: rgba(255,255,255,0.3); }
+
+.pa-type-badge {
+  background: rgba(255,255,255,0.06);
+  border-radius: 4px;
+  padding: 2px 8px;
+  font-size: 11px;
+  color: rgba(255,255,255,0.5);
+}
+
+.pa-status {
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 4px;
+  padding: 2px 8px;
+}
+
+.pa-status--pending { background: rgba(245,158,11,0.12); color: #f59e0b; }
+.pa-status--accepted { background: rgba(74,222,128,0.12); color: #4ade80; }
+.pa-status--expired, .pa-status--revoked { background: rgba(239,68,68,0.1); color: #f87171; }
+
+.pa-toggle {
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 6px;
+  color: rgba(255,255,255,0.5);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.pa-toggle--on {
+  background: rgba(43,143,216,0.15);
+  border-color: rgba(43,143,216,0.3);
+  color: #2b8fd8;
+}
+
+.pa-toggle:disabled { opacity: 0.5; cursor: default; }
+
+.pa-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+}
+
+.pa-modal {
+  background: #0d1a2a;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 12px;
+  padding: 28px 32px;
+  width: 100%;
+  max-width: 440px;
+}
+
+.pa-modal-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: #e8edf2;
+  margin-bottom: 20px;
+}
+
+.pa-modal-desc {
+  font-size: 13px;
+  color: rgba(255,255,255,0.5);
+  margin: -8px 0 16px;
+  line-height: 1.5;
+}
+
+.pa-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 20px;
+}

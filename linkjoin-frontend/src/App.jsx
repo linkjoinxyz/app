@@ -1,6 +1,7 @@
 import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import { useAuth } from './context/AuthContext.jsx'
+
 import { apiGet, apiPost } from './api/client.js'
 
 function ScrollToTop() {
@@ -29,6 +30,8 @@ import PrivacySchools from './pages/PrivacySchools.jsx'
 import Subprocessors from './pages/Subprocessors.jsx'
 import BreachPolicy from './pages/BreachPolicy.jsx'
 import AdminDashboard from './pages/AdminDashboard.jsx'
+import PlatformAdmin from './pages/PlatformAdmin.jsx'
+import JoinInvite from './pages/JoinInvite.jsx'
 import Settings from './pages/Settings.jsx'
 import School from './pages/School.jsx'
 import SchoolAttendance from './pages/SchoolAttendance.jsx'
@@ -85,6 +88,13 @@ function TeacherRoute({ children }) {
   return children
 }
 
+function PlatformAdminRoute({ children }) {
+  const { token, isAdmin } = useAuth()
+  if (!token) return <Navigate to="/login" replace />
+  if (!isAdmin) return <Navigate to="/meetings" replace />
+  return children
+}
+
 export default function App() {
   return (
     <>
@@ -117,6 +127,8 @@ export default function App() {
       <Route path="/schools/dashboards" element={<SchoolDashboards />} />
       <Route path="/demo" element={<Demo />} />
       <Route path="/admin/*" element={<TeacherRoute><AdminDashboard /></TeacherRoute>} />
+      <Route path="/platform" element={<PlatformAdminRoute><PlatformAdmin /></PlatformAdminRoute>} />
+      <Route path="/join/:token" element={<JoinInvite />} />
       <Route path="/settings" element={<PrivateRoute><Settings /></PrivateRoute>} />
       <Route path="/history" element={<PrivateRoute><History /></PrivateRoute>} />
       <Route path="/profile" element={<PrivateRoute><StudentProfile /></PrivateRoute>} />

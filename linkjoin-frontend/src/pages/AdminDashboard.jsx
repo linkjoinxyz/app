@@ -257,6 +257,37 @@ function ClassDetail({ cls, onBack, onUpdate, onViewStudent }) {
   const [editingLink, setEditingLink] = useState(null)
   const [exporting, setExporting] = useState(false)
 
+  // Student join code
+  const [joinCode, setJoinCode] = useState(null) // null = not loaded, false = none exists
+  const [joinCodeLoading, setJoinCodeLoading] = useState(false)
+  const [joinCopied, setJoinCopied] = useState(false)
+
+  async function loadJoinCode() {
+    if (joinCode !== null) return
+    setJoinCodeLoading(true)
+    try {
+      const invites = await apiGet('/invites')
+      const active = Array.isArray(invites) ? invites.find(i => i.class_id === cls.class_id && i.type === 'student_class' && i.status === 'pending') : null
+      setJoinCode(active || false)
+    } catch { setJoinCode(false) }
+    setJoinCodeLoading(false)
+  }
+
+  async function generateJoinCode() {
+    setJoinCodeLoading(true)
+    try {
+      const inv = await apiPost('/invites', { type: 'student_class', class_id: cls.class_id })
+      setJoinCode(inv)
+    } catch { /* ignore */ }
+    setJoinCodeLoading(false)
+  }
+
+  function copyJoinLink() {
+    if (!joinCode?.token) return
+    const url = `${window.location.origin}/join/${joinCode.token}`
+    navigator.clipboard.writeText(url).then(() => { setJoinCopied(true); setTimeout(() => setJoinCopied(false), 2000) })
+  }
+
   // Family alerts
   const [familyAlerts, setFamilyAlerts] = useState(cls.family_alerts || false)
   const [parentContacts, setParentContacts] = useState({})
@@ -808,6 +839,45 @@ function ClassDetail({ cls, onBack, onUpdate, onViewStudent }) {
               </table>
             ) : (
               <div className="admin-empty">No students enrolled yet.</div>
+            )}
+          </div>
+
+          <div className="detail-section-divider" />
+
+          <div className="detail-section-body">
+            <div className="join-code-header" onClick={loadJoinCode}>
+              <span className="detail-section-label" style={{ fontSize: 13 }}>Student join link</span>
+            </div>
+            {joinCode === null && !joinCodeLoading && (
+              <button className="admin-btn" style={{ marginTop: 8 }} onClick={loadJoinCode}>Show join link</button>
+            )}
+            {joinCodeLoading && <div className="admin-empty" style={{ padding: '12px 0' }}>Loading...</div>}
+            {joinCode !== null && !joinCodeLoading && (
+              <div className="join-code-section">
+                {joinCode ? (
+                  <>
+                    <div className="join-code-url">{`${window.location.origin}/join/${joinCode.token}`}</div>
+                    <div className="join-code-actions">
+                      <button className="admin-btn" onClick={copyJoinLink}>
+                        {joinCopied ? 'Copied!' : 'Copy link'}
+                      </button>
+                      <button className="admin-btn admin-btn--ghost" onClick={generateJoinCode} disabled={joinCodeLoading}>
+                        Regenerate
+                      </button>
+                    </div>
+                    <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.3)', marginTop: 8 }}>
+                      Students can sign up at this link and join this class automatically.
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.4)', marginBottom: 10 }}>No active join link. Generate one for students to use.</div>
+                    <button className="admin-btn" onClick={generateJoinCode} disabled={joinCodeLoading}>
+                      {joinCodeLoading ? '...' : 'Generate join link'}
+                    </button>
+                  </>
+                )}
+              </div>
             )}
           </div>
         </div>}
@@ -2415,11 +2485,17 @@ function SchoolAdminView() {
   const [brandName, setBrandName] = useState('')
   const [brandSaved, setBrandSaved] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
+  const [showInviteTeacher, setShowInviteTeacher] = useState(false)
+  const [inviteEmail, setInviteEmail] = useState('')
+  const [inviting, setInviting] = useState(false)
+  const [inviteResult, setInviteResult] = useState(null) // null | {ok, msg}
+  const [pendingInvites, setPendingInvites] = useState([])
 
   useEffect(() => {
     apiGet('/classes').then(cls => setClasses(cls)).finally(() => setLoading(false))
     apiGet('/interventions').then(ivs => setOpenCases(Array.isArray(ivs) ? ivs : [])).catch(() => {})
     if (orgId) apiGet(`/orgs/${orgId}`).then(org => setBrandName(org.brand_name || '')).catch(() => {})
+    apiGet('/invites').then(ivs => setPendingInvites(Array.isArray(ivs) ? ivs.filter(i => i.type === 'teacher' && i.status === 'pending') : [])).catch(() => {})
   }, [orgId])
 
   useEffect(() => {
@@ -2466,6 +2542,21 @@ function SchoolAdminView() {
       setBrandSaved(true)
       setTimeout(() => setBrandSaved(false), 2000)
     } catch { /* ignore */ }
+  }
+
+  async function sendTeacherInvite() {
+    if (!inviteEmail.trim()) return
+    setInviting(true); setInviteResult(null)
+    try {
+      await apiPost('/invites', { type: 'teacher', email: inviteEmail.trim().toLowerCase() })
+      setInviteResult({ ok: true, msg: `Invite sent to ${inviteEmail.trim()}` })
+      setPendingInvites(prev => [...prev, { email: inviteEmail.trim(), status: 'pending', type: 'teacher' }])
+      setInviteEmail('')
+      setTimeout(() => { setInviteResult(null); setShowInviteTeacher(false) }, 2500)
+    } catch (e) {
+      setInviteResult({ ok: false, msg: e?.message || 'Failed to send invite' })
+    }
+    setInviting(false)
   }
 
   const teacherLabels = {}
@@ -2560,7 +2651,54 @@ function SchoolAdminView() {
           onChange={e => { setSearch(e.target.value); setVisibleCount(PAGE_SIZE) }}
           placeholder="Search teachers…"
         />
+        <button className="admin-btn" style={{ marginLeft: 10, flexShrink: 0 }} onClick={() => { setShowInviteTeacher(true); setInviteResult(null) }}>
+          Invite teacher
+        </button>
       </div>
+
+      {showInviteTeacher && (
+        <div className="iv-modal-backdrop" onClick={() => setShowInviteTeacher(false)}>
+          <div className="iv-modal" onClick={e => e.stopPropagation()}>
+            <div className="iv-modal-title">Invite teacher</div>
+            <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)', margin: '0 0 16px' }}>
+              Send an invite email. The recipient will be able to sign up as a teacher in your organization.
+            </p>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <input
+                className="admin-input"
+                style={{ flex: 1 }}
+                type="email"
+                value={inviteEmail}
+                onChange={e => setInviteEmail(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && sendTeacherInvite()}
+                placeholder="teacher@school.edu"
+                autoFocus
+              />
+              <button className="admin-btn" onClick={sendTeacherInvite} disabled={inviting || !inviteEmail.trim()}>
+                {inviting ? '...' : 'Send'}
+              </button>
+            </div>
+            {inviteResult && (
+              <div style={{ marginTop: 10, fontSize: 13, color: inviteResult.ok ? '#4ade80' : '#f87171' }}>
+                {inviteResult.msg}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {pendingInvites.length > 0 && (
+        <div className="teacher-pending-invites">
+          <div className="teacher-pending-label">Pending invites</div>
+          {pendingInvites.map((iv, i) => (
+            <div key={i} className="teacher-pending-row">
+              <span className="teacher-pending-email">{iv.email}</span>
+              <span className="iv-status-pill iv-status-pill--open">Pending</span>
+            </div>
+          ))}
+        </div>
+      )}
+
       <div className="teacher-list">
         {visibleTeachers.map(([tid, teacherClasses]) => {
           const info = teacherLabels[tid] || {}

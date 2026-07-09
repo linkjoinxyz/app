@@ -114,6 +114,7 @@ async def register(request: Request, body: RegisterRequest, background_tasks: Ba
             "account_type": account.get("account_type", "personal"),
             "role": account.get("role"),
             "org_id": account.get("org_id"),
+            "admin": account.get("admin"),
         }
 
     await analytics("signups")
@@ -124,6 +125,7 @@ async def register(request: Request, body: RegisterRequest, background_tasks: Ba
         "account_type": account.get("account_type", "personal"),
         "role": account.get("role"),
         "org_id": account.get("org_id"),
+        "admin": account.get("admin"),
     }
 
 
@@ -160,6 +162,7 @@ async def confirm_email(token: str):
         "account_type": user.get("account_type", "personal") if user else "personal",
         "role": user.get("role") if user else None,
         "org_id": user.get("org_id") if user else None,
+        "admin": user.get("admin") if user else None,
     }
 
 
@@ -231,6 +234,7 @@ async def login(request: Request, body: LoginRequest):
         "account_type": user.get("account_type", "personal"),
         "role": user.get("role"),
         "org_id": user.get("org_id"),
+        "admin": user.get("admin"),
     }
 
 
@@ -302,6 +306,7 @@ async def google_code_exchange(request: Request, body: GoogleCodeRequest):
         "account_type": user.get("account_type", "personal"),
         "role": user.get("role"),
         "org_id": user.get("org_id"),
+        "admin": user.get("admin"),
     }
 
 
@@ -353,6 +358,7 @@ async def google_token_auth(request: Request, body: dict):
         "account_type": user.get("account_type", "personal"),
         "role": user.get("role"),
         "org_id": user.get("org_id"),
+        "admin": user.get("admin"),
     }
 
 

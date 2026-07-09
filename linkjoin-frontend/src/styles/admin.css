@@ -2177,3 +2177,104 @@ button.iv-status-pill { cursor: pointer; }
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+/* ── Invite teacher modal ────────────────────────────────────────────────── */
+
+.iv-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.65);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+.iv-modal {
+  background: #0C1E30;
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 12px;
+  padding: 28px;
+  width: 100%;
+  max-width: 420px;
+}
+
+.iv-modal-title {
+  font-size: 17px;
+  font-weight: 700;
+  color: #e8edf2;
+  margin: 0 0 16px;
+}
+
+/* ── Invite teacher (SchoolAdminView) ─────────────────────────────────────── */
+
+.teacher-pending-invites {
+  margin-bottom: 20px;
+  background: rgba(255,255,255,0.02);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 8px;
+  padding: 12px 16px;
+}
+
+.teacher-pending-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: rgba(255,255,255,0.35);
+  margin-bottom: 10px;
+}
+
+.teacher-pending-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+}
+
+.teacher-pending-row:last-child { border-bottom: none; }
+
+.teacher-pending-email {
+  font-size: 13px;
+  color: rgba(255,255,255,0.7);
+  flex: 1;
+}
+
+/* ── Student join code (ClassDetail) ─────────────────────────────────────── */
+
+.detail-section-divider {
+  height: 1px;
+  background: rgba(255,255,255,0.06);
+  margin: 0 -20px;
+}
+
+.join-code-section {
+  margin-top: 10px;
+}
+
+.join-code-url {
+  font-family: monospace;
+  font-size: 12px;
+  color: rgba(255,255,255,0.55);
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 6px;
+  padding: 8px 12px;
+  word-break: break-all;
+  margin-bottom: 10px;
+}
+
+.join-code-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.admin-btn--ghost {
+  background: rgba(255,255,255,0.06);
+  color: rgba(255,255,255,0.7);
+  border: 1px solid rgba(255,255,255,0.1);
+}
+
+.admin-btn--ghost:hover { background: rgba(255,255,255,0.1); }

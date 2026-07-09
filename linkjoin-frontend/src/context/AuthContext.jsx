@@ -17,6 +17,7 @@ export function AuthProvider({ children }) {
   const [accountType, setAccountType] = useState(() => localStorage.getItem('lj_account_type') || 'personal')
   const [role, setRole] = useState(() => localStorage.getItem('lj_role') || null)
   const [orgId, setOrgId] = useState(() => localStorage.getItem('lj_org_id') || null)
+  const [isAdmin, setIsAdmin] = useState(() => localStorage.getItem('lj_admin') === 'true')
 
   const isTeacher = TEACHER_ROLES.has(role)
 
@@ -29,13 +30,29 @@ export function AuthProvider({ children }) {
     else localStorage.removeItem('lj_role')
     if (meta.org_id) localStorage.setItem('lj_org_id', meta.org_id)
     else localStorage.removeItem('lj_org_id')
+    if (meta.admin === 'true') localStorage.setItem('lj_admin', 'true')
+    else localStorage.removeItem('lj_admin')
     setToken(accessToken)
     setEmail(userEmail)
     setConfirmed(isConfirmed)
     setAccountType(meta.account_type || 'personal')
     setRole(meta.role || null)
     setOrgId(meta.org_id || null)
+    setIsAdmin(meta.admin === 'true')
     window.postMessage({ type: 'lj:login' }, window.location.origin)
+  }, [])
+
+  const refreshAuth = useCallback((data) => {
+    if (data.access_token) localStorage.setItem('lj_token', data.access_token)
+    if (data.account_type) localStorage.setItem('lj_account_type', data.account_type)
+    if (data.role) localStorage.setItem('lj_role', data.role)
+    else localStorage.removeItem('lj_role')
+    if (data.org_id) localStorage.setItem('lj_org_id', data.org_id)
+    else localStorage.removeItem('lj_org_id')
+    if (data.access_token) setToken(data.access_token)
+    if (data.account_type) setAccountType(data.account_type)
+    setRole(data.role || null)
+    setOrgId(data.org_id || null)
   }, [])
 
   const logout = useCallback(async () => {
@@ -46,17 +63,19 @@ export function AuthProvider({ children }) {
     localStorage.removeItem('lj_account_type')
     localStorage.removeItem('lj_role')
     localStorage.removeItem('lj_org_id')
+    localStorage.removeItem('lj_admin')
     setToken(null)
     setEmail(null)
     setConfirmed(false)
     setAccountType('personal')
     setRole(null)
     setOrgId(null)
+    setIsAdmin(false)
     window.postMessage({ type: 'lj:logout' }, window.location.origin)
   }, [])
 
   return (
-    <AuthContext.Provider value={{ token, email, confirmed, accountType, role, orgId, isTeacher, login, logout }}>
+    <AuthContext.Provider value={{ token, email, confirmed, accountType, role, orgId, isAdmin, isTeacher, login, logout, refreshAuth }}>
       {children}
     </AuthContext.Provider>
   )
