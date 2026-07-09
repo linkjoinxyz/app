@@ -2131,6 +2131,11 @@ function TeacherView() {
 
       {activeTab === 'classes' && (
         <div className="class-grid" style={{ marginTop: 20 }}>
+          {classes.length === 0 && (
+            <div className="admin-empty" style={{ gridColumn: '1 / -1', padding: '48px 0' }}>
+              No classes yet. Your school admin will assign you to a class.
+            </div>
+          )}
           {classes.map(cls => (
             <div key={cls.class_id} className="class-card" onClick={() => navigate(`/admin/class/${cls.class_id}`)}>
               {(cls.time || cls.days?.length > 0) && (
