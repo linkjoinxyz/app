@@ -144,7 +144,7 @@ export default function CreateOrg() {
       <div className="admin-page">
         <div className="co-topbar">
           <button className="co-back" onClick={() => navigate('/platform')}>
-            <span className="co-back-arrow">←</span>
+            <img src="/images/arrow-left.svg" alt="back" style={{ width: 16, height: 16 }} />
             Platform Admin
           </button>
           <h1 className="co-page-title">Create Organization</h1>

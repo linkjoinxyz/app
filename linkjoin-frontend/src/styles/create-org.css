@@ -5,23 +5,25 @@
 .co-back {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  background: none;
-  border: none;
-  color: rgba(255,255,255,0.6);
-  font-size: 14px;
-  font-weight: 400;
+  gap: 8px;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 8px;
+  color: rgba(255,255,255,0.8);
+  font-size: 13px;
+  font-weight: 500;
   cursor: pointer;
-  padding: 0;
-  margin-bottom: 20px;
-  transition: color 0.15s;
+  padding: 7px 14px 7px 10px;
+  margin-bottom: 24px;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
 }
-.co-back:hover { color: #e8edf2; }
-
-.co-back-arrow {
-  font-size: 16px;
-  line-height: 1;
+.co-back:hover {
+  background: rgba(255,255,255,0.1);
+  border-color: rgba(255,255,255,0.2);
+  color: #fff;
 }
+.co-back img { opacity: 0.7; transition: opacity 0.15s; }
+.co-back:hover img { opacity: 1; }
 
 .co-page-title {
   font-size: 24px;
