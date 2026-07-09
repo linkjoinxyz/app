@@ -34,6 +34,9 @@ export default function JoinInvite() {
   const [accepting, setAccepting] = useState(false)
   const [acceptErr, setAcceptErr] = useState('')
 
+  // Welcome screen shown after successful accept
+  const [welcomed, setWelcomed] = useState(null) // { orgName, role, dest }
+
   useEffect(() => {
     apiGet(`/invites/${token}`)
       .then(data => {
@@ -54,7 +57,7 @@ export default function JoinInvite() {
       const data = await apiPost(`/invites/${token}/accept`, {})
       refreshAuth(data)
       const dest = data.role === 'student' ? '/meetings' : '/admin'
-      navigate(dest, { replace: true })
+      setWelcomed({ orgName: invite.org_name, role: data.role, dest })
     } catch (err) {
       setAcceptErr(err?.detail || 'Failed to accept invite. Please try again.')
       setAccepting(false)
@@ -85,7 +88,7 @@ export default function JoinInvite() {
       const acceptData = await apiPost(`/invites/${token}/accept`, {})
       refreshAuth(acceptData)
       const dest = acceptData.role === 'student' ? '/meetings' : '/admin'
-      navigate(dest, { replace: true })
+      setWelcomed({ orgName: invite.org_name, role: acceptData.role, dest })
     } catch (err) {
       const msg = err?.detail || err?.message || 'Something went wrong. Please try again.'
       const friendly = {
@@ -96,6 +99,29 @@ export default function JoinInvite() {
       setFormErr(friendly[msg] || msg)
       setSubmitting(false)
     }
+  }
+
+  if (welcomed) {
+    const roleLabel = ROLE_LABELS[welcomed.role] || welcomed.role
+    const roleDesc = {
+      school_admin: 'You can manage teachers, classes, students, and settings for your organization.',
+      teacher: 'You can manage your classes, add students, and track attendance.',
+      student: 'Your class links will open automatically at the right time.',
+    }[welcomed.role] || ''
+    return (
+      <div className="join-root">
+        <div className="join-card">
+          <img src="/images/logo-text.svg" alt="LinkJoin" className="join-logo" />
+          <div className="join-welcome-icon">&#10003;</div>
+          <div className="join-welcome-title">Welcome to {welcomed.orgName || 'your organization'}!</div>
+          <div className="join-welcome-role">You've been added as a <strong>{roleLabel}</strong>.</div>
+          {roleDesc && <div className="join-welcome-desc">{roleDesc}</div>}
+          <button className="join-btn" style={{ marginTop: 28 }} onClick={() => navigate(welcomed.dest, { replace: true })}>
+            Go to dashboard
+          </button>
+        </div>
+      </div>
+    )
   }
 
   if (loading) {

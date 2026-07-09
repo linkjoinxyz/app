@@ -211,3 +211,42 @@
   text-align: center;
   line-height: 1.5;
 }
+
+.join-welcome-icon {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: rgba(43,143,216,0.15);
+  border: 1.5px solid rgba(43,143,216,0.4);
+  color: #2b8fd8;
+  font-size: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 20px;
+}
+
+.join-welcome-title {
+  font-size: 20px;
+  font-weight: 700;
+  color: #e8edf2;
+  letter-spacing: -0.3px;
+  margin-bottom: 10px;
+  text-align: center;
+}
+
+.join-welcome-role {
+  font-size: 14px;
+  color: rgba(255,255,255,0.6);
+  text-align: center;
+  margin-bottom: 8px;
+}
+
+.join-welcome-desc {
+  font-size: 13px;
+  color: rgba(255,255,255,0.35);
+  text-align: center;
+  line-height: 1.6;
+  max-width: 320px;
+  margin: 0 auto;
+}
