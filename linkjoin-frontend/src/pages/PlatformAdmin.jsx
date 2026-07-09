@@ -155,7 +155,7 @@ function InvitesTab() {
           <tbody>
             {invites.map(iv => (
               <tr key={iv.token}>
-                <td>{iv.email || <span className="pa-dim">(join code)</span>}</td>
+                <td>{iv.email || <span className="pa-dim">-</span>}</td>
                 <td>{orgMap[iv.org_id] || <span className="pa-dim">{iv.org_id || '-'}</span>}</td>
                 <td>{iv.type}</td>
                 <td><span className={`pa-status pa-status--${iv.status}`}>{iv.status}</span></td>
