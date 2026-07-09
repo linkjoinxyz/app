@@ -1775,8 +1775,15 @@ button.iv-status-pill { cursor: pointer; }
   justify-content: space-between;
   gap: 12px;
   padding: 16px 20px 12px;
+  width: 100%;
+  background: none;
+  border: none;
   border-bottom: 1px solid rgba(255,255,255,0.06);
+  text-align: left;
+  cursor: pointer;
 }
+.iv-mine-header:hover { background: rgba(255,255,255,0.02); }
+.iv-mine-header--open { border-bottom-color: rgba(255,255,255,0.08); }
 .iv-mine-header-left {
   display: flex;
   flex-direction: column;

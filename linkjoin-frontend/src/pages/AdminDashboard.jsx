@@ -2274,26 +2274,33 @@ function OrgInterventionList({ onBack, initialExpanded = null }) {
 
       {filter === 'mine' ? (
         <div className="iv-mine-list" style={{ marginTop: 12 }}>
-          {visible.map(iv => (
-            <div key={iv.intervention_id} className="iv-mine-card">
-              <div className="iv-mine-header">
-                <div className="iv-mine-header-left">
-                  <span className="iv-student-name">{iv.student_name || iv.student_email}</span>
-                  {iv.student_name && <span className="iv-student-email">{iv.student_email}</span>}
-                </div>
-                <div className="iv-mine-header-right">
-                  <span className="iv-class-chip">{iv.class_name}</span>
-                  <span className={`att-badge ${iv.flag_type === 'repeat_tardy' ? 'att-late' : 'att-slightly-late'}`}>
-                    {iv.flag_type === 'repeat_tardy' ? 'Repeat tardy' : 'Low attendance'}
-                  </span>
-                  <span className={`iv-status-pill iv-status-pill--${iv.status}`}>
-                    {iv.status === 'open' ? 'Open' : 'In progress'}
-                  </span>
-                </div>
+          {visible.map(iv => {
+            const expanded = expandedCase === iv.intervention_id
+            return (
+              <div key={iv.intervention_id} className="iv-mine-card">
+                <button
+                  className={`iv-mine-header${expanded ? ' iv-mine-header--open' : ''}`}
+                  onClick={() => setExpandedCase(expanded ? null : iv.intervention_id)}
+                >
+                  <div className="iv-mine-header-left">
+                    <span className="iv-student-name">{iv.student_name || iv.student_email}</span>
+                    {iv.student_name && <span className="iv-student-email">{iv.student_email}</span>}
+                  </div>
+                  <div className="iv-mine-header-right">
+                    <span className="iv-class-chip">{iv.class_name}</span>
+                    <span className={`att-badge ${iv.flag_type === 'repeat_tardy' ? 'att-late' : 'att-slightly-late'}`}>
+                      {iv.flag_type === 'repeat_tardy' ? 'Repeat tardy' : 'Low attendance'}
+                    </span>
+                    <span className={`iv-status-pill iv-status-pill--${iv.status}`}>
+                      {iv.status === 'open' ? 'Open' : 'In progress'}
+                    </span>
+                    <span className="iv-chevron">{expanded ? '▾' : '▸'}</span>
+                  </div>
+                </button>
+                {expanded && <IvDetailPanel iv={iv} {...detailProps} parentContact={parentContacts[iv.student_user_id]} />}
               </div>
-              <IvDetailPanel iv={iv} {...detailProps} parentContact={parentContacts[iv.student_user_id]} />
-            </div>
-          ))}
+            )
+          })}
         </div>
       ) : (
         <div className="iv-list" style={{ marginTop: 12 }}>
