@@ -147,6 +147,14 @@
 .pa-table--clickable tbody tr:hover td {
   background: rgba(255,255,255,0.03);
 }
+.pa-table--clickable tbody tr td:first-child {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-color: rgba(255,255,255,0.3);
+}
+.pa-table--clickable tbody tr:hover td:first-child {
+  text-decoration-color: rgba(255,255,255,0.7);
+}
 
 .pa-mono { font-family: monospace; font-size: 12px; }
 .pa-dim { color: rgba(255,255,255,0.3); }
