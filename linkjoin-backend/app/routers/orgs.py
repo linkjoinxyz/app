@@ -73,6 +73,17 @@ async def create_org(body: CreateOrgRequest, _: None = Depends(_check_token)):
     return {k: v for k, v in doc.items() if k != "_id"}
 
 
+@router.get("/{org_id}/members")
+async def get_org_members(org_id: str, user: dict = Depends(get_confirmed_user)):
+    require_school_admin(user)
+    if user.get("org_id") != org_id and user.get("role") != "district_admin":
+        raise HTTPException(status_code=403, detail="Access denied")
+    members = []
+    async for u in motor_db.login.find({"org_id": org_id}, {"password": 0, "_id": 0}):
+        members.append(u)
+    return members
+
+
 @router.get("/{org_id}")
 async def get_org(org_id: str, user: dict = Depends(get_confirmed_user)):
     require_school_admin(user)

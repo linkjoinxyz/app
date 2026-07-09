@@ -2495,11 +2495,17 @@ function SchoolAdminView() {
   const [inviting, setInviting] = useState(false)
   const [inviteResult, setInviteResult] = useState(null) // null | {ok, msg}
   const [pendingInvites, setPendingInvites] = useState([])
+  const [orgTeachers, setOrgTeachers] = useState([])
 
   useEffect(() => {
     apiGet('/classes').then(cls => setClasses(cls)).finally(() => setLoading(false))
     apiGet('/interventions').then(ivs => setOpenCases(Array.isArray(ivs) ? ivs : [])).catch(() => {})
-    if (orgId) apiGet(`/orgs/${orgId}`).then(org => setBrandName(org.brand_name || '')).catch(() => {})
+    if (orgId) {
+      apiGet(`/orgs/${orgId}`).then(org => setBrandName(org.brand_name || '')).catch(() => {})
+      apiGet(`/orgs/${orgId}/members`).then(members => {
+        setOrgTeachers(Array.isArray(members) ? members.filter(m => m.role === 'teacher') : [])
+      }).catch(() => {})
+    }
     apiGet('/invites').then(ivs => setPendingInvites(Array.isArray(ivs) ? ivs.filter(i => i.type === 'teacher' && i.status === 'pending') : [])).catch(() => {})
   }, [orgId])
 
@@ -2619,6 +2625,9 @@ function SchoolAdminView() {
   }
 
   const q = search.trim().toLowerCase()
+  const teacherIdsWithClasses = new Set(Object.keys(byTeacher))
+  const classlessTeachers = orgTeachers.filter(t => !teacherIdsWithClasses.has(t.user_id))
+
   const filteredTeachers = Object.entries(byTeacher).filter(([tid]) => {
     if (!q) return true
     const info = teacherLabels[tid] || {}
@@ -2787,6 +2796,18 @@ function SchoolAdminView() {
           </button>
         )}
       </div>
+
+      {classlessTeachers.length > 0 && (
+        <div className="teacher-pending-invites" style={{ marginTop: 24 }}>
+          <div className="teacher-pending-label">No classes assigned</div>
+          {classlessTeachers.map(t => (
+            <div key={t.user_id} className="teacher-pending-row">
+              <span className="teacher-pending-email">{t.username}</span>
+              <span className="iv-status-pill iv-status-pill--open">Teacher</span>
+            </div>
+          ))}
+        </div>
+      )}
       </>}
 
     </>
