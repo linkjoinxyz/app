@@ -133,7 +133,7 @@ function InvitesTab() {
       apiGet('/invites'),
       apiGet('/admin/orgs'),
     ]).then(([ivs, orgs]) => {
-      setInvites(Array.isArray(ivs) ? ivs : [])
+      setInvites(Array.isArray(ivs) ? ivs.filter(iv => iv.type !== 'student_class') : [])
       const map = {}
       if (Array.isArray(orgs)) orgs.forEach(o => { map[o.org_id] = o.name })
       setOrgMap(map)
