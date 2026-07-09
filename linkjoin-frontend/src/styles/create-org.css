@@ -17,7 +17,11 @@
   transition: color 0.15s;
 }
 .co-back:hover { color: #e8edf2; }
-.co-back svg { flex-shrink: 0; opacity: 0.9; }
+
+.co-back-arrow {
+  font-size: 16px;
+  line-height: 1;
+}
 
 .co-page-title {
   font-size: 24px;
