@@ -218,7 +218,14 @@ async def get_class_patterns(class_id: str, student_email: str | None = Query(de
     if not cls:
         raise HTTPException(status_code=404, detail="Class not found")
     if user.get("role") == "teacher" and cls["teacher_id"] != user["user_id"]:
-        raise HTTPException(status_code=403, detail="Access denied")
+        # Also allow teachers who have an active intervention assigned to them for this class
+        assigned = await motor_db.interventions.find_one({
+            "class_id": class_id,
+            "assigned_to": user["username"],
+            "status": {"$ne": "resolved"},
+        })
+        if not assigned:
+            raise HTTPException(status_code=403, detail="Access denied")
     if user.get("role") in ("school_admin", "district_admin") and cls["org_id"] != user.get("org_id"):
         raise HTTPException(status_code=403, detail="Access denied")
 
