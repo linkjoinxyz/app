@@ -1,6 +1,7 @@
-import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
-import { useEffect } from 'react'
+import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom'
+import { useEffect, useState } from 'react'
 import { useAuth } from './context/AuthContext.jsx'
+import { apiGet, apiPost } from './api/client.js'
 
 function ScrollToTop() {
   const { pathname } = useLocation()
@@ -39,10 +40,42 @@ import History from './pages/History.jsx'
 
 const TEACHER_ROLES = new Set(['teacher', 'school_admin', 'district_admin'])
 
+function IvToast() {
+  const { role } = useAuth()
+  const navigate = useNavigate()
+  const [count, setCount] = useState(null)
+
+  useEffect(() => {
+    if (!TEACHER_ROLES.has(role)) return
+    apiGet('/interventions?mine=true&unseen=true').then(ivs => {
+      if (Array.isArray(ivs) && ivs.length > 0) setCount(ivs.length)
+    }).catch(() => {})
+  }, [role])
+
+  if (!count) return null
+
+  function dismiss() {
+    setCount(null)
+    apiPost('/interventions/acknowledge-mine', {}).catch(() => {})
+  }
+
+  return (
+    <div className="iv-toast">
+      <div className="iv-toast-body">
+        You have {count} new intervention assignment{count !== 1 ? 's' : ''}.
+      </div>
+      <div className="iv-toast-actions">
+        <button className="iv-toast-view" onClick={() => { navigate('/admin'); dismiss() }}>View</button>
+        <button className="iv-toast-dismiss" onClick={dismiss}>&#x2715;</button>
+      </div>
+    </div>
+  )
+}
+
 function PrivateRoute({ children }) {
   const { token } = useAuth()
   if (!token) return <Navigate to="/login" replace />
-  return children
+  return <>{children}<IvToast /></>
 }
 
 function TeacherRoute({ children }) {

@@ -2179,17 +2179,7 @@ function OrgInterventionList({ onBack, initialExpanded = null }) {
   const [noteInputs, setNoteInputs] = useState({})
   const [assignedDrafts, setAssignedDrafts] = useState({})
   const [assignedSaved, setAssignedSaved] = useState({})
-  const [toast, setToast] = useState(null)
   const [parentContacts, setParentContacts] = useState({})
-
-  // Check for unseen assignments on mount
-  useEffect(() => {
-    apiGet('/interventions?mine=true&unseen=true').then(ivs => {
-      if (Array.isArray(ivs) && ivs.length > 0) {
-        setToast(ivs.length)
-      }
-    }).catch(() => {})
-  }, [])
 
   useEffect(() => {
     setLoading(true)
@@ -2214,17 +2204,6 @@ function OrgInterventionList({ onBack, initialExpanded = null }) {
       }
     })
   }, [interventions, filter])
-
-  function dismissToast() {
-    setToast(null)
-    apiPost('/interventions/acknowledge-mine', {}).catch(() => {})
-  }
-
-  function goToMine() {
-    setFilter('mine')
-    setExpandedCase(null)
-    dismissToast()
-  }
 
   async function updateCase(ivId, updates) {
     try {
@@ -2269,18 +2248,6 @@ function OrgInterventionList({ onBack, initialExpanded = null }) {
 
   return (
     <div>
-      {toast !== null && (
-        <div className="iv-toast">
-          <div className="iv-toast-body">
-            You have {toast} new intervention assignment{toast !== 1 ? 's' : ''}.
-          </div>
-          <div className="iv-toast-actions">
-            <button className="iv-toast-view" onClick={goToMine}>View</button>
-            <button className="iv-toast-dismiss" onClick={dismissToast}>&#x2715;</button>
-          </div>
-        </div>
-      )}
-
       <div className="iv-toolbar">
         <input
           className="iv-search-input"
