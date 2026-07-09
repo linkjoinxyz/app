@@ -76,8 +76,10 @@ async def create_invite(
     class_name = None
 
     if invite_type == "school_admin":
-        if not _settings.add_accounts_token or x_admin_token != _settings.add_accounts_token:
-            raise HTTPException(status_code=403, detail="Admin token required for school_admin invites")
+        is_platform_admin = user.get("admin") == "true"
+        has_token = _settings.add_accounts_token and x_admin_token == _settings.add_accounts_token
+        if not is_platform_admin and not has_token:
+            raise HTTPException(status_code=403, detail="Admin token or platform admin account required for school_admin invites")
         org_id = body.get("org_id")
         if not org_id:
             raise HTTPException(status_code=422, detail="org_id required")
