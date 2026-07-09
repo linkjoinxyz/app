@@ -158,7 +158,7 @@ function InvitesTab() {
                 <td>{iv.email || <span className="pa-dim">-</span>}</td>
                 <td>{orgMap[iv.org_id] || <span className="pa-dim">{iv.org_id || '-'}</span>}</td>
                 <td>{iv.type}</td>
-                <td><span className={`pa-status pa-status--${iv.status}`}>{iv.status}</span></td>
+                <td><span className={`pa-status pa-status--${iv.status}`}>{iv.status === 'revoked' ? 'rescinded' : iv.status}</span></td>
                 <td className="pa-dim">{iv.created_at ? new Date(iv.created_at).toLocaleDateString() : '-'}</td>
               </tr>
             ))}
