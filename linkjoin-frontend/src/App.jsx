@@ -31,6 +31,7 @@ import Subprocessors from './pages/Subprocessors.jsx'
 import BreachPolicy from './pages/BreachPolicy.jsx'
 import AdminDashboard from './pages/AdminDashboard.jsx'
 import PlatformAdmin from './pages/PlatformAdmin.jsx'
+import CreateOrg from './pages/CreateOrg.jsx'
 import JoinInvite from './pages/JoinInvite.jsx'
 import Settings from './pages/Settings.jsx'
 import School from './pages/School.jsx'
@@ -128,6 +129,7 @@ export default function App() {
       <Route path="/demo" element={<Demo />} />
       <Route path="/admin/*" element={<TeacherRoute><AdminDashboard /></TeacherRoute>} />
       <Route path="/platform" element={<PlatformAdminRoute><PlatformAdmin /></PlatformAdminRoute>} />
+      <Route path="/platform/orgs/new" element={<PlatformAdminRoute><CreateOrg /></PlatformAdminRoute>} />
       <Route path="/join/:token" element={<JoinInvite />} />
       <Route path="/settings" element={<PrivateRoute><Settings /></PrivateRoute>} />
       <Route path="/history" element={<PrivateRoute><History /></PrivateRoute>} />

@@ -39,9 +39,19 @@ async def create_org(body: CreateOrgRequest, _: None = Depends(_check_token)):
         "name": body.name,
         "type": body.type,
         "parent_org_id": body.parent_org_id,
+        "address": body.address,
+        "city": body.city,
+        "state": body.state,
+        "zip_code": body.zip_code,
+        "website": body.website,
+        "phone": body.phone,
+        "timezone": body.timezone,
+        "grade_levels": body.grade_levels or [],
+        "school_year_start": body.school_year_start,
+        "school_year_end": body.school_year_end,
     }
     await motor_db.orgs.insert_one(doc)
-    return {"org_id": org_id, "name": body.name, "type": body.type}
+    return {k: v for k, v in doc.items() if k != "_id"}
 
 
 @router.get("/{org_id}")

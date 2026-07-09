@@ -1,26 +1,15 @@
-import { useState, useEffect, useCallback } from 'react'
-import { apiFetch, apiGet, apiPatch } from '../api/client.js'
+import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { apiGet, apiPatch } from '../api/client.js'
 import HeaderModern from '../components/HeaderModern.jsx'
 import '../styles/platform-admin.css'
-
-function adminFetch(path, opts = {}) {
-  return apiFetch(path, opts)
-}
 
 // ─── Orgs Tab ─────────────────────────────────────────────────────────────────
 
 function OrgsTab() {
-  const [adminToken, setAdminToken] = useState(() => sessionStorage.getItem('pa_tok') || '')
+  const navigate = useNavigate()
   const [orgs, setOrgs] = useState([])
   const [loading, setLoading] = useState(true)
-  const [showCreate, setShowCreate] = useState(null) // null | 'org' | 'invite'
-  const [newOrg, setNewOrg] = useState({ name: '', type: 'school' })
-  const [creating, setCreating] = useState(false)
-  const [createdOrgId, setCreatedOrgId] = useState(null)
-  const [inviteEmail, setInviteEmail] = useState('')
-  const [inviting, setInviting] = useState(false)
-  const [inviteOk, setInviteOk] = useState(false)
-  const [err, setErr] = useState('')
 
   useEffect(() => {
     apiGet('/admin/orgs')
@@ -29,99 +18,12 @@ function OrgsTab() {
       .finally(() => setLoading(false))
   }, [])
 
-  async function createOrg() {
-    if (!newOrg.name.trim()) { setErr('Name is required'); return }
-    if (!adminToken.trim()) { setErr('Admin token is required'); return }
-    setCreating(true); setErr('')
-    try {
-      const res = await apiFetch('/orgs', {
-        method: 'POST',
-        body: JSON.stringify({ name: newOrg.name, type: newOrg.type }),
-        headers: { 'X-Admin-Token': adminToken },
-      })
-      sessionStorage.setItem('pa_tok', adminToken)
-      setCreatedOrgId(res.org_id)
-      setOrgs(prev => [res, ...prev])
-      setShowCreate('invite')
-    } catch (e) {
-      setErr(e?.message || 'Failed to create org')
-    }
-    setCreating(false)
-  }
-
-  async function sendSchoolAdminInvite() {
-    if (!inviteEmail.trim()) { setErr('Email is required'); return }
-    setInviting(true); setErr('')
-    try {
-      await apiFetch('/invites', {
-        method: 'POST',
-        body: JSON.stringify({ type: 'school_admin', org_id: createdOrgId, email: inviteEmail.trim() }),
-        headers: { 'X-Admin-Token': adminToken },
-      })
-      setInviteOk(true)
-      setTimeout(() => {
-        setInviteOk(false); setShowCreate(null)
-        setNewOrg({ name: '', type: 'school' }); setInviteEmail(''); setCreatedOrgId(null)
-      }, 2000)
-    } catch (e) {
-      setErr(e?.message || 'Failed to send invite')
-    }
-    setInviting(false)
-  }
-
   return (
     <div className="pa-section">
       <div className="pa-section-header">
         <span className="pa-section-title">Organizations</span>
-        <button className="pa-btn" onClick={() => { setShowCreate('org'); setErr('') }}>+ Create org</button>
+        <button className="pa-btn" onClick={() => navigate('/platform/orgs/new')}>+ Create org</button>
       </div>
-
-      {showCreate === 'org' && (
-        <div className="pa-modal-backdrop" onClick={() => setShowCreate(null)}>
-          <div className="pa-modal" onClick={e => e.stopPropagation()}>
-            <div className="pa-modal-title">Create organization</div>
-            <div className="pa-field">
-              <label className="pa-label">Name</label>
-              <input className="pa-input" value={newOrg.name} onChange={e => setNewOrg(p => ({ ...p, name: e.target.value }))} placeholder="Lincoln High School" />
-            </div>
-            <div className="pa-field">
-              <label className="pa-label">Type</label>
-              <select className="pa-input" value={newOrg.type} onChange={e => setNewOrg(p => ({ ...p, type: e.target.value }))}>
-                <option value="school">School</option>
-                <option value="district">District</option>
-              </select>
-            </div>
-            <div className="pa-field">
-              <label className="pa-label">Admin token</label>
-              <input className="pa-input" type="password" value={adminToken} onChange={e => setAdminToken(e.target.value)} placeholder="X-Admin-Token value" />
-            </div>
-            {err && <div className="pa-error">{err}</div>}
-            <div className="pa-modal-actions">
-              <button className="pa-btn pa-btn--ghost" onClick={() => setShowCreate(null)}>Cancel</button>
-              <button className="pa-btn" onClick={createOrg} disabled={creating}>{creating ? 'Creating...' : 'Create'}</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {showCreate === 'invite' && (
-        <div className="pa-modal-backdrop" onClick={() => setShowCreate(null)}>
-          <div className="pa-modal" onClick={e => e.stopPropagation()}>
-            <div className="pa-modal-title">Invite school administrator</div>
-            <p className="pa-modal-desc">Send an invite to the person who will manage this school.</p>
-            <div className="pa-field">
-              <label className="pa-label">Email</label>
-              <input className="pa-input" type="email" value={inviteEmail} onChange={e => setInviteEmail(e.target.value)} placeholder="admin@school.edu" />
-            </div>
-            {err && <div className="pa-error">{err}</div>}
-            {inviteOk && <div className="pa-success">Invite sent!</div>}
-            <div className="pa-modal-actions">
-              <button className="pa-btn pa-btn--ghost" onClick={() => setShowCreate(null)}>Skip</button>
-              <button className="pa-btn" onClick={sendSchoolAdminInvite} disabled={inviting}>{inviting ? 'Sending...' : 'Send invite'}</button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {loading ? (
         <div className="pa-empty">Loading...</div>
