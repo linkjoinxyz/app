@@ -1821,12 +1821,7 @@
   border-color: transparent;
 }
 .canvas-connect-btn:hover { background: #c85500; }
-.canvas-c {
-  font-size: 15px;
-  font-weight: 800;
-  color: #fff;
-  line-height: 1;
-}
+
 .gc-course-select {
   padding: 8px 12px;
   background: rgba(255,255,255,0.06);

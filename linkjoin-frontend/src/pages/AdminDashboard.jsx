@@ -1205,7 +1205,7 @@ function ClassDetail({ cls, onBack, onUpdate, onViewStudent }) {
                   <p className="gc-prompt-text">Connect your Canvas account to sync attendance scores directly to your Canvas gradebook.</p>
                   <button className="gc-connect-btn canvas-connect-btn" onClick={handleCanvasConnect} disabled={canvasConnecting}>
                     {canvasConnecting ? 'Connecting...' : (
-                      <><span className="canvas-c">C</span> Connect Canvas</>
+                      <><img src="/images/lms/canvas.svg" alt="" className="gc-logo-icon" /> Connect Canvas</>
                     )}
                   </button>
                 </div>
@@ -1222,7 +1222,7 @@ function ClassDetail({ cls, onBack, onUpdate, onViewStudent }) {
               ) : (
                 <div className="gc-connected">
                   <div className="gc-course-row">
-                    <span className="gc-course-icon"><span className="canvas-c">C</span></span>
+                    <span className="gc-course-icon"><img src="/images/lms/canvas.svg" alt="Canvas" className="gc-logo-icon" /></span>
                     <div className="gc-course-info">
                       <div className="gc-course-name">Canvas LMS</div>
                       <div className="gc-course-meta">{cls.canvas_course_name}</div>
