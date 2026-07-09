@@ -102,7 +102,7 @@ export default function JoinInvite() {
     return (
       <div className="join-root">
         <div className="join-card">
-          <div className="join-logo">LinkJoin</div>
+          <img src="/images/logo-text.svg" alt="LinkJoin" className="join-logo" />
           <div className="join-loading">Loading invite...</div>
         </div>
       </div>
@@ -113,7 +113,7 @@ export default function JoinInvite() {
     return (
       <div className="join-root">
         <div className="join-card">
-          <div className="join-logo">LinkJoin</div>
+          <img src="/images/logo-text.svg" alt="LinkJoin" className="join-logo" />
           <div className="join-error-state">
             <div className="join-error-icon">!</div>
             <div className="join-error-title">Invite not available</div>
@@ -131,7 +131,7 @@ export default function JoinInvite() {
   return (
     <div className="join-root">
       <div className="join-card">
-        <div className="join-logo">LinkJoin</div>
+        <img src="/images/logo-text.svg" alt="LinkJoin" className="join-logo" />
 
         <div className="join-invite-meta">
           <div className="join-org">{invite.org_name}</div>
