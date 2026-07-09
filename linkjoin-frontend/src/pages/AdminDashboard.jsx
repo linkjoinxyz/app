@@ -2243,14 +2243,18 @@ function OrgInterventionList({ onBack, initialExpanded = null }) {
     if (!iv) return
     const uid = iv.student_user_id
     if (!uid || studentProfiles[uid] !== undefined) return
-    Promise.all([
+    Promise.allSettled([
       apiGet(`/users/student/${uid}`),
       apiGet(`/attendance/class/${iv.class_id}/patterns?student_email=${encodeURIComponent(iv.student_email)}`),
-    ]).then(([profile, patterns]) => {
-      const studentRow = (patterns?.students || []).find(s => s.student_email === iv.student_email)
-      setStudentProfiles(p => ({ ...p, [uid]: { ...profile, _attendanceRow: studentRow || null } }))
-    }).catch(() => {
-      setStudentProfiles(p => ({ ...p, [uid]: null }))
+    ]).then(([profileResult, patternsResult]) => {
+      if (profileResult.status === 'rejected') {
+        setStudentProfiles(p => ({ ...p, [uid]: null }))
+        return
+      }
+      const profile = profileResult.value
+      const patterns = patternsResult.status === 'fulfilled' ? patternsResult.value : null
+      const studentRow = (patterns?.students || []).find(s => s.student_email === iv.student_email) || null
+      setStudentProfiles(p => ({ ...p, [uid]: { ...profile, _attendanceRow: studentRow } }))
     })
   }, [expandedCase, filter, interventions, studentProfiles])
 
