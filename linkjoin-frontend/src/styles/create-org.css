@@ -5,18 +5,19 @@
 .co-back {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 6px;
   background: none;
   border: none;
-  color: rgba(255,255,255,0.4);
-  font-size: 13px;
+  color: rgba(255,255,255,0.6);
+  font-size: 14px;
+  font-weight: 400;
   cursor: pointer;
   padding: 0;
-  margin-bottom: 16px;
+  margin-bottom: 20px;
   transition: color 0.15s;
 }
-.co-back:hover { color: rgba(255,255,255,0.7); }
-.co-back svg { flex-shrink: 0; }
+.co-back:hover { color: #e8edf2; }
+.co-back svg { flex-shrink: 0; opacity: 0.9; }
 
 .co-page-title {
   font-size: 24px;

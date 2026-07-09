@@ -144,7 +144,7 @@ export default function CreateOrg() {
       <div className="admin-page">
         <div className="co-topbar">
           <button className="co-back" onClick={() => navigate('/platform')}>
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M10 12L6 8l4-4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>
+            <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M11 14L6 9l5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
             Platform Admin
           </button>
           <h1 className="co-page-title">Create Organization</h1>
