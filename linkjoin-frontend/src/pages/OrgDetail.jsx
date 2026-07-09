@@ -211,10 +211,6 @@ export default function OrgDetail() {
       <HeaderModern page="admin" />
       <div className="admin-page">
         <div className="co-topbar">
-          <button className="co-back" onClick={() => navigate('/platform')}>
-            <img src="/images/arrow-left.svg" alt="back" style={{ width: 16, height: 16 }} />
-            Platform Admin
-          </button>
           <h1 className="co-page-title">{orgName}</h1>
           <p className="co-page-sub">Org ID: {orgId}</p>
         </div>
@@ -399,6 +395,9 @@ export default function OrgDetail() {
               disabled={saving || !form.name.trim()}
             >
               {saving ? 'Saving...' : 'Save changes'}
+            </button>
+            <button className="pa-btn pa-btn--ghost co-cancel-btn" onClick={() => navigate('/platform')}>
+              Back
             </button>
           </div>
         </div>
