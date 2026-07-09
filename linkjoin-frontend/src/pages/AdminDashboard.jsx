@@ -2119,17 +2119,14 @@ function IvDetailPanel({ iv, updateCase, addNote, deleteNote, noteInputs, setNot
 
           {classSummary && (
             <div className="iv-mine-section">
-              <div className="iv-mine-section-title">Attendance — {classSummary.class_name}</div>
+              <div className="iv-mine-section-title">Attendance (last 90 days) — {classSummary.class_name}</div>
               <div className="iv-mine-fields">
-                <div className="iv-mine-field"><span className="iv-mine-label">Sessions</span><span className="iv-mine-value">{classSummary.sessions}</span></div>
+                <div className="iv-mine-field"><span className="iv-mine-label">Sessions attended</span><span className="iv-mine-value">{classSummary.sessions}</span></div>
                 <div className="iv-mine-field"><span className="iv-mine-label">On time</span><span className="iv-mine-value">{classSummary.on_time}</span></div>
                 <div className="iv-mine-field"><span className="iv-mine-label">Tardy</span><span className="iv-mine-value" style={{ color: classSummary.tardy > 0 ? '#ff6b6b' : 'inherit' }}>{classSummary.tardy}</span></div>
-                {classSummary.sessions > 0 && (
-                  <div className="iv-mine-field">
-                    <span className="iv-mine-label">Attendance rate</span>
-                    <span className="iv-mine-value">{Math.round((classSummary.on_time / classSummary.sessions) * 100)}%</span>
-                  </div>
-                )}
+              </div>
+              <div style={{ marginTop: 8, fontSize: 11, color: 'rgba(255,255,255,0.3)' }}>
+                Attendance rate is based on expected sessions from the class schedule.
               </div>
             </div>
           )}
