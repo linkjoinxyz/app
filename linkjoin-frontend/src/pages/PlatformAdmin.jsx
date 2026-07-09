@@ -125,13 +125,19 @@ function UsersTab() {
 
 function InvitesTab() {
   const [invites, setInvites] = useState([])
+  const [orgMap, setOrgMap] = useState({})
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    apiGet('/invites')
-      .then(data => setInvites(Array.isArray(data) ? data : []))
-      .catch(() => setInvites([]))
-      .finally(() => setLoading(false))
+    Promise.all([
+      apiGet('/invites'),
+      apiGet('/admin/orgs'),
+    ]).then(([ivs, orgs]) => {
+      setInvites(Array.isArray(ivs) ? ivs : [])
+      const map = {}
+      if (Array.isArray(orgs)) orgs.forEach(o => { map[o.org_id] = o.name })
+      setOrgMap(map)
+    }).catch(() => {}).finally(() => setLoading(false))
   }, [])
 
   if (loading) return <div className="pa-section"><div className="pa-empty">Loading...</div></div>
@@ -145,11 +151,12 @@ function InvitesTab() {
         <div className="pa-empty">No invites yet.</div>
       ) : (
         <table className="pa-table">
-          <thead><tr><th>Email</th><th>Type</th><th>Status</th><th>Created</th></tr></thead>
+          <thead><tr><th>Email</th><th>Org</th><th>Type</th><th>Status</th><th>Created</th></tr></thead>
           <tbody>
             {invites.map(iv => (
               <tr key={iv.token}>
                 <td>{iv.email || <span className="pa-dim">(join code)</span>}</td>
+                <td>{orgMap[iv.org_id] || <span className="pa-dim">{iv.org_id || '-'}</span>}</td>
                 <td>{iv.type}</td>
                 <td><span className={`pa-status pa-status--${iv.status}`}>{iv.status}</span></td>
                 <td className="pa-dim">{iv.created_at ? new Date(iv.created_at).toLocaleDateString() : '-'}</td>
