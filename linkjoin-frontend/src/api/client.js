@@ -28,6 +28,7 @@ export async function apiFetch(path, options = {}) {
       : (typeof detail === 'string' ? detail : 'Request failed')
     throw Object.assign(new Error(message), { status: res.status, body })
   }
+  if (res.status === 204 || res.headers.get('content-length') === '0') return null
   return res.json()
 }
 
