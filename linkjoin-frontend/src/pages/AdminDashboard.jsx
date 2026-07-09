@@ -2121,7 +2121,7 @@ function IvDetailPanel({ iv, updateCase, addNote, deleteNote, noteInputs, setNot
 
           {(classSummary || attendanceRow) && (
             <div className="iv-mine-section">
-              <div className="iv-mine-section-title">Attendance — {classSummary?.class_name || iv.class_name}</div>
+              <div className="iv-mine-section-title">Attendance</div>
               <div className="iv-mine-fields">
                 {attendanceRow && <div className="iv-mine-field"><span className="iv-mine-label">Expected</span><span className="iv-mine-value">{attendanceRow.effective_expected}</span></div>}
                 <div className="iv-mine-field"><span className="iv-mine-label">Attended</span><span className="iv-mine-value">{attendanceRow?.sessions ?? classSummary?.sessions}</span></div>
