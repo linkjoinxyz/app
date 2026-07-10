@@ -107,6 +107,7 @@ export default function CreateOrg() {
       const payload = {
         name: form.name.trim(),
         type: form.type,
+        admin_email: form.admin_email.trim() || null,
         parent_org_id: form.parent_org_id || null,
         address: form.address.trim() || null,
         city: form.city.trim() || null,
@@ -119,17 +120,10 @@ export default function CreateOrg() {
         school_year_start: `${form.school_year_start_month} ${form.school_year_start_day}`,
         school_year_end: `${form.school_year_end_month} ${form.school_year_end_day}`,
       }
-      const org = await apiFetch('/orgs', {
+      await apiFetch('/orgs', {
         method: 'POST',
         body: JSON.stringify(payload),
       })
-
-      if (form.admin_email.trim()) {
-        await apiFetch('/invites', {
-          method: 'POST',
-          body: JSON.stringify({ type: 'school_admin', org_id: org.org_id, email: form.admin_email.trim().toLowerCase() }),
-        })
-      }
 
       navigate('/platform')
     } catch (e) {

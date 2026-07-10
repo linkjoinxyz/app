@@ -5,14 +5,76 @@ import { usersApi } from '../api/users.js'
 import { apiGet, apiPatch, apiPost } from '../api/client.js'
 import '../styles/admin-onboarding.css'
 
-const TOTAL_STEPS = 3
-
-function ProgressDots({ step }) {
+function ProgressDots({ step, total }) {
   return (
-    <div className="aob-dots" aria-label={`Step ${step} of ${TOTAL_STEPS}`}>
-      {Array.from({ length: TOTAL_STEPS }, (_, i) => (
+    <div className="aob-dots" aria-label={`Step ${step} of ${total}`}>
+      {Array.from({ length: total }, (_, i) => (
         <span key={i} className={`aob-dot${i + 1 === step ? ' aob-dot--active' : i + 1 < step ? ' aob-dot--done' : ''}`} />
       ))}
+    </div>
+  )
+}
+
+function StepSetPassword({ onNext }) {
+  const { clearMustChangePassword } = useAuth()
+  const [newPw, setNewPw] = useState('')
+  const [confirmPw, setConfirmPw] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [err, setErr] = useState('')
+
+  async function handleNext() {
+    if (newPw.length < 8) { setErr('Password must be at least 8 characters.'); return }
+    if (newPw !== confirmPw) { setErr('Passwords do not match.'); return }
+    setSaving(true); setErr('')
+    try {
+      await apiPost('/auth/set-password', { new_password: newPw, confirm_password: confirmPw })
+      clearMustChangePassword()
+      onNext()
+    } catch (e) {
+      setErr(e?.message || 'Could not set password. Please try again.')
+    }
+    setSaving(false)
+  }
+
+  return (
+    <div className="aob-step-body">
+      <div className="aob-step-title">Create your password</div>
+      <div className="aob-step-desc">You were assigned a temporary password. Set a permanent one now.</div>
+
+      <div className="aob-field">
+        <label className="aob-label" htmlFor="ob-new-pw">New password</label>
+        <input
+          id="ob-new-pw"
+          className="aob-input"
+          type="password"
+          value={newPw}
+          onChange={e => { setNewPw(e.target.value); setErr('') }}
+          placeholder="At least 8 characters"
+          autoFocus
+          autoComplete="new-password"
+        />
+      </div>
+      <div className="aob-field">
+        <label className="aob-label" htmlFor="ob-confirm-pw">Confirm password</label>
+        <input
+          id="ob-confirm-pw"
+          className="aob-input"
+          type="password"
+          value={confirmPw}
+          onChange={e => { setConfirmPw(e.target.value); setErr('') }}
+          placeholder="Re-enter your password"
+          onKeyDown={e => e.key === 'Enter' && handleNext()}
+          autoComplete="new-password"
+        />
+      </div>
+
+      {err && <div className="aob-error">{err}</div>}
+
+      <div className="aob-actions">
+        <button className="aob-btn aob-btn--primary" onClick={handleNext} disabled={saving || !newPw || !confirmPw}>
+          {saving ? 'Saving...' : 'Continue'}
+        </button>
+      </div>
     </div>
   )
 }
@@ -210,9 +272,13 @@ function Step3Done({ onFinish }) {
 }
 
 export default function AdminOnboarding() {
-  const { markOnboardingDone } = useAuth()
+  const { markOnboardingDone, mustChangePassword } = useAuth()
   const navigate = useNavigate()
-  const [step, setStep] = useState(1)
+  // If user must change password, we prepend a password step (step 0),
+  // shifting the existing 3 steps to 1, 2, 3 (total = 4).
+  // If not, we start at step 1 with 3 total steps.
+  const totalSteps = mustChangePassword ? 4 : 3
+  const [step, setStep] = useState(mustChangePassword ? 0 : 1)
 
   async function finish() {
     markOnboardingDone()
@@ -220,14 +286,19 @@ export default function AdminOnboarding() {
     navigate('/admin')
   }
 
+  // Display step number for ProgressDots: password step shows as 1,
+  // then org=2, invite=3, done=4 (or 1, 2, 3 when no password step).
+  const displayStep = mustChangePassword ? step + 1 : step
+
   return (
     <div className="aob-root">
       <div className="aob-card">
         <div className="aob-header">
           <img src="/images/logo-text.svg" width="140" height="32" alt="LinkJoin" />
-          <ProgressDots step={step} />
+          <ProgressDots step={displayStep} total={totalSteps} />
         </div>
 
+        {step === 0 && <StepSetPassword onNext={() => setStep(1)} />}
         {step === 1 && <Step1OrgProfile onNext={() => setStep(2)} />}
         {step === 2 && <Step2InviteStaff onNext={() => setStep(3)} onSkip={() => setStep(3)} />}
         {step === 3 && <Step3Done onFinish={finish} />}

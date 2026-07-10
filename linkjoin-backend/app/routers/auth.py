@@ -258,7 +258,24 @@ async def login(request: Request, body: LoginRequest):
         "admin": user.get("admin"),
         "onboarding_done": bool(user.get("onboarding_done", True)),
         "mfa_enabled": bool(user.get("mfa_enabled", False)),
+        "must_change_password": bool(user.get("must_change_password", False)),
     }
+
+
+@router.post("/set-password")
+async def set_password(body: dict, user: dict = Depends(get_confirmed_user)):
+    new_password = body.get("new_password", "")
+    confirm_password = body.get("confirm_password", "")
+    if len(new_password) < 8:
+        raise HTTPException(status_code=422, detail="Password must be at least 8 characters")
+    if new_password != confirm_password:
+        raise HTTPException(status_code=422, detail="Passwords do not match")
+    email = user["username"]
+    await motor_db.login.update_one(
+        {"username": email},
+        {"$set": {"password": hasher.hash(new_password)}, "$unset": {"must_change_password": ""}}
+    )
+    return {"ok": True}
 
 
 class GoogleCodeRequest(BaseModel):

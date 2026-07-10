@@ -1,9 +1,11 @@
+import re
 import secrets
 from datetime import date, datetime, timedelta, timezone
 from typing import Optional
 import httpx
+from argon2 import PasswordHasher as _PH
 from icalendar import Calendar
-from fastapi import APIRouter, Depends, HTTPException, Header
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Header
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jose import JWTError, jwt
 from app.auth import get_confirmed_user
@@ -12,6 +14,9 @@ from app.config import get_settings
 from app.models.org import CreateOrgRequest, UpdateOrgRequest
 from app.roles import require_school_admin
 from app.utils import track_event
+from app.email_service import send_email
+
+_hasher = _PH()
 
 # Keywords that identify "no school" events in a calendar feed
 _NO_SCHOOL_KEYWORDS = {
@@ -49,8 +54,31 @@ async def _check_token(
     raise HTTPException(status_code=403, detail="Admin token or platform admin account required")
 
 
+def _admin_welcome_email(org_name: str, email: str, temp_password: str, login_url: str) -> str:
+    return f"""
+<div style="font-family:sans-serif;max-width:520px;margin:0 auto;background:#0c1e32;padding:40px 32px;border-radius:12px">
+  <img src="https://linkjoin.xyz/images/logo-full.png" alt="LinkJoin" style="height:32px;margin-bottom:28px" />
+  <h2 style="color:#fff;font-size:20px;margin:0 0 12px">You've been added as an admin for {org_name}</h2>
+  <p style="color:rgba(255,255,255,0.6);font-size:14px;margin:0 0 24px">
+    Your LinkJoin administrator account has been created. Use the credentials below to log in and complete your setup.
+  </p>
+  <div style="background:rgba(255,255,255,0.06);border-radius:8px;padding:16px 20px;margin-bottom:24px">
+    <p style="color:rgba(255,255,255,0.5);font-size:12px;margin:0 0 4px;text-transform:uppercase;letter-spacing:.06em">Email</p>
+    <p style="color:#fff;font-size:15px;font-weight:600;margin:0 0 14px">{email}</p>
+    <p style="color:rgba(255,255,255,0.5);font-size:12px;margin:0 0 4px;text-transform:uppercase;letter-spacing:.06em">Temporary password</p>
+    <p style="color:#fff;font-size:15px;font-weight:600;margin:0;font-family:monospace;letter-spacing:.08em">{temp_password}</p>
+  </div>
+  <p style="color:rgba(255,255,255,0.5);font-size:13px;margin:0 0 24px">
+    You will be asked to set a permanent password when you first log in.
+  </p>
+  <a href="{login_url}" style="display:inline-block;background:#2563EB;color:#fff;text-decoration:none;font-size:14px;font-weight:600;padding:12px 24px;border-radius:8px">
+    Log in to LinkJoin
+  </a>
+</div>"""
+
+
 @router.post("", status_code=201)
-async def create_org(body: CreateOrgRequest, _: None = Depends(_check_token)):
+async def create_org(body: CreateOrgRequest, background_tasks: BackgroundTasks, _: None = Depends(_check_token)):
     if body.type not in ("school", "district"):
         raise HTTPException(status_code=422, detail="type must be 'school' or 'district'")
     org_id = secrets.token_urlsafe(16)
@@ -73,7 +101,41 @@ async def create_org(body: CreateOrgRequest, _: None = Depends(_check_token)):
     }
     await motor_db.orgs.insert_one(doc)
     await track_event("org_created")
-    return {k: v for k, v in doc.items() if k != "_id"}
+
+    admin_created = False
+    if body.admin_email:
+        admin_email = body.admin_email.strip().lower()
+        if re.match(r"^[^@ ]+@[^@ ]+\.[^@ .]{2,}$", admin_email):
+            existing = await motor_db.login.find_one({"username": admin_email}, {"_id": 1})
+            if not existing:
+                temp_pw = secrets.token_urlsafe(9)  # 12-char URL-safe password
+                user_doc = {
+                    "username": admin_email,
+                    "user_id": secrets.token_urlsafe(16),
+                    "password": _hasher.hash(temp_pw),
+                    "role": "school_admin",
+                    "org_id": org_id,
+                    "account_type": "personal",
+                    "premium": "false",
+                    "confirmed": "true",
+                    "onboarding_done": False,
+                    "must_change_password": True,
+                    "org_name": admin_email.split("@")[1],
+                    "created_at": datetime.now(timezone.utc),
+                }
+                await motor_db.login.insert_one(user_doc)
+                login_url = f"{_settings.app_base_url}/login"
+                background_tasks.add_task(
+                    send_email,
+                    _admin_welcome_email(body.name, admin_email, temp_pw, login_url),
+                    f"Your LinkJoin admin account for {body.name}",
+                    admin_email,
+                )
+                admin_created = True
+
+    result = {k: v for k, v in doc.items() if k != "_id"}
+    result["admin_created"] = admin_created
+    return result
 
 
 @router.get("/{org_id}/members")

@@ -19,6 +19,7 @@ export function AuthProvider({ children }) {
   const [orgId, setOrgId] = useState(() => localStorage.getItem('lj_org_id') || null)
   const [isAdmin, setIsAdmin] = useState(() => localStorage.getItem('lj_admin') === 'true')
   const [onboardingDone, setOnboardingDone] = useState(() => localStorage.getItem('lj_onboarding_done') === 'true')
+  const [mustChangePassword, setMustChangePassword] = useState(() => localStorage.getItem('lj_must_change_pw') === 'true')
 
   const isTeacher = TEACHER_ROLES.has(role)
   const isOrgAdmin = ADMIN_ROLES.has(role)
@@ -36,6 +37,9 @@ export function AuthProvider({ children }) {
     else localStorage.removeItem('lj_admin')
     const ob = meta.onboarding_done !== false
     localStorage.setItem('lj_onboarding_done', ob ? 'true' : 'false')
+    const mcp = meta.must_change_password === true
+    if (mcp) localStorage.setItem('lj_must_change_pw', 'true')
+    else localStorage.removeItem('lj_must_change_pw')
     setToken(accessToken)
     setEmail(userEmail)
     setConfirmed(isConfirmed)
@@ -44,6 +48,7 @@ export function AuthProvider({ children }) {
     setOrgId(meta.org_id || null)
     setIsAdmin(meta.admin === 'true')
     setOnboardingDone(ob)
+    setMustChangePassword(mcp)
     window.postMessage({ type: 'lj:login' }, window.location.origin)
   }, [])
 
@@ -65,6 +70,11 @@ export function AuthProvider({ children }) {
     setOnboardingDone(true)
   }, [])
 
+  const clearMustChangePassword = useCallback(() => {
+    localStorage.removeItem('lj_must_change_pw')
+    setMustChangePassword(false)
+  }, [])
+
   const logout = useCallback(async () => {
     await apiFetch('/auth/logout', { method: 'POST' }).catch(() => {})
     localStorage.removeItem('lj_token')
@@ -75,6 +85,7 @@ export function AuthProvider({ children }) {
     localStorage.removeItem('lj_org_id')
     localStorage.removeItem('lj_admin')
     localStorage.removeItem('lj_onboarding_done')
+    localStorage.removeItem('lj_must_change_pw')
     setToken(null)
     setEmail(null)
     setConfirmed(false)
@@ -83,6 +94,7 @@ export function AuthProvider({ children }) {
     setOrgId(null)
     setIsAdmin(false)
     setOnboardingDone(false)
+    setMustChangePassword(false)
     window.postMessage({ type: 'lj:logout' }, window.location.origin)
   }, [])
 
@@ -91,6 +103,7 @@ export function AuthProvider({ children }) {
       token, email, confirmed, accountType, role, orgId,
       isAdmin, isTeacher, isOrgAdmin,
       onboardingDone, markOnboardingDone,
+      mustChangePassword, clearMustChangePassword,
       login, logout, refreshAuth,
     }}>
       {children}

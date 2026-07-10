@@ -5,6 +5,7 @@ from typing import List
 class CreateOrgRequest(BaseModel):
     name: str
     type: str  # "school" | "district"
+    admin_email: str | None = None
     parent_org_id: str | None = None
     address: str | None = None
     city: str | None = None
