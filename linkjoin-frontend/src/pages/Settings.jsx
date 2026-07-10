@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext.jsx'
 import { apiFetch, apiGet, apiPost, apiDelete, apiPatch } from '../api/client.js'
 import { usersApi } from '../api/users.js'
+import { authApi } from '../api/auth.js'
 import HeaderModern from '../components/HeaderModern.jsx'
 import countryCodes from '../../public/country_codes.json'
 import '../styles/settings.css'
@@ -42,6 +43,138 @@ async function resizeToDataURL(file, size = 220) {
     img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Bad image')) }
     img.src = url
   })
+}
+
+function MfaSection({ user, showToast }) {
+  const [expanded, setExpanded] = useState(false)
+  const [mfaPhone, setMfaPhone] = useState('')
+  const [mfaCode, setMfaCode] = useState('')
+  const [mfaStep, setMfaStep] = useState('idle') // idle | sent | disabling
+  const [mfaError, setMfaError] = useState('')
+  const [mfaLoading, setMfaLoading] = useState(false)
+  const isEnabled = !!user?.mfa_enabled
+
+  async function sendSetupCode() {
+    if (!mfaPhone.trim()) { setMfaError('Enter a phone number first.'); return }
+    setMfaLoading(true)
+    setMfaError('')
+    try {
+      await usersApi.setupMfa(true, mfaPhone.replace(/\D/g, ''))
+      setMfaStep('sent')
+    } catch (e) {
+      setMfaError(e.body?.detail || 'Failed to send code. Check the phone number.')
+    } finally {
+      setMfaLoading(false)
+    }
+  }
+
+  async function confirmSetup() {
+    if (!mfaCode.trim()) return
+    setMfaLoading(true)
+    setMfaError('')
+    try {
+      await usersApi.verifyMfaSetup(mfaCode.trim(), mfaPhone.replace(/\D/g, ''))
+      showToast(true)
+      setMfaStep('idle')
+      setExpanded(false)
+      setMfaCode('')
+      setMfaPhone('')
+      // Reload user data
+      window.location.reload()
+    } catch (e) {
+      setMfaError(e.body?.detail || 'Invalid code. Please try again.')
+    } finally {
+      setMfaLoading(false)
+    }
+  }
+
+  async function disableMfa() {
+    setMfaLoading(true)
+    setMfaError('')
+    try {
+      await usersApi.setupMfa(false, null)
+      showToast(true)
+      setMfaStep('idle')
+      setExpanded(false)
+      window.location.reload()
+    } catch (e) {
+      setMfaError(e.body?.detail || 'Failed to disable MFA.')
+    } finally {
+      setMfaLoading(false)
+    }
+  }
+
+  return (
+    <section className="settings-section">
+      <div className="settings-section-title">Security</div>
+      <div className="settings-row settings-row--last">
+        <div>
+          <div className="settings-row-label">Two-factor authentication</div>
+          <div className="settings-row-desc">
+            {isEnabled
+              ? `Enabled - codes sent via SMS`
+              : 'Add an extra layer of security to your account'}
+          </div>
+        </div>
+        <button className="settings-btn" onClick={() => { setExpanded(e => !e); setMfaStep('idle'); setMfaError('') }}>
+          {isEnabled ? 'Manage' : 'Enable'}
+        </button>
+      </div>
+
+      {expanded && !isEnabled && (
+        <div className="settings-mfa-setup">
+          {mfaError && <div className="settings-error">{mfaError}</div>}
+          {mfaStep === 'idle' && (
+            <>
+              <div className="settings-row-desc" style={{ marginBottom: 10 }}>Enter your phone number to receive verification codes.</div>
+              <input
+                className="settings-input"
+                type="tel"
+                placeholder="+1 555 000 0000"
+                value={mfaPhone}
+                onChange={e => setMfaPhone(e.target.value)}
+              />
+              <button className="settings-save-btn" onClick={sendSetupCode} disabled={mfaLoading}>
+                {mfaLoading ? 'Sending...' : 'Send verification code'}
+              </button>
+            </>
+          )}
+          {mfaStep === 'sent' && (
+            <>
+              <div className="settings-row-desc" style={{ marginBottom: 10 }}>Enter the 6-digit code sent to your phone.</div>
+              <input
+                className="settings-input"
+                type="text"
+                inputMode="numeric"
+                maxLength={6}
+                placeholder="000000"
+                value={mfaCode}
+                onChange={e => setMfaCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                onKeyDown={e => e.key === 'Enter' && confirmSetup()}
+                autoFocus
+              />
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button className="settings-save-btn" onClick={confirmSetup} disabled={mfaLoading || mfaCode.length < 6}>
+                  {mfaLoading ? 'Verifying...' : 'Enable MFA'}
+                </button>
+                <button className="settings-btn" onClick={() => { setMfaStep('idle'); setMfaCode('') }}>Back</button>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {expanded && isEnabled && (
+        <div className="settings-mfa-setup">
+          {mfaError && <div className="settings-error">{mfaError}</div>}
+          <div className="settings-row-desc" style={{ marginBottom: 10 }}>MFA is currently active. Disabling it will remove the SMS verification step on login.</div>
+          <button className="settings-danger-btn" onClick={disableMfa} disabled={mfaLoading}>
+            {mfaLoading ? 'Disabling...' : 'Disable MFA'}
+          </button>
+        </div>
+      )}
+    </section>
+  )
 }
 
 export default function Settings() {
@@ -430,6 +563,9 @@ export default function Settings() {
               </button>
             </div>
           </section>}
+
+          {/* SECURITY */}
+          <MfaSection user={user} showToast={flash} />
 
           {/* ACCOUNT */}
           <section className="settings-section">

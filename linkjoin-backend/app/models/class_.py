@@ -4,8 +4,8 @@ from typing import List
 
 class CreateClassRequest(BaseModel):
     name: str
-    time: str
-    days: List[str]
+    time: str = ""
+    days: List[str] = []
 
 
 class UpdateClassRequest(BaseModel):

@@ -1,6 +1,8 @@
 import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import { useAuth } from './context/AuthContext.jsx'
+import { ToastProvider } from './context/ToastContext.jsx'
+import { useDarkMode } from './hooks/useDarkMode.js'
 
 import { apiGet, apiPost } from './api/client.js'
 
@@ -43,6 +45,9 @@ import Demo from './pages/Demo.jsx'
 import StudentProfile from './pages/StudentProfile.jsx'
 import History from './pages/History.jsx'
 import ParentPortal from './pages/ParentPortal.jsx'
+import AdminOnboarding from './pages/AdminOnboarding.jsx'
+import IncidentBanner from './components/IncidentBanner.jsx'
+import Status from './pages/Status.jsx'
 
 const TEACHER_ROLES = new Set(['teacher', 'school_admin', 'district_admin'])
 
@@ -79,9 +84,16 @@ function IvToast() {
 }
 
 function PrivateRoute({ children }) {
+  const { token, isOrgAdmin, onboardingDone } = useAuth()
+  if (!token) return <Navigate to="/login" replace />
+  if (isOrgAdmin && !onboardingDone) return <Navigate to="/onboarding" replace />
+  return <>{children}<IvToast /></>
+}
+
+function OnboardingRoute({ children }) {
   const { token } = useAuth()
   if (!token) return <Navigate to="/login" replace />
-  return <>{children}<IvToast /></>
+  return children
 }
 
 function TeacherRoute({ children }) {
@@ -98,9 +110,15 @@ function PlatformAdminRoute({ children }) {
   return children
 }
 
+function AppInner() {
+  useDarkMode()
+  return <IncidentBanner />
+}
+
 export default function App() {
   return (
-    <>
+    <ToastProvider>
+      <AppInner />
       <ScrollToTop />
       <Routes>
       <Route path="/" element={<NewHomepage />} />
@@ -119,6 +137,7 @@ export default function App() {
       <Route path="/confirm" element={<ConfirmEmail />} />
       <Route path="/premeet" element={<PreMeet />} />
       <Route path="/contact" element={<Contact />} />
+      <Route path="/status" element={<Status />} />
       <Route path="/dpa" element={<DPA />} />
       <Route path="/privacy-schools" element={<PrivacySchools />} />
       <Route path="/subprocessors" element={<Subprocessors />} />
@@ -138,8 +157,9 @@ export default function App() {
       <Route path="/history" element={<PrivateRoute><History /></PrivateRoute>} />
       <Route path="/profile" element={<PrivateRoute><StudentProfile /></PrivateRoute>} />
       <Route path="/parent" element={<PrivateRoute><ParentPortal /></PrivateRoute>} />
+      <Route path="/onboarding" element={<OnboardingRoute><AdminOnboarding /></OnboardingRoute>} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
-    </>
+    </ToastProvider>
   )
 }

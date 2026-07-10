@@ -255,3 +255,25 @@
         font-size: 14px;
     }
 }
+
+[data-theme="light"] .link {
+  background: #ffffff;
+  border-color: #E2EAF2;
+  color: #0D1B2A;
+  box-shadow: 0 1px 3px rgba(13,27,42,0.07), 0 1px 2px rgba(13,27,42,0.04);
+}
+[data-theme="light"] .link:hover {
+  background: #ffffff;
+  border-color: var(--lightblue);
+  box-shadow: 0 4px 12px rgba(43,143,216,0.12);
+}
+[data-theme="light"] .description { color: #4B5563; opacity: 1; }
+[data-theme="light"] .days-dots { color: #64748B; }
+[data-theme="light"] .menu {
+  background: #ffffff;
+  border-color: #E2EAF2;
+  box-shadow: 0 8px 24px rgba(13,27,42,0.12);
+  color: #0D1B2A;
+}
+[data-theme="light"] .menu div:hover { background: #F2F4F7; }
+[data-theme="light"] .menu_line { background: #E2EAF2; opacity: 1; }

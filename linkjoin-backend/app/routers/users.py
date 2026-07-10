@@ -7,7 +7,7 @@ from pydantic import BaseModel
 from app.auth import get_confirmed_user, get_current_user
 from app.database import motor_db
 from app.models.user import (
-    UpdateTimezoneRequest, AddNumberRequest, TutorialRequest,
+    UpdateTimezoneRequest, AddNumberRequest,
     SortRequest, OpenEarlyRequest, NoteRequest, AutoDeleteRequest, VacationModeRequest,
 )
 
@@ -148,17 +148,9 @@ async def popup_check(user: dict = Depends(get_current_user)):
     return {"message": "Updated"}
 
 
-@router.patch("/tutorial")
-async def tutorial(body: TutorialRequest, user: dict = Depends(get_confirmed_user)):
-    await motor_db.login.update_one({"username": user["username"]}, {"$set": {"tutorial": body.step}})
-    return {"message": "Updated"}
-
-
-@router.patch("/tutorial-widget")
-async def tutorial_widget(body: dict, user: dict = Depends(get_confirmed_user)):
-    finished = body.get("finished", False)
-    value = "complete" if finished else "incomplete"
-    await motor_db.login.update_one({"username": user["username"]}, {"$set": {"tutorialWidget": value}})
+@router.patch("/onboarding")
+async def complete_onboarding(user: dict = Depends(get_confirmed_user)):
+    await motor_db.login.update_one({"username": user["username"]}, {"$set": {"onboarding_done": True}})
     return {"message": "Updated"}
 
 
@@ -354,7 +346,9 @@ async def get_student_profile(user_id: str, user: dict = Depends(get_confirmed_u
 
 @router.delete("/me")
 async def delete_account(user: dict = Depends(get_current_user)):
+    from app.audit import log_audit
     email = user["username"]
+    await log_audit(email, "user.delete_account")
     await motor_db.links.delete_many({"username": email})
     await motor_db.bookmarks.delete_many({"username": email})
     await motor_db.deleted_links.delete_many({"username": email})
@@ -363,3 +357,31 @@ async def delete_account(user: dict = Depends(get_current_user)):
     await motor_db.pending_bookmarks.delete_many({"username": email})
     await motor_db.login.delete_one({"username": email})
     return {"message": "Account deleted"}
+
+
+@router.patch("/mfa")
+async def update_mfa(body: dict, user: dict = Depends(get_confirmed_user)):
+    from app.routers.mfa import _send_mfa_code
+    enabled = body.get("enabled")
+    if enabled is None:
+        raise HTTPException(status_code=422, detail="enabled required")
+
+    if enabled:
+        phone = (body.get("phone") or "").strip().lstrip("+")
+        if not phone or not phone.isdigit():
+            raise HTTPException(status_code=422, detail="Valid phone number required to enable MFA")
+        await motor_db.login.update_one(
+            {"username": user["username"]},
+            {"$set": {"mfa_phone": phone}},
+        )
+        updated_user = await motor_db.login.find_one({"username": user["username"]})
+        await _send_mfa_code(updated_user)
+        return {"message": "Verification code sent. Call /auth/mfa/setup-verify with the code to confirm."}
+    else:
+        from app.audit import log_audit
+        await motor_db.login.update_one(
+            {"username": user["username"]},
+            {"$set": {"mfa_enabled": False}},
+        )
+        await log_audit(user["username"], "auth.mfa_disabled")
+        return {"message": "MFA disabled"}

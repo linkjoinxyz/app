@@ -2,8 +2,10 @@ import { useState, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext.jsx'
 import { useNavigate } from 'react-router-dom'
 import { apiGet } from '../api/client.js'
+import { usersApi } from '../api/users.js'
 import HeaderModern from '../components/HeaderModern.jsx'
 import '../styles/parent-portal.css'
+import '../styles/globals.css'
 
 const FLAG_LABELS = {
   low_attendance: 'Low attendance',
@@ -169,12 +171,19 @@ function AttendanceTab({ student }) {
 }
 
 export default function ParentPortal() {
-  const { role, token } = useAuth()
+  const { role, token, onboardingDone, markOnboardingDone } = useAuth()
   const navigate = useNavigate()
   const [children, setChildren] = useState([])
   const [loading, setLoading] = useState(true)
   const [selectedChild, setSelectedChild] = useState(null)
   const [tab, setTab] = useState('classes')
+  const [welcomeDismissed, setWelcomeDismissed] = useState(onboardingDone)
+
+  async function dismissWelcome() {
+    setWelcomeDismissed(true)
+    markOnboardingDone()
+    try { await usersApi.completeOnboarding() } catch {}
+  }
 
   useEffect(() => {
     if (!token) { navigate('/login'); return }
@@ -201,6 +210,27 @@ export default function ParentPortal() {
           <div className="pp-header-title">Parent Portal</div>
           <div className="pp-header-sub">View your children's classes and attendance</div>
         </div>
+
+        {!welcomeDismissed && (
+          <div className="pp-welcome-banner">
+            <div className="pp-welcome-icon">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+              </svg>
+            </div>
+            <div className="pp-welcome-text">
+              <div className="pp-welcome-title">Welcome to the Parent Portal</div>
+              <div className="pp-welcome-desc">
+                Here you can view your children's classes and attendance history. Your school administrator linked your account. If you don't see your children listed, contact your school.
+              </div>
+            </div>
+            <button className="pp-welcome-close" onClick={dismissWelcome} aria-label="Dismiss welcome message">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+              </svg>
+            </button>
+          </div>
+        )}
 
         {loading ? (
           <div className="pp-loading">Loading...</div>

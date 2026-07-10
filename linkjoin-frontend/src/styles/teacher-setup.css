@@ -1,0 +1,186 @@
+.ts-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.45);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.ts-modal {
+  background: var(--bg-card, #0c1e32);
+  border: 1px solid var(--border, rgba(255,255,255,0.1));
+  border-radius: 16px;
+  width: 100%;
+  max-width: 480px;
+  padding: 36px 36px 28px;
+  font-family: Montserrat, sans-serif;
+  color: var(--text-primary, #fff);
+  box-shadow: 0 24px 64px rgba(0,0,0,0.4);
+}
+
+[data-theme="light"] .ts-modal {
+  background: #ffffff;
+  border-color: #E2EAF2;
+  box-shadow: 0 8px 40px rgba(13,27,42,0.12);
+  color: #0D1B2A;
+}
+
+.ts-progress {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 28px;
+}
+
+.ts-step-dot {
+  height: 4px;
+  flex: 1;
+  border-radius: 2px;
+  background: rgba(255,255,255,0.12);
+  transition: background 0.25s;
+}
+.ts-step-dot--active { background: var(--lightblue); }
+.ts-step-dot--done   { background: rgba(37,99,235,0.5); }
+
+[data-theme="light"] .ts-step-dot          { background: #E2EAF2; }
+[data-theme="light"] .ts-step-dot--active  { background: var(--lightblue); }
+[data-theme="light"] .ts-step-dot--done    { background: rgba(37,99,235,0.3); }
+
+.ts-eyebrow {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--lightblue);
+  margin: 0 0 8px;
+}
+
+.ts-title {
+  font-size: 22px;
+  font-weight: 700;
+  margin: 0 0 6px;
+}
+
+.ts-sub {
+  font-size: 14px;
+  color: rgba(255,255,255,0.5);
+  margin: 0 0 24px;
+  line-height: 1.5;
+}
+
+[data-theme="light"] .ts-sub { color: #64748B; }
+
+.ts-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(255,255,255,0.6);
+  margin: 0 0 6px;
+  display: block;
+}
+
+[data-theme="light"] .ts-label { color: #475569; }
+
+.ts-input {
+  width: 100%;
+  box-sizing: border-box;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 8px;
+  color: var(--text-primary, #fff);
+  font: 500 15px Montserrat, sans-serif;
+  padding: 10px 14px;
+  outline: none;
+  transition: border-color 0.15s;
+  margin-bottom: 16px;
+}
+.ts-input:focus { border-color: var(--lightblue); }
+
+[data-theme="light"] .ts-input {
+  background: #F8FAFC;
+  border-color: #CBD5E1;
+  color: #0D1B2A;
+}
+[data-theme="light"] .ts-input:focus { border-color: var(--lightblue); }
+
+.ts-input::placeholder { color: rgba(255,255,255,0.25); }
+[data-theme="light"] .ts-input::placeholder { color: #94A3B8; }
+
+textarea.ts-input {
+  resize: vertical;
+  min-height: 90px;
+  line-height: 1.5;
+}
+
+.ts-field { margin-bottom: 4px; }
+
+.ts-error {
+  font-size: 12px;
+  color: #F87171;
+  margin: -10px 0 12px;
+}
+
+.ts-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 8px;
+  align-items: center;
+}
+
+.ts-btn-primary {
+  flex: 1;
+  padding: 11px 0;
+  background: var(--lightblue);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font: 700 14px Montserrat, sans-serif;
+  cursor: pointer;
+  transition: filter 0.15s;
+}
+.ts-btn-primary:hover:not(:disabled) { filter: brightness(1.1); }
+.ts-btn-primary:disabled { opacity: 0.5; cursor: default; }
+
+.ts-btn-skip {
+  background: none;
+  border: none;
+  color: rgba(255,255,255,0.35);
+  font: 500 13px Montserrat, sans-serif;
+  cursor: pointer;
+  padding: 0 4px;
+  white-space: nowrap;
+  transition: color 0.15s;
+}
+.ts-btn-skip:hover { color: rgba(255,255,255,0.65); }
+
+[data-theme="light"] .ts-btn-skip { color: #94A3B8; }
+[data-theme="light"] .ts-btn-skip:hover { color: #64748B; }
+
+.ts-back {
+  background: none;
+  border: none;
+  color: rgba(255,255,255,0.4);
+  font: 500 13px Montserrat, sans-serif;
+  cursor: pointer;
+  padding: 0;
+  transition: color 0.15s;
+  margin-right: auto;
+}
+.ts-back:hover { color: rgba(255,255,255,0.75); }
+[data-theme="light"] .ts-back { color: #94A3B8; }
+[data-theme="light"] .ts-back:hover { color: #475569; }
+
+.ts-success {
+  text-align: center;
+  padding: 16px 0 8px;
+}
+
+.ts-success-icon {
+  font-size: 40px;
+  margin-bottom: 12px;
+}
+
+@media (max-width: 520px) {
+  .ts-modal { padding: 28px 22px 22px; }
+}

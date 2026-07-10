@@ -323,6 +323,71 @@ async def check_absences() -> None:
             log.info("[absence] alert sent for student %s in class %s", student_email, cls["class_id"])
 
 
+async def record_status_check() -> None:
+    """Every-5-min job: ping MongoDB and record uptime for the public status page."""
+    import time as _time
+    from datetime import datetime, timezone, timedelta
+    from app.database import motor_db
+    t0 = _time.monotonic()
+    ok = False
+    mongo_ms = None
+    try:
+        await motor_db.command("ping")
+        mongo_ms = round((_time.monotonic() - t0) * 1000)
+        ok = True
+    except Exception as exc:
+        log.warning("[status-check] MongoDB ping failed: %s", exc)
+    now = datetime.now(timezone.utc)
+    await motor_db.status_checks.insert_one({"ts": now, "ok": ok, "mongo_ms": mongo_ms})
+    cutoff = now - timedelta(days=91)
+    await motor_db.status_checks.delete_many({"ts": {"$lt": cutoff}})
+
+
+async def run_backup_health_check() -> None:
+    """Weekly job: verify MongoDB is reachable and core collections are non-empty."""
+    import time as _time
+    from datetime import datetime, timezone
+    from app.database import motor_db
+    from app.audit import log_audit
+
+    CORE_COLLECTIONS = ["login", "links", "orgs", "classes", "audit_logs"]
+    result: dict = {"collections": {}, "errors": [], "ok": True}
+
+    try:
+        t0 = _time.monotonic()
+        await motor_db.command("ping")
+        result["mongo_latency_ms"] = round((_time.monotonic() - t0) * 1000, 1)
+    except Exception as e:
+        result["ok"] = False
+        result["errors"].append(f"MongoDB ping failed: {e}")
+        log.error("[backup-check] MongoDB ping failed: %s", e)
+
+    for coll_name in CORE_COLLECTIONS:
+        try:
+            count = await motor_db[coll_name].estimated_document_count()
+            result["collections"][coll_name] = count
+            if count == 0 and coll_name in ("login", "links"):
+                result["ok"] = False
+                result["errors"].append(f"{coll_name}: unexpectedly empty")
+        except Exception as e:
+            result["ok"] = False
+            result["errors"].append(f"{coll_name}: {e}")
+
+    try:
+        await log_audit(
+            "system",
+            "backup.health_check",
+            detail={**result, "ts": datetime.now(timezone.utc).isoformat()},
+        )
+    except Exception as e:
+        log.error("[backup-check] failed to write audit log: %s", e)
+
+    if result["ok"]:
+        log.info("[backup-check] OK: %s", result)
+    else:
+        log.error("[backup-check] DEGRADED: %s", result)
+
+
 def load_all_text_jobs() -> None:
     # Wipe all persisted jobs first so stale/mismatched jobs never fire
     for job in scheduler.get_jobs():
@@ -347,3 +412,25 @@ def load_all_text_jobs() -> None:
         misfire_grace_time=3600,
     )
     log.info("[scheduler] added absence-check interval job (every 5 min)")
+
+    scheduler.add_job(
+        run_backup_health_check,
+        "cron",
+        day_of_week="sun",
+        hour=2,
+        minute=0,
+        id="backup-health-check",
+        replace_existing=True,
+        misfire_grace_time=7200,
+    )
+    log.info("[scheduler] added backup-health-check weekly job (Sun 02:00 UTC)")
+
+    scheduler.add_job(
+        record_status_check,
+        "interval",
+        minutes=5,
+        id="status-check",
+        replace_existing=True,
+        misfire_grace_time=300,
+    )
+    log.info("[scheduler] added status-check interval job (every 5 min)")

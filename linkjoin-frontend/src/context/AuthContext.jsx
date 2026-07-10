@@ -4,13 +4,13 @@ import { apiFetch } from '../api/client.js'
 const AuthContext = createContext(null)
 
 const TEACHER_ROLES = new Set(['teacher', 'school_admin', 'district_admin'])
+const ADMIN_ROLES = new Set(['school_admin', 'district_admin'])
 
 export function AuthProvider({ children }) {
   const [token, setToken] = useState(() => localStorage.getItem('lj_token'))
   const [email, setEmail] = useState(() => localStorage.getItem('lj_email'))
   const [confirmed, setConfirmed] = useState(() => {
     const stored = localStorage.getItem('lj_confirmed')
-    // Existing sessions with no flag stored are assumed confirmed
     if (stored === null && localStorage.getItem('lj_token')) return true
     return stored === 'true'
   })
@@ -18,8 +18,10 @@ export function AuthProvider({ children }) {
   const [role, setRole] = useState(() => localStorage.getItem('lj_role') || null)
   const [orgId, setOrgId] = useState(() => localStorage.getItem('lj_org_id') || null)
   const [isAdmin, setIsAdmin] = useState(() => localStorage.getItem('lj_admin') === 'true')
+  const [onboardingDone, setOnboardingDone] = useState(() => localStorage.getItem('lj_onboarding_done') === 'true')
 
   const isTeacher = TEACHER_ROLES.has(role)
+  const isOrgAdmin = ADMIN_ROLES.has(role)
 
   const login = useCallback((accessToken, userEmail, isConfirmed = false, meta = {}) => {
     localStorage.setItem('lj_token', accessToken)
@@ -32,6 +34,8 @@ export function AuthProvider({ children }) {
     else localStorage.removeItem('lj_org_id')
     if (meta.admin === 'true') localStorage.setItem('lj_admin', 'true')
     else localStorage.removeItem('lj_admin')
+    const ob = meta.onboarding_done !== false
+    localStorage.setItem('lj_onboarding_done', ob ? 'true' : 'false')
     setToken(accessToken)
     setEmail(userEmail)
     setConfirmed(isConfirmed)
@@ -39,6 +43,7 @@ export function AuthProvider({ children }) {
     setRole(meta.role || null)
     setOrgId(meta.org_id || null)
     setIsAdmin(meta.admin === 'true')
+    setOnboardingDone(ob)
     window.postMessage({ type: 'lj:login' }, window.location.origin)
   }, [])
 
@@ -55,6 +60,11 @@ export function AuthProvider({ children }) {
     setOrgId(data.org_id || null)
   }, [])
 
+  const markOnboardingDone = useCallback(() => {
+    localStorage.setItem('lj_onboarding_done', 'true')
+    setOnboardingDone(true)
+  }, [])
+
   const logout = useCallback(async () => {
     await apiFetch('/auth/logout', { method: 'POST' }).catch(() => {})
     localStorage.removeItem('lj_token')
@@ -64,6 +74,7 @@ export function AuthProvider({ children }) {
     localStorage.removeItem('lj_role')
     localStorage.removeItem('lj_org_id')
     localStorage.removeItem('lj_admin')
+    localStorage.removeItem('lj_onboarding_done')
     setToken(null)
     setEmail(null)
     setConfirmed(false)
@@ -71,11 +82,17 @@ export function AuthProvider({ children }) {
     setRole(null)
     setOrgId(null)
     setIsAdmin(false)
+    setOnboardingDone(false)
     window.postMessage({ type: 'lj:logout' }, window.location.origin)
   }, [])
 
   return (
-    <AuthContext.Provider value={{ token, email, confirmed, accountType, role, orgId, isAdmin, isTeacher, login, logout, refreshAuth }}>
+    <AuthContext.Provider value={{
+      token, email, confirmed, accountType, role, orgId,
+      isAdmin, isTeacher, isOrgAdmin,
+      onboardingDone, markOnboardingDone,
+      login, logout, refreshAuth,
+    }}>
       {children}
     </AuthContext.Provider>
   )

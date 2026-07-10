@@ -94,12 +94,15 @@ export default function DPA() {
               <li>Encryption of meeting link URLs at rest using AES-256;</li>
               <li>Encryption of all Student Data in transit using TLS 1.2 or higher;</li>
               <li>Role-based access controls limiting data access to personnel with a need to know;</li>
-              <li>Audit logging of all access to and modifications of Student Data;</li>
+              <li>Audit logging of all access to and modifications of Student Data, retained for 24 months;</li>
               <li>Regular security review of access credentials and access logs; and</li>
               <li>Employee training on data privacy obligations.</li>
             </ul>
             <p>
               Provider shall promptly remediate identified security vulnerabilities that could expose Student Data.
+            </p>
+            <p>
+              <strong>Data Residency.</strong> All Student Data is processed and stored exclusively in the United States. Application infrastructure operates on Microsoft Azure (US West region). Database storage uses MongoDB Atlas (US region). No Student Data is transferred outside the United States except as described in Provider's Subprocessors disclosure at linkjoin.xyz/subprocessors.
             </p>
           </section>
 

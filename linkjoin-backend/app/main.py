@@ -21,7 +21,7 @@ from app.utils import configure_data
 from app.websocket_manager import manager
 from app.database import motor_db
 from app.redis_client import get_redis
-from app.routers import auth, links, bookmarks, users, admin, messaging, ai, contact, orgs, classes, attendance, interventions, integrations, invites, parent
+from app.routers import auth, links, bookmarks, users, admin, messaging, ai, contact, orgs, classes, attendance, interventions, integrations, invites, parent, consent, mfa, incidents, status
 
 _DIST = Path(__file__).resolve().parent.parent.parent / "linkjoin-frontend" / "dist"
 
@@ -68,6 +68,17 @@ async def lifespan(app: FastAPI):
     await motor_db.audit_logs.create_index([("user", 1), ("ts", -1)])
     await motor_db.audit_logs.create_index([("user", 1), ("resource_type", 1), ("ts", -1)])
     await motor_db.audit_logs.create_index("ts")
+    # TTL: audit logs expire after 730 days (24 months per DPA)
+    try:
+        await motor_db.audit_logs.create_index("ts", expireAfterSeconds=63072000, name="ts_ttl_730d")
+    except Exception:
+        pass
+    # TTL: MFA challenges expire after 10 minutes
+    try:
+        await motor_db.mfa_challenges.create_index("created_at", expireAfterSeconds=600, name="mfa_ttl_10m")
+        await motor_db.mfa_challenges.create_index("user_id")
+    except Exception:
+        pass
     await motor_db.login.create_index("user_id", unique=True, sparse=True)
     await motor_db.classes.create_index("class_id", unique=True)
     await motor_db.classes.create_index("org_id")
@@ -88,6 +99,21 @@ async def lifespan(app: FastAPI):
     await motor_db.invites.create_index([("class_id", 1), ("type", 1), ("status", 1)])
     await motor_db.analytics_events.create_index([("event", 1), ("ym", 1)])
     await motor_db.analytics_events.create_index("ts")
+    # Missing indexes surfaced by load test analysis
+    await motor_db.login.create_index("org_id", sparse=True)
+    await motor_db.login.create_index("parental_consent.token", sparse=True)
+    await motor_db.parent_links.create_index("parent_user_id")
+    await motor_db.parent_links.create_index("student_user_id")
+    await motor_db.integrations.create_index([("org_id", 1), ("provider", 1)])
+    await motor_db.integrations.create_index([("user_id", 1), ("provider", 1)])
+    await motor_db.classes.create_index("student_ids")
+    await motor_db.incidents.create_index("status")
+    await motor_db.incidents.create_index("started_at")
+    await motor_db.status_checks.create_index("ts")
+    try:
+        await motor_db.status_checks.create_index("ts", expireAfterSeconds=7948800, name="status_checks_ttl_92d")
+    except Exception:
+        pass
 
     async for u in motor_db.login.find({"user_id": {"$exists": False}}):
         await motor_db.login.update_one(
@@ -139,6 +165,10 @@ app.include_router(interventions.router)
 app.include_router(integrations.router)
 app.include_router(invites.router)
 app.include_router(parent.router)
+app.include_router(consent.router)
+app.include_router(mfa.router)
+app.include_router(incidents.router)
+app.include_router(status.router)
 
 
 @app.get("/location")
@@ -149,6 +179,37 @@ async def location(cf_ipcountry: str | None = None):
 @app.get("/health")
 async def health():
     return {"status": "ok"}
+
+
+@app.get("/health/ready")
+async def health_ready():
+    import time as _time
+    result: dict = {"status": "ok", "mongo_ms": None, "redis_ms": None}
+    degraded = False
+
+    try:
+        t0 = _time.monotonic()
+        await motor_db.command("ping")
+        result["mongo_ms"] = round((_time.monotonic() - t0) * 1000, 1)
+    except Exception as e:
+        result["mongo_ms"] = None
+        result["mongo_error"] = str(e)
+        degraded = True
+
+    try:
+        redis = await get_redis()
+        t1 = _time.monotonic()
+        await redis.ping()
+        result["redis_ms"] = round((_time.monotonic() - t1) * 1000, 1)
+    except Exception as e:
+        result["redis_ms"] = None
+        result["redis_error"] = str(e)
+        degraded = True
+
+    if degraded:
+        result["status"] = "degraded"
+        return JSONResponse(status_code=503, content=result)
+    return result
 
 
 @app.get("/ws-ticket")

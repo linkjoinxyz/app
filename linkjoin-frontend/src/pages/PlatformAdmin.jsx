@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { apiGet, apiPatch } from '../api/client.js'
+import { incidentsApi } from '../api/incidents.js'
 import HeaderModern from '../components/HeaderModern.jsx'
 import '../styles/platform-admin.css'
+import '../styles/incident.css'
 
 // ─── Orgs Tab ─────────────────────────────────────────────────────────────────
 
@@ -392,6 +394,239 @@ function AnalyticsTab() {
   )
 }
 
+// ─── Incidents Tab ────────────────────────────────────────────────────────────
+
+const ALL_COMPONENTS = ['API', 'WebSocket', 'Attendance', 'Auth', 'Email', 'Links', 'Admin', 'Extension']
+
+function fmtIncTs(iso) {
+  if (!iso) return '-'
+  const d = new Date(iso)
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ' ' +
+    d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false })
+}
+
+function IncidentsTab() {
+  const [incidents, setIncidents] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [err, setErr] = useState('')
+  const [title, setTitle] = useState('')
+  const [severity, setSeverity] = useState('P1')
+  const [components, setComponents] = useState([])
+  const [creating, setCreating] = useState(false)
+  const [updateMsgs, setUpdateMsgs] = useState({})
+  const [updateStatuses, setUpdateStatuses] = useState({})
+  const [acting, setActing] = useState({})
+
+  useEffect(() => { loadIncidents() }, [])
+
+  async function loadIncidents() {
+    setLoading(true)
+    try {
+      const data = await incidentsApi.list(1)
+      setIncidents(data.incidents || [])
+    } catch {
+      setErr('Failed to load incidents')
+    }
+    setLoading(false)
+  }
+
+  function toggleComponent(c) {
+    setComponents(prev => prev.includes(c) ? prev.filter(x => x !== c) : [...prev, c])
+  }
+
+  async function handleCreate(e) {
+    e.preventDefault()
+    if (!title.trim() || components.length === 0) return
+    setCreating(true); setErr('')
+    try {
+      const inc = await incidentsApi.create({ title: title.trim(), severity, affected_components: components, public: true })
+      setIncidents(prev => [inc, ...prev])
+      setTitle(''); setComponents([])
+    } catch (e) {
+      setErr(e?.detail || 'Failed to create incident')
+    }
+    setCreating(false)
+  }
+
+  async function handleUpdate(id) {
+    setActing(a => ({ ...a, [id]: true }))
+    try {
+      const status = updateStatuses[id]
+      const msg = updateMsgs[id]
+      const patch = {}
+      if (status) patch.status = status
+      if (msg) patch.timeline_message = msg
+      const updated = await incidentsApi.update(id, patch)
+      setIncidents(prev => prev.map(i => i.incident_id === id ? updated : i))
+      setUpdateMsgs(m => ({ ...m, [id]: '' }))
+      setUpdateStatuses(s => ({ ...s, [id]: '' }))
+    } catch (e) {
+      setErr(e?.detail || 'Update failed')
+    }
+    setActing(a => ({ ...a, [id]: false }))
+  }
+
+  async function handleResolve(id) {
+    setActing(a => ({ ...a, [id]: true }))
+    try {
+      const updated = await incidentsApi.resolve(id)
+      setIncidents(prev => prev.map(i => i.incident_id === id ? updated : i))
+    } catch (e) {
+      setErr(e?.detail || 'Resolve failed')
+    }
+    setActing(a => ({ ...a, [id]: false }))
+  }
+
+  const open = incidents.filter(i => i.status !== 'resolved')
+  const closed = incidents.filter(i => i.status === 'resolved')
+
+  return (
+    <div className="pa-section inc-section">
+      <div className="pa-section-header">
+        <span className="pa-section-title">Incidents</span>
+      </div>
+
+      {err && <div className="pa-error" style={{ marginBottom: 12 }}>{err}</div>}
+
+      <form className="inc-create-form" onSubmit={handleCreate}>
+        <div className="inc-form-row">
+          <div className="inc-form-col" style={{ flex: 3, minWidth: 220 }}>
+            <label className="inc-label">Title</label>
+            <input
+              className="pa-input"
+              value={title}
+              onChange={e => setTitle(e.target.value)}
+              placeholder="Brief description of the incident"
+              required
+            />
+          </div>
+          <div className="inc-form-col" style={{ flex: 0.8 }}>
+            <label className="inc-label">Severity</label>
+            <select className="pa-input" value={severity} onChange={e => setSeverity(e.target.value)}>
+              <option>P0</option>
+              <option>P1</option>
+              <option>P2</option>
+              <option>P3</option>
+            </select>
+          </div>
+        </div>
+        <div>
+          <div className="inc-label" style={{ marginBottom: 6 }}>Affected components</div>
+          <div className="inc-components">
+            {ALL_COMPONENTS.map(c => (
+              <label key={c} className="inc-component-chip">
+                <input type="checkbox" checked={components.includes(c)} onChange={() => toggleComponent(c)} />
+                {c}
+              </label>
+            ))}
+          </div>
+        </div>
+        <div>
+          <button className="pa-btn" type="submit" disabled={creating || !title.trim() || components.length === 0}>
+            {creating ? 'Creating...' : 'Create incident'}
+          </button>
+        </div>
+      </form>
+
+      {loading ? (
+        <div className="inc-empty">Loading...</div>
+      ) : (
+        <>
+          <div className="inc-list">
+            {open.length === 0 && <div className="inc-empty">No active incidents.</div>}
+            {open.map(inc => (
+              <div key={inc.incident_id} className="inc-card">
+                <div className="inc-card-header">
+                  <span className="inc-title">{inc.title}</span>
+                  <span className={`inc-severity inc-severity--${inc.severity}`}>{inc.severity}</span>
+                  <span className={`inc-status inc-status--${inc.status}`}>{inc.status}</span>
+                </div>
+                <div className="inc-card-meta">
+                  Started {fmtIncTs(inc.started_at)} - Created by {inc.created_by}
+                </div>
+                {inc.affected_components?.length > 0 && (
+                  <div className="inc-components-list">
+                    {inc.affected_components.map(c => (
+                      <span key={c} className="inc-comp-tag">{c}</span>
+                    ))}
+                  </div>
+                )}
+                {inc.timeline?.length > 0 && (
+                  <div className="inc-timeline">
+                    {inc.timeline.slice(-3).map((e, i) => (
+                      <div key={i} className="inc-timeline-entry">
+                        <span className="inc-timeline-ts">{fmtIncTs(e.ts)}</span>
+                        {e.message}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <div className="inc-card-actions">
+                  <div className="inc-update-row">
+                    <select
+                      className="pa-input"
+                      style={{ flex: 1 }}
+                      value={updateStatuses[inc.incident_id] || ''}
+                      onChange={e => setUpdateStatuses(s => ({ ...s, [inc.incident_id]: e.target.value }))}
+                    >
+                      <option value="">Status (no change)</option>
+                      <option value="investigating">Investigating</option>
+                      <option value="identified">Identified</option>
+                      <option value="monitoring">Monitoring</option>
+                    </select>
+                    <input
+                      className="pa-input"
+                      style={{ flex: 2 }}
+                      placeholder="Timeline note..."
+                      value={updateMsgs[inc.incident_id] || ''}
+                      onChange={e => setUpdateMsgs(m => ({ ...m, [inc.incident_id]: e.target.value }))}
+                    />
+                    <button
+                      className="pa-btn pa-btn--ghost"
+                      onClick={() => handleUpdate(inc.incident_id)}
+                      disabled={acting[inc.incident_id]}
+                    >
+                      Update
+                    </button>
+                  </div>
+                  <button
+                    className="pa-btn"
+                    onClick={() => handleResolve(inc.incident_id)}
+                    disabled={acting[inc.incident_id]}
+                  >
+                    Resolve
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {closed.length > 0 && (
+            <>
+              <hr className="inc-divider" />
+              <div className="inc-divider-label">Resolved</div>
+              <div className="inc-list">
+                {closed.slice(0, 10).map(inc => (
+                  <div key={inc.incident_id} className="inc-card">
+                    <div className="inc-card-header">
+                      <span className="inc-title">{inc.title}</span>
+                      <span className={`inc-severity inc-severity--${inc.severity}`}>{inc.severity}</span>
+                      <span className="inc-status inc-status--resolved">resolved</span>
+                    </div>
+                    <div className="inc-card-meta">
+                      {fmtIncTs(inc.started_at)} - {fmtIncTs(inc.resolved_at)}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+        </>
+      )}
+    </div>
+  )
+}
+
 // ─── Root ─────────────────────────────────────────────────────────────────────
 
 export default function PlatformAdmin() {
@@ -410,11 +645,13 @@ export default function PlatformAdmin() {
           <button className={`admin-tab${activeTab === 'users' ? ' admin-tab--active' : ''}`} onClick={() => setActiveTab('users')}>Users</button>
           <button className={`admin-tab${activeTab === 'invites' ? ' admin-tab--active' : ''}`} onClick={() => setActiveTab('invites')}>Invites</button>
           <button className={`admin-tab${activeTab === 'analytics' ? ' admin-tab--active' : ''}`} onClick={() => setActiveTab('analytics')}>Analytics</button>
+          <button className={`admin-tab${activeTab === 'incidents' ? ' admin-tab--active' : ''}`} onClick={() => setActiveTab('incidents')}>Incidents</button>
         </div>
         {activeTab === 'orgs' && <OrgsTab />}
         {activeTab === 'users' && <UsersTab />}
         {activeTab === 'invites' && <InvitesTab />}
         {activeTab === 'analytics' && <AnalyticsTab />}
+        {activeTab === 'incidents' && <IncidentsTab />}
       </div>
     </div>
   )

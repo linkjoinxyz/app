@@ -715,6 +715,27 @@ export default function OrgDetail() {
             {savedOk && <div className="pa-success" style={{ marginTop: 16 }}>Changes saved</div>}
             {saveErr && <div className="pa-error" style={{ marginTop: 16 }}>{saveErr}</div>}
 
+            <Section title="Compliance">
+              <div className="od-compliance-grid">
+                <a href="/dpa" className="od-compliance-card" target="_blank" rel="noopener noreferrer">
+                  <div className="od-compliance-card-title">Data Processing Agreement</div>
+                  <div className="od-compliance-card-desc">FERPA School Official designation, COPPA provisions, student data rights</div>
+                </a>
+                <a href="/privacy-schools" className="od-compliance-card" target="_blank" rel="noopener noreferrer">
+                  <div className="od-compliance-card-title">School Privacy Policy</div>
+                  <div className="od-compliance-card-desc">What student data we collect, how we use it, and your rights</div>
+                </a>
+                <div className="od-compliance-badge">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                  Data Residency: US-only (Azure US West)
+                </div>
+                <div className="od-compliance-badge">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                  Audit logs retained 24 months
+                </div>
+              </div>
+            </Section>
+
             <div className="od-danger-zone">
               <div className="od-danger-title">Danger zone</div>
               {deleteErr && <div className="pa-error" style={{ marginBottom: 10 }}>{deleteErr}</div>}

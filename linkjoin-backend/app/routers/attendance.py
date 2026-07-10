@@ -11,6 +11,7 @@ from app.auth import get_confirmed_user
 from app.database import motor_db
 from app.roles import require_teacher
 from app.utils import get_blackout_set
+from app.audit import log_audit
 
 log = logging.getLogger(__name__)
 
@@ -490,6 +491,7 @@ async def export_class_attendance(
                 status = "Excused Absent" if is_excused_absent else "Absent"
                 writer.writerow([email, name, class_name, date_str, day_name, status, "", is_excused_absent, ""])
 
+    await log_audit(user["username"], "data.attendance_export", detail={"class_id": class_id})
     safe_name = "".join(c if c.isalnum() or c in " -_" else "_" for c in class_name)
     return StreamingResponse(
         iter([output.getvalue()]),

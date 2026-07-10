@@ -691,3 +691,91 @@
 .od-import-errors { margin: 8px 0 0 16px; padding: 0; font-size: 12px; color: rgba(255,255,255,0.5); list-style: disc; }
 .od-import-errors li { margin-bottom: 4px; }
 .od-import-btn { font-size: 12px; padding: 6px 14px; }
+
+[data-theme="light"] .pa-header-title { color: #0f172a; }
+[data-theme="light"] .pa-header-sub { color: rgba(15,23,42,0.45); }
+[data-theme="light"] .pa-tab-bar { border-bottom-color: rgba(0,0,0,0.1); }
+[data-theme="light"] .pa-tab-btn { color: rgba(15,23,42,0.5); }
+[data-theme="light"] .pa-tab-btn--active { color: #0f172a; border-bottom-color: var(--lightblue); }
+[data-theme="light"] .pa-table th { color: rgba(15,23,42,0.45); border-bottom-color: rgba(0,0,0,0.09); }
+[data-theme="light"] .pa-table td { border-bottom-color: rgba(0,0,0,0.06); color: #0f172a; }
+[data-theme="light"] .pa-table tr:hover td { background: rgba(0,0,0,0.03); }
+[data-theme="light"] .pa-dim { color: rgba(15,23,42,0.35); }
+[data-theme="light"] .pa-org-row { background: rgba(0,0,0,0.02); border-color: rgba(0,0,0,0.08); }
+[data-theme="light"] .pa-org-name { color: #0f172a; }
+[data-theme="light"] .pa-org-sub { color: rgba(15,23,42,0.5); }
+[data-theme="light"] .pa-invite-row { background: rgba(0,0,0,0.02); border-color: rgba(0,0,0,0.08); }
+[data-theme="light"] .pa-invite-email { color: #0f172a; }
+[data-theme="light"] .pa-invite-meta { color: rgba(15,23,42,0.45); }
+[data-theme="light"] .pa-modal { background: #fff; color: #0f172a; }
+[data-theme="light"] .pa-modal-title { color: #0f172a; }
+[data-theme="light"] .pa-modal-sub { color: rgba(15,23,42,0.5); }
+[data-theme="light"] .pa-modal-label { color: rgba(15,23,42,0.55); }
+[data-theme="light"] .pa-modal-input { background: rgba(0,0,0,0.05); border-color: rgba(0,0,0,0.12); color: #0f172a; }
+[data-theme="light"] .pa-modal-input::placeholder { color: rgba(15,23,42,0.3); }
+[data-theme="light"] .pa-modal-close { color: rgba(15,23,42,0.4); }
+[data-theme="light"] .pa-modal-close:hover { color: #0f172a; }
+[data-theme="light"] .pa-empty { color: rgba(15,23,42,0.4); }
+[data-theme="light"] .pa-member-row { border-bottom-color: rgba(0,0,0,0.06); color: #0f172a; }
+[data-theme="light"] .pa-member-email { color: #0f172a; }
+[data-theme="light"] .pa-member-role { color: rgba(15,23,42,0.45); background: rgba(0,0,0,0.06); }
+[data-theme="light"] .pa-remove-btn { color: rgba(15,23,42,0.35); }
+[data-theme="light"] .pa-remove-btn:hover { color: #ef4444; }
+[data-theme="light"] .od-import-errors { color: rgba(15,23,42,0.5); }
+
+.od-compliance-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.od-compliance-card {
+  display: block;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.09);
+  border-radius: 10px;
+  padding: 14px 16px;
+  text-decoration: none;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.od-compliance-card:hover {
+  border-color: var(--lightblue, #2B8FD8);
+  background: rgba(43,143,216,0.07);
+}
+
+.od-compliance-card-title {
+  font-family: Montserrat, sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  color: #fff;
+  margin-bottom: 4px;
+}
+
+.od-compliance-card-desc {
+  font-family: Montserrat, sans-serif;
+  font-size: 11px;
+  color: rgba(255,255,255,0.45);
+  line-height: 1.5;
+}
+
+.od-compliance-badge {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.09);
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-family: Montserrat, sans-serif;
+  font-size: 12px;
+  color: rgba(255,255,255,0.6);
+}
+
+.od-compliance-badge svg { color: rgba(74,222,128,0.8); flex-shrink: 0; }
+
+[data-theme="light"] .od-compliance-card { background: rgba(0,0,0,0.03); border-color: rgba(0,0,0,0.09); }
+[data-theme="light"] .od-compliance-card:hover { background: rgba(43,143,216,0.06); border-color: var(--lightblue); }
+[data-theme="light"] .od-compliance-card-title { color: #0f172a; }
+[data-theme="light"] .od-compliance-card-desc { color: rgba(15,23,42,0.5); }
+[data-theme="light"] .od-compliance-badge { background: rgba(0,0,0,0.03); border-color: rgba(0,0,0,0.09); color: rgba(15,23,42,0.6); }

@@ -15,7 +15,9 @@ import NotesModal from '../components/NotesModal.jsx'
 import CalendarPanel from '../components/CalendarPanel.jsx'
 import CalendarImportModal from '../components/CalendarImportModal.jsx'
 import OnboardingCard from '../components/OnboardingCard.jsx'
+import OnboardingChecklist from '../components/OnboardingChecklist.jsx'
 import WhatsNewModal from '../components/WhatsNewModal.jsx'
+import TeacherSetupModal from '../components/TeacherSetupModal.jsx'
 import '../styles/links.css'
 import '../styles/new_links.css'
 import '../styles/calendar-panel.css'
@@ -178,7 +180,7 @@ function findNextLinkId(links) {
 }
 
 export default function Links() {
-  const { token, email, confirmed } = useAuth()
+  const { token, email, confirmed, role, onboardingDone } = useAuth()
   const location = useLocation()
   const [user, setUser] = useState(null)
   const [links, setLinks] = useState([])
@@ -203,6 +205,21 @@ const [showDeleted, setShowDeleted] = useState(false)
   const [showWhatsNew, setShowWhatsNew] = useState(false)
   const [modifiedNames, setModifiedNames] = useState([])
   const [popupBanner, setPopupBanner] = useState(null) // null | 'checking' | 'blocked'
+  const [obClasses, setObClasses] = useState([])
+  const [showTeacherSetup, setShowTeacherSetup] = useState(false)
+
+  useEffect(() => {
+    if (onboardingDone) return
+    const isTeacherOrStudent = role === 'teacher' || role === 'school_admin' || role === 'district_admin' || role === 'student'
+    if (!isTeacherOrStudent || !token) return
+    apiGet('/classes').then(cls => {
+      const list = Array.isArray(cls) ? cls : []
+      setObClasses(list)
+      if (role === 'teacher' && list.length === 0 && localStorage.getItem('lj_teacher_setup_done') !== 'true') {
+        setShowTeacherSetup(true)
+      }
+    }).catch(() => {})
+  }, [onboardingDone, role, token])
 
   useEffect(() => {
     document.documentElement.id = 'links_html'
@@ -436,6 +453,10 @@ const [showDeleted, setShowDeleted] = useState(false)
         page="links"
       />
 
+      {!onboardingDone && (
+        <OnboardingChecklist links={links} classes={obClasses} />
+      )}
+
       <div className={calendarEnabled ? 'lp-body' : ''}>
         <div className={calendarEnabled ? 'lp-links-col' : ''}>
           {modifiedNames.length > 0 && (
@@ -603,6 +624,10 @@ const [showDeleted, setShowDeleted] = useState(false)
 
 {showWhatsNew && !loading && (
         <WhatsNewModal onClose={() => setShowWhatsNew(false)} />
+      )}
+
+      {showTeacherSetup && (
+        <TeacherSetupModal onDone={() => setShowTeacherSetup(false)} />
       )}
 
       {showDeleted && (

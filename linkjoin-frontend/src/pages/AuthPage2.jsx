@@ -19,6 +19,92 @@ const ERROR_MESSAGES = {
   google_signup_failed: 'Google sign-up failed. Please try again.',
   login_failed: 'Sign-in failed. Please try again.',
   signup_failed: 'Sign-up failed. Please try again.',
+  parental_consent_pending: 'This account requires parental consent before it can be activated. Check your parent\'s email for instructions.',
+  mfa_invalid: 'Incorrect verification code. Please try again.',
+  mfa_expired: 'Verification code expired. Request a new one.',
+  mfa_resent: 'A new code has been sent.',
+}
+
+function MfaStep({ mfaSession, onVerified, onBack }) {
+  const [code, setCode] = useState('')
+  const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [resendCooldown, setResendCooldown] = useState(0)
+  const [resendMsg, setResendMsg] = useState('')
+
+  useEffect(() => {
+    if (resendCooldown <= 0) return
+    const t = setTimeout(() => setResendCooldown(c => c - 1), 1000)
+    return () => clearTimeout(t)
+  }, [resendCooldown])
+
+  async function handleVerify() {
+    if (!code.trim()) return
+    setLoading(true)
+    setError('')
+    try {
+      const data = await authApi.verifyMfa(mfaSession, code.trim())
+      onVerified(data)
+    } catch (e) {
+      const detail = e.body?.detail || ''
+      if (detail.includes('expired') || detail.includes('Invalid or')) {
+        setError('mfa_invalid')
+      } else {
+        setError('mfa_invalid')
+      }
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function handleResend() {
+    if (resendCooldown > 0) return
+    try {
+      await authApi.resendMfa(mfaSession)
+      setResendMsg('mfa_resent')
+      setResendCooldown(30)
+      setCode('')
+    } catch (_) {
+      setError('login_failed')
+    }
+  }
+
+  return (
+    <div className="ap-form-wrap">
+      <div className="ap-heading-wrap">
+        <h1 className="ap-heading">Verify your identity.</h1>
+      </div>
+      <p className="ap-mfa-desc">We sent a 6-digit code to your phone number on file. Enter it below to continue.</p>
+      {error && <div className="ap-error">{ERROR_MESSAGES[error] || error}</div>}
+      {resendMsg && !error && <div className="ap-mfa-success">{ERROR_MESSAGES[resendMsg]}</div>}
+      <input
+        type="text"
+        inputMode="numeric"
+        pattern="[0-9]*"
+        maxLength={6}
+        className="ap-input ap-mfa-input"
+        placeholder="000000"
+        value={code}
+        onChange={e => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+        onKeyDown={e => e.key === 'Enter' && handleVerify()}
+        autoComplete="one-time-code"
+        autoFocus
+      />
+      <button className="ap-submit" onClick={handleVerify} disabled={loading || code.length < 6}>
+        {loading ? 'Verifying...' : 'Verify'}
+      </button>
+      <div className="ap-mfa-actions">
+        <button
+          className="ap-mfa-resend"
+          onClick={handleResend}
+          disabled={resendCooldown > 0}
+        >
+          {resendCooldown > 0 ? `Resend code (${resendCooldown}s)` : 'Resend code'}
+        </button>
+        <button className="ap-mfa-back" onClick={onBack}>Back to login</button>
+      </div>
+    </div>
+  )
 }
 
 function GoogleIcon() {
@@ -91,6 +177,7 @@ export default function AuthPage2({ defaultTab = 'login' }) {
   const [error, setError] = useState(ERROR_MESSAGES[rawErrorParam] ? rawErrorParam : '')
   const [loading, setLoading] = useState(false)
   const [googleReady, setGoogleReady] = useState(false)
+  const [mfaSession, setMfaSession] = useState(null)
 
   const tokenClientRef = useRef(null)
   const tabRef = useRef(tab)
@@ -166,6 +253,10 @@ export default function AuthPage2({ defaultTab = 'login' }) {
     try {
       if (tab === 'login') {
         const data = await authApi.login({ email, password })
+        if (data.mfa_required) {
+          setMfaSession(data.mfa_session)
+          return
+        }
         login(data.access_token, data.email, data.confirmed ?? false, data)
         navigate(redirect, { replace: true })
       } else {
@@ -192,6 +283,11 @@ export default function AuthPage2({ defaultTab = 'login' }) {
     }
   }
 
+  function handleMfaVerified(data) {
+    login(data.access_token, data.email, data.confirmed ?? true, data)
+    navigate(redirect, { replace: true })
+  }
+
   const isLogin = tab === 'login'
 
   return (
@@ -208,6 +304,13 @@ export default function AuthPage2({ defaultTab = 'login' }) {
         </div>
 
         <div className="ap-form-outer">
+          {mfaSession ? (
+            <MfaStep
+              mfaSession={mfaSession}
+              onVerified={handleMfaVerified}
+              onBack={() => setMfaSession(null)}
+            />
+          ) : (
           <div className="ap-form-wrap">
             {/* Animated heading */}
             <div className="ap-heading-wrap">
@@ -258,10 +361,11 @@ export default function AuthPage2({ defaultTab = 'login' }) {
 
             <button className="ap-submit" onClick={handleSubmit} disabled={loading}>
               {loading
-                ? (isLogin ? 'Signing in…' : 'Creating account…')
+                ? (isLogin ? 'Signing in...' : 'Creating account...')
                 : (isLogin ? 'Log In' : 'Create Account')}
             </button>
           </div>
+          )}
         </div>
       </div>
 

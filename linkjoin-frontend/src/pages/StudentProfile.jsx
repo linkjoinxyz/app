@@ -62,7 +62,7 @@ export default function StudentProfile() {
   const [rewards, setRewards] = useState(null)
 
   useEffect(() => {
-    if (role && role !== 'student') navigate('/settings', { replace: true })
+    if (role !== 'student') navigate('/settings', { replace: true })
   }, [role, navigate])
 
   useEffect(() => {

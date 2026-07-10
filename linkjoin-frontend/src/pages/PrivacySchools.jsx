@@ -120,7 +120,7 @@ export default function PrivacySchools() {
           </section>
 
           <section className="pp-section">
-            <h2>9. Security</h2>
+            <h2>9. Security and Data Residency</h2>
             <p>
               We protect student data with the following technical safeguards:
             </p>
@@ -128,9 +128,12 @@ export default function PrivacySchools() {
               <li>Meeting link URLs are encrypted at rest using AES-256.</li>
               <li>All data is transmitted over TLS (HTTPS).</li>
               <li>Strict Transport Security (HSTS) is enforced to prevent downgrade attacks.</li>
-              <li>All data access and modifications are recorded in an audit log.</li>
+              <li>All data access and modifications are recorded in an audit log, retained for 24 months.</li>
               <li>Access to student data is limited to personnel with a legitimate need.</li>
             </ul>
+            <p>
+              <strong>Data Residency.</strong> All student data is processed and stored exclusively in the United States. Application servers run on Microsoft Azure (US West region). The database is hosted on MongoDB Atlas (US region, AES-256 encryption at rest). No student data is transferred outside the United States.
+            </p>
           </section>
 
           <section className="pp-section">

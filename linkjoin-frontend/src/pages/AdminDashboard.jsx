@@ -2121,7 +2121,7 @@ function TeacherView() {
   return (
     <>
       <div className="admin-tabs">
-        {[['classes', 'Classes'], ['log', 'Open Log'], ['interventions', 'Interventions']].map(([key, label]) => (
+        {[['classes', 'Classes'], ['log', 'Open Log'], ['interventions', 'Interventions'], ['audit', 'Audit Log']].map(([key, label]) => (
           <button key={key} className={`admin-tab${activeTab === key ? ' admin-tab--active' : ''}`}
             onClick={() => setActiveTab(key)}>
             {label}
@@ -2163,7 +2163,125 @@ function TeacherView() {
       {activeTab === 'log' && <HistoryPanel />}
 
       {activeTab === 'interventions' && <OrgInterventionList />}
+
+      {activeTab === 'audit' && <AuditLogTab />}
     </>
+  )
+}
+
+const ACTION_FILTERS = [
+  { value: '', label: 'All events' },
+  { value: 'auth', label: 'Auth' },
+  { value: 'admin', label: 'Admin' },
+  { value: 'consent', label: 'Consent' },
+  { value: 'data', label: 'Data' },
+  { value: 'user', label: 'User' },
+]
+
+function AuditLogTab() {
+  const [items, setItems] = useState([])
+  const [total, setTotal] = useState(0)
+  const [page, setPage] = useState(1)
+  const [action, setAction] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [exporting, setExporting] = useState(false)
+  const limit = 50
+
+  const load = useCallback(async (pg = 1, act = action) => {
+    setLoading(true)
+    try {
+      const qs = new URLSearchParams({ page: pg, limit })
+      if (act) qs.set('action', act)
+      const data = await apiGet(`/admin/audit-logs?${qs}`)
+      setItems(data.items || [])
+      setTotal(data.total || 0)
+      setPage(pg)
+    } catch (_) {
+      setItems([])
+    } finally {
+      setLoading(false)
+    }
+  }, [action]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => { load(1, action) }, [action]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function handleExport() {
+    setExporting(true)
+    try {
+      const qs = new URLSearchParams()
+      if (action) qs.set('action', action)
+      const res = await fetch(`/admin/audit-logs/export.csv?${qs}`, {
+        headers: { Authorization: `Bearer ${localStorage.getItem('lj_token')}` },
+      })
+      if (!res.ok) throw new Error('Export failed')
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = 'audit-log.csv'
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch (_) {
+      // silent
+    } finally {
+      setExporting(false)
+    }
+  }
+
+  const totalPages = Math.ceil(total / limit)
+
+  return (
+    <div className="audit-log-wrap">
+      <div className="audit-log-toolbar">
+        <select
+          className="audit-log-filter"
+          value={action}
+          onChange={e => setAction(e.target.value)}
+        >
+          {ACTION_FILTERS.map(f => (
+            <option key={f.value} value={f.value}>{f.label}</option>
+          ))}
+        </select>
+        <button className="audit-log-export" onClick={handleExport} disabled={exporting}>
+          {exporting ? 'Exporting...' : 'Export CSV'}
+        </button>
+      </div>
+
+      {loading ? (
+        <div className="audit-log-loading">Loading...</div>
+      ) : items.length === 0 ? (
+        <div className="audit-log-empty">No audit events found.</div>
+      ) : (
+        <table className="audit-log-table">
+          <thead>
+            <tr>
+              <th>Date / Time</th>
+              <th>Event</th>
+              <th>User</th>
+              <th>IP</th>
+            </tr>
+          </thead>
+          <tbody>
+            {items.map((item, i) => (
+              <tr key={i}>
+                <td className="audit-log-ts">{new Date(item.ts).toLocaleString()}</td>
+                <td><span className="audit-log-action">{item.action}</span></td>
+                <td className="audit-log-user">{item.user}</td>
+                <td className="audit-log-ip">{item.ip || '-'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+
+      {totalPages > 1 && (
+        <div className="audit-log-pagination">
+          <button className="audit-log-page-btn" disabled={page <= 1} onClick={() => load(page - 1)}>Previous</button>
+          <span className="audit-log-page-info">Page {page} of {totalPages}</span>
+          <button className="audit-log-page-btn" disabled={page >= totalPages} onClick={() => load(page + 1)}>Next</button>
+        </div>
+      )}
+    </div>
   )
 }
 

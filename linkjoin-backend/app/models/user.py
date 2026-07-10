@@ -11,6 +11,7 @@ class RegisterRequest(BaseModel):
     offset: Optional[float] = 0.0
     timezone: Optional[str] = ""
     keep: Optional[bool] = False
+    under_13: Optional[bool] = False
 
     @field_validator("password")
     @classmethod

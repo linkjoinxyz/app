@@ -134,3 +134,17 @@
   text-align: center;
   padding: 24px 0;
 }
+
+[data-theme="light"] .sp-card { background: #fff; }
+[data-theme="light"] .sp-close { color: rgba(15,23,42,0.4); }
+[data-theme="light"] .sp-close:hover { color: rgba(15,23,42,0.8); }
+[data-theme="light"] .sp-avatar-ring { background: rgba(0,0,0,0.05); }
+[data-theme="light"] .sp-name { color: #0f172a; }
+[data-theme="light"] .sp-email { color: rgba(15,23,42,0.45); }
+[data-theme="light"] .sp-stat-val { color: #0f172a; }
+[data-theme="light"] .sp-stat-label { color: rgba(15,23,42,0.4); }
+[data-theme="light"] .sp-section-title { color: rgba(15,23,42,0.5); }
+[data-theme="light"] .sp-award-row { background: rgba(0,0,0,0.03); border-color: rgba(0,0,0,0.08); }
+[data-theme="light"] .sp-award-label { color: rgba(15,23,42,0.7); }
+[data-theme="light"] .sp-award-val { color: rgba(15,23,42,0.45); }
+[data-theme="light"] .sp-empty { color: rgba(15,23,42,0.45); }

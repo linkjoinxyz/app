@@ -1,7 +1,10 @@
+import csv
+import io
 import secrets
 import string
 from datetime import datetime, timezone
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
+from fastapi.responses import StreamingResponse
 from app.auth import get_confirmed_user
 from app.config import get_settings
 from app.database import motor_db
@@ -72,6 +75,58 @@ def _welcome_email_html(email: str, org_name: str, role: str, temp_password: str
   </table>
 </body>
 </html>"""
+
+def _consent_email_html(student_name: str, org_name: str, grant_url: str) -> str:
+    return f"""<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#060F1A;font-family:Arial,Helvetica,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#060F1A;padding:40px 0;">
+    <tr><td align="center">
+      <table width="560" cellpadding="0" cellspacing="0" style="background:#0d1a2a;border-radius:12px;border:1px solid rgba(255,255,255,0.08);overflow:hidden;">
+        <tr><td style="background:#2b8fd8;padding:20px 32px;">
+          <span style="color:#fff;font-size:20px;font-weight:700;letter-spacing:-0.3px;">LinkJoin</span>
+        </td></tr>
+        <tr><td style="padding:32px;">
+          <p style="color:#e8edf2;font-size:16px;margin:0 0 8px;">Parental consent required</p>
+          <p style="color:rgba(255,255,255,0.5);font-size:13px;margin:0 0 24px;">
+            <strong style="color:#e8edf2;">{org_name}</strong> has added <strong style="color:#e8edf2;">{student_name}</strong> to LinkJoin, a school meeting management platform. Because this student is under 13, we require your consent before activating their account.
+          </p>
+          <p style="color:rgba(255,255,255,0.5);font-size:13px;margin:0 0 24px;">
+            LinkJoin is used by teachers to manage class meeting links and track attendance. Student data is stored exclusively in the United States and is never sold or used for advertising.
+          </p>
+          <a href="{grant_url}" style="display:inline-block;background:#2b8fd8;color:#fff;text-decoration:none;font-size:14px;font-weight:600;padding:12px 28px;border-radius:8px;margin-bottom:24px;">I consent - activate account</a>
+          <p style="color:rgba(255,255,255,0.3);font-size:12px;margin:0 0 8px;">This link is single-use. If you did not expect this email, contact your school administrator.</p>
+          <p style="color:rgba(255,255,255,0.3);font-size:12px;margin:0;">
+            <a href="https://linkjoin.xyz/dpa" style="color:rgba(43,143,216,0.7);">Data Processing Agreement</a> &middot;
+            <a href="https://linkjoin.xyz/privacy-schools" style="color:rgba(43,143,216,0.7);">School Privacy Policy</a>
+          </p>
+        </td></tr>
+        <tr><td style="padding:16px 32px;border-top:1px solid rgba(255,255,255,0.06);">
+          <p style="color:rgba(255,255,255,0.3);font-size:12px;margin:0;">LinkJoin - School meeting management</p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>"""
+
+
+def _mask_email(email: str) -> str:
+    if not email or "@" not in email:
+        return "***"
+    local, domain = email.split("@", 1)
+    return local[:2] + "***@" + domain
+
+
+def _mask_ip(ip: str | None) -> str | None:
+    if not ip:
+        return None
+    parts = ip.split(".")
+    if len(parts) >= 2:
+        return ".".join(parts[:2]) + ".x.x"
+    return "x.x"
+
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -261,12 +316,15 @@ async def import_org_members(
     if not rows or not isinstance(rows, list):
         raise HTTPException(status_code=422, detail="rows must be a non-empty list")
 
+    app_url = _settings.frontend_url
     results = []
     for row in rows:
         email = (row.get("email") or "").strip().lower()
         role = (row.get("role") or "").strip()
         first_name = (row.get("first_name") or "").strip()
         last_name = (row.get("last_name") or "").strip()
+        parent_email = (row.get("parent_email") or "").strip().lower()
+        requires_consent = (row.get("requires_consent") or "").strip().lower() == "yes"
 
         if not email or "@" not in email:
             results.append({"email": email or "(blank)", "status": "error", "error": "Invalid email"})
@@ -275,19 +333,34 @@ async def import_org_members(
             results.append({"email": email, "status": "error", "error": f"Invalid role '{role}'"})
             continue
 
+        consent_needed = requires_consent and parent_email and "@" in parent_email
+
         existing = await motor_db.login.find_one({"username": email}, {"_id": 0, "user_id": 1})
         if existing:
-            await motor_db.login.update_one(
-                {"username": email},
-                {"$set": {"role": role, "org_id": org_id, "account_type": "institutional"}},
-            )
+            update: dict = {"$set": {"role": role, "org_id": org_id, "account_type": "institutional"}}
+            if consent_needed:
+                consent_token = secrets.token_urlsafe(32)
+                update["$set"]["parental_consent"] = {
+                    "required": True,
+                    "status": "pending",
+                    "parent_email": parent_email,
+                    "token": consent_token,
+                    "granted_at": None,
+                    "grant_ip": None,
+                }
+                grant_url = f"{app_url}/consent/grant?token={consent_token}"
+                student_name = f"{first_name} {last_name}".strip() or email
+                consent_html = _consent_email_html(student_name, org_name, grant_url)
+                background_tasks.add_task(send_email, consent_html, f"Parental consent required for {org_name} on LinkJoin", parent_email)
+                await log_audit(user["username"], "consent.parental_required", detail={"email": email, "parent_email": parent_email, "org_id": org_id})
+            await motor_db.login.update_one({"username": email}, update)
             results.append({"email": email, "status": "updated"})
             await log_audit(user["username"], "admin.import_member_updated", detail={"email": email, "role": role, "org_id": org_id})
             continue
 
         temp_pw = _gen_temp_password()
         hashed = _hasher.hash(temp_pw)
-        new_user = {
+        new_user: dict = {
             "username": email,
             "password": hashed,
             "user_id": gen_id(),
@@ -306,12 +379,28 @@ async def import_org_members(
             "offset": 0,
             "notes": "",
         }
+        if consent_needed:
+            consent_token = secrets.token_urlsafe(32)
+            new_user["parental_consent"] = {
+                "required": True,
+                "status": "pending",
+                "parent_email": parent_email,
+                "token": consent_token,
+                "granted_at": None,
+                "grant_ip": None,
+            }
         await motor_db.login.insert_one(new_user)
         await log_audit(user["username"], "admin.import_member_created", detail={"email": email, "role": role, "org_id": org_id})
 
-        app_url = _settings.frontend_url
         html = _welcome_email_html(email, org_name, role, temp_pw, app_url)
         background_tasks.add_task(send_email, html, f"Welcome to {org_name} on LinkJoin", email)
+
+        if consent_needed:
+            grant_url = f"{app_url}/consent/grant?token={new_user['parental_consent']['token']}"
+            student_name = f"{first_name} {last_name}".strip() or email
+            consent_html = _consent_email_html(student_name, org_name, grant_url)
+            background_tasks.add_task(send_email, consent_html, f"Parental consent required for {org_name} on LinkJoin", parent_email)
+            await log_audit(user["username"], "consent.parental_required", detail={"email": email, "parent_email": parent_email, "org_id": org_id})
 
         results.append({"email": email, "status": "created"})
 
@@ -367,7 +456,7 @@ async def import_org_parents(
                 "must_reset_password": True,
                 "created_at": datetime.now(timezone.utc),
                 "premium": "false",
-                "tutorial": "true",
+                "onboarding_done": True,
                 "popup_check_done": "false",
                 "offset": 0,
                 "notes": "",
@@ -523,3 +612,143 @@ async def set_platform_admin(user_id: str, body: dict, user: dict = Depends(get_
     )
     await log_audit(user["username"], "admin.set_platform_admin", detail={"target_user_id": user_id, "enabled": enabled})
     return {"message": "Updated"}
+
+
+@router.post("/orgs/{org_id}/resend-consent")
+async def resend_consent_email(
+    org_id: str,
+    body: dict,
+    background_tasks: BackgroundTasks,
+    user: dict = Depends(get_confirmed_user),
+):
+    role = user.get("role")
+    if role not in ("school_admin", "district_admin") and user.get("admin") != "true":
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
+    if user.get("admin") != "true" and user.get("org_id") != org_id:
+        raise HTTPException(status_code=403, detail="Org mismatch")
+
+    student_id = body.get("student_id")
+    if not student_id:
+        raise HTTPException(status_code=422, detail="student_id required")
+
+    student = await motor_db.login.find_one({"user_id": student_id, "org_id": org_id})
+    if not student:
+        raise HTTPException(status_code=404, detail="Student not found")
+
+    consent = student.get("parental_consent")
+    if not consent or not consent.get("required"):
+        raise HTTPException(status_code=400, detail="Parental consent not required for this account")
+    if consent.get("status") == "granted":
+        raise HTTPException(status_code=400, detail="Consent already granted")
+
+    parent_email = consent.get("parent_email")
+    if not parent_email:
+        raise HTTPException(status_code=400, detail="No parent email on record")
+
+    new_token = secrets.token_urlsafe(32)
+    await motor_db.login.update_one(
+        {"user_id": student_id},
+        {"$set": {"parental_consent.token": new_token}},
+    )
+
+    org = await motor_db.orgs.find_one({"org_id": org_id}, {"name": 1})
+    org_name = org.get("name", "your school") if org else "your school"
+    first_name = student.get("first_name", "")
+    last_name = student.get("last_name", "")
+    student_name = f"{first_name} {last_name}".strip() or student["username"]
+
+    app_url = _settings.frontend_url
+    grant_url = f"{app_url}/consent/grant?token={new_token}"
+    html = _consent_email_html(student_name, org_name, grant_url)
+    background_tasks.add_task(send_email, html, f"Parental consent required for {org_name} on LinkJoin", parent_email)
+    await log_audit(user["username"], "consent.parental_resent", detail={"student_id": student_id, "parent_email": parent_email, "org_id": org_id})
+    return {"message": "Consent email resent"}
+
+
+@router.get("/audit-logs/export.csv")
+async def export_audit_logs_csv(
+    from_date: str | None = Query(None),
+    to_date: str | None = Query(None),
+    action: str | None = Query(None),
+    user: dict = Depends(get_confirmed_user),
+):
+    role = user.get("role")
+    if role not in ("school_admin", "district_admin") and user.get("admin") != "true":
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
+
+    query = await _build_audit_query(user, from_date, to_date, action)
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["timestamp", "user", "action", "ip", "detail"])
+    async for log in motor_db.audit_logs.find(query, {"_id": 0}).sort("ts", -1).limit(10000):
+        ts = log.get("ts")
+        writer.writerow([
+            ts.isoformat() if hasattr(ts, "isoformat") else str(ts),
+            _mask_email(log.get("user", "")),
+            log.get("action", ""),
+            _mask_ip(log.get("ip")),
+            str(log.get("detail", {}))[:200] if log.get("detail") else "",
+        ])
+    output.seek(0)
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=audit-log.csv"},
+    )
+
+
+@router.get("/audit-logs")
+async def list_audit_logs(
+    page: int = Query(1, ge=1),
+    limit: int = Query(50, ge=1, le=200),
+    from_date: str | None = Query(None),
+    to_date: str | None = Query(None),
+    action: str | None = Query(None),
+    user: dict = Depends(get_confirmed_user),
+):
+    role = user.get("role")
+    if role not in ("school_admin", "district_admin") and user.get("admin") != "true":
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
+
+    query = await _build_audit_query(user, from_date, to_date, action)
+    total = await motor_db.audit_logs.count_documents(query)
+    skip = (page - 1) * limit
+    items = []
+    async for log in motor_db.audit_logs.find(query, {"_id": 0}).sort("ts", -1).skip(skip).limit(limit):
+        ts = log.get("ts")
+        items.append({
+            "ts": ts.isoformat() if hasattr(ts, "isoformat") else str(ts),
+            "user": _mask_email(log.get("user", "")),
+            "action": log.get("action"),
+            "ip": _mask_ip(log.get("ip")),
+            "detail_summary": str(log.get("detail", {}))[:120] if log.get("detail") else None,
+        })
+    return {"total": total, "page": page, "limit": limit, "items": items}
+
+
+async def _build_audit_query(user: dict, from_date: str | None, to_date: str | None, action: str | None) -> dict:
+    if user.get("admin") == "true":
+        query: dict = {}
+    else:
+        org_id = user.get("org_id")
+        if not org_id:
+            return {"user": "__no_org__"}
+        org_usernames = [u["username"] async for u in motor_db.login.find({"org_id": org_id}, {"username": 1, "_id": 0})]
+        query = {"user": {"$in": org_usernames}}
+
+    ts_filter: dict = {}
+    if from_date:
+        try:
+            ts_filter["$gte"] = datetime.fromisoformat(from_date.replace("Z", "+00:00"))
+        except Exception:
+            pass
+    if to_date:
+        try:
+            ts_filter["$lte"] = datetime.fromisoformat(to_date.replace("Z", "+00:00"))
+        except Exception:
+            pass
+    if ts_filter:
+        query["ts"] = ts_filter
+    if action:
+        query["action"] = {"$regex": f"^{action}", "$options": "i"}
+    return query
