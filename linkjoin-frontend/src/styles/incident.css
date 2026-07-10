@@ -35,16 +35,19 @@
 
 .inc-banner-body {
   flex: 1;
+  color: inherit;
 }
 
 .inc-banner-title {
   font-weight: 700;
+  color: inherit;
 }
 
 .inc-banner-meta {
   opacity: 0.8;
   font-size: 12px;
   margin-top: 2px;
+  color: inherit;
 }
 
 .inc-banner-dismiss {
