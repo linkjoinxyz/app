@@ -1,6 +1,6 @@
 import { apiGet, apiPost, apiPatch } from './client.js'
 
-const BASE_URL = import.meta.env.VITE_API_URL || ''
+const BASE_URL = import.meta.env.VITE_API_URL || '/api'
 
 export const incidentsApi = {
   getActive: () => fetch(`${BASE_URL}/incidents/active`).then(r => r.json()),

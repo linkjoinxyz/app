@@ -57,7 +57,7 @@ export default function TeacherSetupModal({ onDone }) {
     try {
       const link = await apiFetch('/links', {
         method: 'POST',
-        body: JSON.stringify({ name: meetingName.trim() || className.trim(), link: meetingUrl.trim(), time: '', days: [], repeats: 'weekly' }),
+        body: JSON.stringify({ name: meetingName.trim() || className.trim(), link: meetingUrl.trim(), time: '', days: [], repeats: 'never' }),
       })
       const newLinkId = link.id ?? link.link_id
       setLinkId(newLinkId)

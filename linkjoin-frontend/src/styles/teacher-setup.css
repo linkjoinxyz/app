@@ -60,8 +60,11 @@
 .ts-title {
   font-size: 22px;
   font-weight: 700;
+  color: var(--text-primary, #fff);
   margin: 0 0 6px;
 }
+
+[data-theme="light"] .ts-title { color: #0D1B2A; }
 
 .ts-sub {
   font-size: 14px;
@@ -178,6 +181,7 @@ textarea.ts-input {
 
 .ts-success-icon {
   font-size: 40px;
+  color: #22C55E;
   margin-bottom: 12px;
 }
 
