@@ -7,6 +7,7 @@ from app.database import motor_db
 from app.email_service import send_email
 from app.roles import TEACHER_ROLES, require_school_admin
 from app.audit import log_audit
+from app.utils import track_event
 
 router = APIRouter(prefix="/invites", tags=["invites"])
 _settings = get_settings()
@@ -75,9 +76,10 @@ async def create_invite(
     class_id = None
     class_name = None
 
+    is_platform_admin = user.get("admin") == "true"
+    has_token = _settings.add_accounts_token and x_admin_token == _settings.add_accounts_token
+
     if invite_type == "school_admin":
-        is_platform_admin = user.get("admin") == "true"
-        has_token = _settings.add_accounts_token and x_admin_token == _settings.add_accounts_token
         if not is_platform_admin and not has_token:
             raise HTTPException(status_code=403, detail="Admin token or platform admin account required for school_admin invites")
         org_id = body.get("org_id")
@@ -88,14 +90,23 @@ async def create_invite(
             raise HTTPException(status_code=404, detail="Org not found")
         email = (body.get("email") or "").lower().strip() or None
         reusable = False
-        role = "school_admin"
+        requested_role = body.get("role", "school_admin")
+        role = requested_role if (is_platform_admin or has_token) and requested_role in ("school_admin", "district_admin") else "school_admin"
 
     elif invite_type == "teacher":
-        require_school_admin(user)
-        org_id = user.get("org_id")
-        if not org_id:
-            raise HTTPException(status_code=422, detail="No org_id on your account")
-        org = await motor_db.orgs.find_one({"org_id": org_id}, {"name": 1})
+        if is_platform_admin:
+            org_id = body.get("org_id")
+            if not org_id:
+                raise HTTPException(status_code=422, detail="org_id required")
+            org = await motor_db.orgs.find_one({"org_id": org_id}, {"name": 1})
+            if not org:
+                raise HTTPException(status_code=404, detail="Org not found")
+        else:
+            require_school_admin(user)
+            org_id = user.get("org_id")
+            if not org_id:
+                raise HTTPException(status_code=422, detail="No org_id on your account")
+            org = await motor_db.orgs.find_one({"org_id": org_id}, {"name": 1})
         email = (body.get("email") or "").lower().strip()
         if not email:
             raise HTTPException(status_code=422, detail="email required for teacher invites")
@@ -103,12 +114,18 @@ async def create_invite(
         role = "teacher"
 
     else:  # student_class
-        if user.get("account_type") != "institutional" or user.get("role") not in TEACHER_ROLES:
-            raise HTTPException(status_code=403, detail="Teacher access required")
-        class_id = body.get("class_id")
-        if not class_id:
-            raise HTTPException(status_code=422, detail="class_id required for student join codes")
-        cls = await motor_db.classes.find_one({"class_id": class_id, "teacher_id": user["user_id"]})
+        if is_platform_admin:
+            class_id = body.get("class_id")
+            if not class_id:
+                raise HTTPException(status_code=422, detail="class_id required for student join codes")
+            cls = await motor_db.classes.find_one({"class_id": class_id})
+        else:
+            if user.get("account_type") != "institutional" or user.get("role") not in TEACHER_ROLES:
+                raise HTTPException(status_code=403, detail="Teacher access required")
+            class_id = body.get("class_id")
+            if not class_id:
+                raise HTTPException(status_code=422, detail="class_id required for student join codes")
+            cls = await motor_db.classes.find_one({"class_id": class_id, "teacher_id": user["user_id"]})
         if not cls:
             raise HTTPException(status_code=404, detail="Class not found")
         org_id = cls.get("org_id") or user.get("org_id")
@@ -277,6 +294,7 @@ async def accept_invite(token: str, body: dict, user: dict = Depends(get_current
         )
 
     await log_audit(user["username"], f"invite.accept.{invite['type']}", detail={"token": token})
+    await track_event("invite_accepted", org_id=invite.get("org_id"), user_id=user.get("user_id"))
 
     new_token = create_token(user["username"])
     return {

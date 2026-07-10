@@ -14,7 +14,7 @@ from app.models.link import (
     AcceptLinkRequest,
 )
 from app.scheduler import create_text_job, delete_text_job
-from app.utils import configure_data, analytics, async_next_link_id
+from app.utils import configure_data, track_event, async_next_link_id
 from app.websocket_manager import manager
 from app.email_service import send_email
 from app.config import get_settings
@@ -144,7 +144,7 @@ async def log_link_open(link_id: int, user: dict = Depends(get_confirmed_user)):
         "link_time": link.get("time", ""),
         "opened_at": datetime.now(timezone.utc),
     })
-    await analytics("links_opened")
+    await track_event("link_open", org_id=user.get("org_id"), user_id=user.get("user_id"))
     return {"ok": True}
 
 
@@ -179,7 +179,7 @@ async def create_link(request: Request, body: CreateLinkRequest, user: dict = De
 
     await motor_db.links.insert_one(doc)
     create_text_job(doc)
-    await analytics("links_made")
+    await track_event("link_create", org_id=user.get("org_id"), user_id=user.get("user_id"))
     await log_audit(email, "link.create", "link", link_id, ip=request.client.host if request.client else None, detail={"name": body.name})
     await manager.broadcast(await configure_data(email), email)
     return {"message": "Created", "id": link_id}
@@ -233,7 +233,7 @@ async def update_link(link_id: int, request: Request, body: UpdateLinkRequest, u
     delete_text_job(existing)
     await motor_db.links.replace_one({"username": email, "id": link_id}, doc)
     create_text_job(doc, update=True)
-    await analytics("links_edited")
+    await track_event("link_edit", org_id=user.get("org_id"), user_id=user.get("user_id"))
     await log_audit(email, "link.update", "link", link_id, ip=request.client.host if request.client else None, detail={"name": body.name})
     await manager.broadcast(await configure_data(email), email)
     return {"message": "Updated"}
@@ -262,7 +262,7 @@ async def delete_link(link_id: int, request: Request, permanent: bool = False, t
             # Remove shared copies that other users received from this link
             await motor_db.links.delete_many({"share_id": link_id})
 
-    await analytics("links_deleted")
+    await track_event("link_delete", org_id=user.get("org_id"), user_id=user.get("user_id"))
     link_name = doc.get("name", "") if not permanent else ""
     await log_audit(email, "link.delete", type, link_id, ip=request.client.host if request.client else None, detail={"name": link_name})
     await manager.broadcast(await configure_data(email), email)
@@ -305,7 +305,7 @@ async def toggle_link(link_id: int, body: ToggleLinkRequest, user: dict = Depend
     if active == "true":
         updated = {**existing, "active": "true"}
         create_text_job(updated, update=True)
-    await analytics("links_edited")
+    await track_event("link_edit", org_id=user.get("org_id"), user_id=user.get("user_id"))
     await log_audit(email, "link.toggle", "link", link_id, detail={"active": active, "name": existing.get("name", "")})
     await manager.broadcast(await configure_data(email), email)
     return {"message": "Toggled", "active": active}

@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException
 from app.auth import get_confirmed_user
 from app.database import motor_db
@@ -159,6 +160,112 @@ async def search_users(q: str = "", user: dict = Depends(get_confirmed_user)):
     ).limit(20):
         results.append(u)
     return results
+
+
+@router.get("/orgs/{org_id}/classes")
+async def get_org_classes(org_id: str, user: dict = Depends(get_confirmed_user)):
+    if user.get("admin") != "true":
+        raise HTTPException(status_code=403, detail="Platform admin access required")
+    classes = []
+    async for cls in motor_db.classes.find({"org_id": org_id}, {"_id": 0}):
+        classes.append(dict(cls))
+    class_ids = [c["class_id"] for c in classes]
+    join_tokens: dict = {}
+    if class_ids:
+        async for inv in motor_db.invites.find(
+            {"class_id": {"$in": class_ids}, "type": "student_class", "status": "pending"},
+            {"_id": 0, "class_id": 1, "token": 1},
+        ):
+            join_tokens[inv["class_id"]] = inv["token"]
+    for cls in classes:
+        cls["join_token"] = join_tokens.get(cls["class_id"])
+    return classes
+
+
+@router.get("/analytics")
+async def get_analytics(user: dict = Depends(get_confirmed_user)):
+    _require_admin(user)
+    now = datetime.now(timezone.utc)
+
+    # Last 6 YYYY-MM labels
+    months = []
+    y, m = now.year, now.month
+    for _ in range(6):
+        months.append(f"{y}-{m:02d}")
+        m -= 1
+        if m == 0:
+            m = 12
+            y -= 1
+    months.reverse()
+
+    # Live totals
+    total_users = await motor_db.login.count_documents({})
+    institutional = await motor_db.login.count_documents({"account_type": "institutional"})
+    total_orgs = await motor_db.orgs.count_documents({})
+
+    role_counts: dict = {}
+    for role in ("student", "teacher", "school_admin", "district_admin"):
+        role_counts[role] = await motor_db.login.count_documents({"role": role})
+    role_counts["personal"] = await motor_db.login.count_documents({"account_type": "personal"})
+
+    org_by_type: dict = {}
+    for t in ("school", "district"):
+        org_by_type[t] = await motor_db.orgs.count_documents({"type": t})
+
+    # Invite funnel
+    total_invites = await motor_db.invites.count_documents({})
+    accepted_invites = await motor_db.invites.count_documents({"status": "accepted"})
+    pending_invites = await motor_db.invites.count_documents({"status": "pending"})
+    rescinded_invites = await motor_db.invites.count_documents({"status": {"$in": ["rescinded", "revoked"]}})
+    expired_invites = await motor_db.invites.count_documents({"status": "expired"})
+    invite_by_type: dict = {}
+    for t in ("school_admin", "teacher", "student_class"):
+        invite_by_type[t] = await motor_db.invites.count_documents({"type": t})
+
+    # Monthly signups from new analytics_events collection
+    monthly: dict = {}
+    async for doc in motor_db.analytics_events.aggregate([
+        {"$match": {"event": "signup", "ym": {"$in": months}}},
+        {"$group": {"_id": "$ym", "count": {"$sum": 1}}},
+    ]):
+        monthly[doc["_id"]] = doc["count"]
+
+    # Fallback: derive from audit_logs if analytics_events has no data yet
+    if not any(monthly.values()):
+        cutoff = datetime(now.year - 1, 1, 1, tzinfo=timezone.utc)
+        async for doc in motor_db.audit_logs.aggregate([
+            {"$match": {"action": "auth.register", "ts": {"$gte": cutoff}}},
+            {"$group": {"_id": {"$dateToString": {"format": "%Y-%m", "date": "$ts"}}, "count": {"$sum": 1}}},
+        ]):
+            if doc["_id"] in months:
+                monthly[doc["_id"]] = doc["count"]
+
+    monthly_signups = [{"ym": mo, "count": monthly.get(mo, 0)} for mo in months]
+
+    # Recent audit log
+    recent_audit = []
+    async for entry in motor_db.audit_logs.find(
+        {}, {"_id": 0, "ts": 1, "user": 1, "action": 1}
+    ).sort("ts", -1).limit(15):
+        ts = entry.get("ts")
+        entry["ts"] = ts.isoformat() if hasattr(ts, "isoformat") else str(ts)
+        recent_audit.append(entry)
+
+    return {
+        "users": {"total": total_users, "institutional": institutional, "by_role": role_counts},
+        "orgs": {"total": total_orgs, "by_type": org_by_type},
+        "invites": {
+            "total": total_invites,
+            "accepted": accepted_invites,
+            "pending": pending_invites,
+            "rescinded": rescinded_invites,
+            "expired": expired_invites,
+            "acceptance_rate": round(accepted_invites / total_invites * 100) if total_invites else 0,
+            "by_type": invite_by_type,
+        },
+        "monthly_signups": monthly_signups,
+        "recent_audit": recent_audit,
+    }
 
 
 @router.patch("/users/{user_id}/platform-admin")

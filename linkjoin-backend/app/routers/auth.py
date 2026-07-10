@@ -13,7 +13,7 @@ from app.limiter import limiter
 from app.models.user import RegisterRequest, LoginRequest, ResetPasswordRequest, TokenResponse
 from app.config import get_settings
 from app.email_service import send_email
-from app.utils import gen_id, analytics
+from app.utils import gen_id, track_event
 from app.redis_client import get_redis
 from app.audit import log_audit
 from jose import JWTError
@@ -81,6 +81,7 @@ async def register(request: Request, body: RegisterRequest, background_tasks: Ba
         "confirmed": "false",
         "timezone": body.timezone or "",
         "org_name": email.split("@")[1],
+        "created_at": datetime.now(timezone.utc),
     }
 
     if body.jwt:
@@ -106,7 +107,7 @@ async def register(request: Request, body: RegisterRequest, background_tasks: Ba
             "LinkJoin: Confirm email address",
             email,
         )
-        await analytics("signups")
+        await track_event("signup")
         await log_audit(email, "auth.register", ip=request.client.host if request.client else None)
         access_token = create_token(email)
         return {
@@ -117,7 +118,7 @@ async def register(request: Request, body: RegisterRequest, background_tasks: Ba
             "admin": account.get("admin"),
         }
 
-    await analytics("signups")
+    await track_event("signup")
     await log_audit(email, "auth.register", ip=request.client.host if request.client else None)
     access_token = create_token(email)
     return {
@@ -154,7 +155,7 @@ async def confirm_email(token: str):
 
     await motor_db.login.update_one({"username": email}, {"$set": {"confirmed": "true"}})
     await _blacklist_token(payload)
-    await analytics("signups")
+    await track_event("signup")
     user = await motor_db.login.find_one({"username": email})
     access_token = create_token(email)
     return {
@@ -225,7 +226,7 @@ async def login(request: Request, body: LoginRequest):
     if user.get("offset") is None:
         await motor_db.login.update_one({"username": email}, {"$set": {"offset": "0.0"}})
 
-    await analytics("logins")
+    await track_event("login")
     await log_audit(email, "auth.login", ip=request.client.host if request.client else None)
     access_token = create_token(email)
     confirmed = user.get("confirmed") == "true"
@@ -296,7 +297,7 @@ async def google_code_exchange(request: Request, body: GoogleCodeRequest):
             "org_name": email.split("@")[1],
         }
         await motor_db.login.insert_one(account)
-        await analytics("signups")
+        await track_event("signup")
         user = account
 
     access_token = create_token(email)
@@ -348,7 +349,7 @@ async def google_token_auth(request: Request, body: dict):
             "org_name": email.split("@")[1],
         }
         await motor_db.login.insert_one(account)
-        await analytics("signups")
+        await track_event("signup")
         user = account
 
     access_token_jwt = create_token(email)

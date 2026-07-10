@@ -31,3 +31,12 @@ file globs. Run `gbrain sync --repo /Users/sethraphael/PycharmProject/linkjoin -
 to refresh the index after significant changes.
 
 <!-- gstack-gbrain-search-guidance:end -->
+
+## Deployment (GitHub Pages)
+- After CSS/layout changes, verify CSS override ordering and confirm all JS files (e.g., navtoggle.js) are copied by the deploy workflow before considering the task done.
+## Frontend Verification
+- When confirming account/DB state, check for cached localStorage that may cause the frontend to show stale data, and note this to the user.
+## Billing & Rate Limits
+- Never modify settings.json model/billing configuration to resolve rate-limit errors; this can silently switch from subscription to API billing. Report 429 errors to the user instead of attempting billing workarounds.
+## Knowledge Persistence
+- Sync project knowledge and decisions to gbrain at the end of sessions.

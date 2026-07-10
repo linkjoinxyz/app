@@ -1,5 +1,5 @@
 import secrets
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from typing import Optional
 import httpx
 from icalendar import Calendar
@@ -11,6 +11,7 @@ from app.database import motor_db
 from app.config import get_settings
 from app.models.org import CreateOrgRequest, UpdateOrgRequest
 from app.roles import require_school_admin
+from app.utils import track_event
 
 # Keywords that identify "no school" events in a calendar feed
 _NO_SCHOOL_KEYWORDS = {
@@ -68,8 +69,10 @@ async def create_org(body: CreateOrgRequest, _: None = Depends(_check_token)):
         "grade_levels": body.grade_levels or [],
         "school_year_start": body.school_year_start,
         "school_year_end": body.school_year_end,
+        "created_at": datetime.now(timezone.utc),
     }
     await motor_db.orgs.insert_one(doc)
+    await track_event("org_created")
     return {k: v for k, v in doc.items() if k != "_id"}
 
 

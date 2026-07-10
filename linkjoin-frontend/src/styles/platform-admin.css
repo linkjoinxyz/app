@@ -47,6 +47,19 @@
 .pa-btn:hover:not(:disabled) { opacity: 0.9; }
 .pa-btn:disabled { opacity: 0.5; cursor: default; }
 
+.pa-btn--icon {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  font-size: 22px;
+  line-height: 1;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: Montserrat, sans-serif;
+}
+
 .pa-btn--ghost {
   background: rgba(255,255,255,0.06);
   color: rgba(255,255,255,0.7);
@@ -263,4 +276,252 @@
 .od-remove-btn:disabled {
   opacity: 0.4;
   cursor: default;
+}
+
+.od-copy-btn {
+  background: rgba(43,143,216,0.1);
+  border: 1px solid rgba(43,143,216,0.25);
+  border-radius: 6px;
+  color: #2b8fd8;
+  font-size: 12px;
+  padding: 4px 10px;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.od-copy-btn:hover {
+  background: rgba(43,143,216,0.2);
+  border-color: rgba(43,143,216,0.5);
+}
+.od-copy-btn--generate {
+  background: rgba(255,255,255,0.04);
+  border-color: rgba(255,255,255,0.1);
+  color: rgba(255,255,255,0.5);
+}
+.od-copy-btn--generate:hover:not(:disabled) {
+  background: rgba(255,255,255,0.08);
+  border-color: rgba(255,255,255,0.2);
+  color: rgba(255,255,255,0.8);
+}
+.od-copy-btn:disabled { opacity: 0.4; cursor: default; }
+
+/* Analytics tab */
+.pa-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-bottom: 28px;
+}
+
+@media (max-width: 640px) {
+  .pa-stat-grid { grid-template-columns: repeat(2, 1fr); }
+}
+
+.pa-stat-card {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 10px;
+  padding: 18px 20px;
+  transition: border-color 0.15s;
+}
+
+.pa-stat-val {
+  font-size: 28px;
+  font-weight: 700;
+  color: #e8edf2;
+  line-height: 1;
+  margin-bottom: 6px;
+}
+
+.pa-stat-label {
+  font-size: 12px;
+  color: rgba(255,255,255,0.35);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* 3-column donut row */
+.pa-three-col {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin-bottom: 32px;
+}
+
+@media (max-width: 700px) {
+  .pa-three-col { grid-template-columns: 1fr; }
+}
+
+.pa-chart-card {
+  background: rgba(255,255,255,0.025);
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 12px;
+  padding: 20px;
+}
+
+.pa-chart-inner {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  margin-top: 14px;
+}
+
+/* Donut legend */
+.pa-donut-legend {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  min-width: 0;
+}
+
+.pa-legend-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+}
+
+.pa-legend-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.pa-legend-label {
+  color: rgba(255,255,255,0.6);
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pa-legend-val {
+  color: #e8edf2;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.pa-legend-pct {
+  color: rgba(255,255,255,0.3);
+  font-size: 11px;
+  min-width: 28px;
+  text-align: right;
+}
+
+.pa-subsection {
+  margin-bottom: 28px;
+}
+
+.pa-subsection-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(255,255,255,0.35);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 12px;
+}
+
+/* CSS bar chart */
+.pa-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  height: 110px;
+  padding-bottom: 26px;
+  position: relative;
+}
+
+.pa-bar-col {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  height: 100%;
+  position: relative;
+}
+
+.pa-bar-fill {
+  width: 100%;
+  border-radius: 4px 4px 0 0;
+  min-height: 3px;
+  opacity: 0.75;
+  transition: opacity 0.15s;
+}
+
+.pa-bar-col:hover .pa-bar-fill { opacity: 1; }
+
+.pa-bar-label {
+  position: absolute;
+  bottom: -22px;
+  font-size: 11px;
+  color: rgba(255,255,255,0.3);
+  white-space: nowrap;
+}
+
+.pa-bar-count {
+  position: absolute;
+  top: -18px;
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(255,255,255,0.5);
+}
+
+/* OrgDetail tab layout */
+.od-tab-body {
+  padding: 8px 0;
+}
+
+.od-save-row {
+  margin-top: 24px;
+  padding-top: 24px;
+  border-top: 1px solid rgba(255,255,255,0.06);
+}
+
+.od-invite-row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.od-invite-role {
+  width: 160px;
+  flex-shrink: 0;
+}
+
+.od-invite-email {
+  flex: 1;
+  min-width: 200px;
+}
+
+.od-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 24px;
+  text-align: center;
+  gap: 10px;
+}
+
+.od-empty-icon {
+  color: rgba(255,255,255,0.12);
+  margin-bottom: 4px;
+}
+
+.od-empty-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: rgba(255,255,255,0.4);
+}
+
+.od-empty-sub {
+  font-size: 13px;
+  color: rgba(255,255,255,0.2);
+  max-width: 320px;
+  line-height: 1.5;
 }

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { apiFetch, apiGet } from '../api/client.js'
+import { apiFetch, apiGet, apiPost } from '../api/client.js'
 import HeaderModern from '../components/HeaderModern.jsx'
 import '../styles/platform-admin.css'
 import '../styles/create-org.css'
@@ -68,6 +68,7 @@ export default function OrgDetail() {
   const { orgId } = useParams()
   const navigate = useNavigate()
 
+  const [tab, setTab] = useState('info')
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
   const [orgName, setOrgName] = useState('')
@@ -83,18 +84,27 @@ export default function OrgDetail() {
   const [memberErr, setMemberErr] = useState('')
 
   const [inviteEmail, setInviteEmail] = useState('')
+  const [inviteRole, setInviteRole] = useState('school_admin')
   const [inviting, setInviting] = useState(false)
   const [inviteErr, setInviteErr] = useState('')
   const [inviteOk, setInviteOk] = useState(false)
+
+  const [classes, setClasses] = useState([])
+  const [classesLoaded, setClassesLoaded] = useState(false)
+  const [joinBusy, setJoinBusy] = useState({})
+  const [copiedToken, setCopiedToken] = useState(null)
 
   useEffect(() => {
     Promise.all([
       apiGet(`/admin/orgs/${orgId}`),
       apiGet('/admin/orgs'),
-    ]).then(([data, orgs]) => {
+      apiGet(`/admin/orgs/${orgId}/classes`),
+    ]).then(([data, orgs, clsList]) => {
       setOrgName(data.name || '')
       setMembers(data.members || [])
       setAllOrgs(Array.isArray(orgs) ? orgs : [])
+      setClasses(Array.isArray(clsList) ? clsList : [])
+      setClassesLoaded(true)
       setForm({
         name: data.name || '',
         type: data.type || 'school',
@@ -194,10 +204,11 @@ export default function OrgDetail() {
     if (!email) return
     setInviting(true); setInviteErr(''); setInviteOk(false)
     try {
-      await apiFetch('/invites', {
-        method: 'POST',
-        body: JSON.stringify({ type: 'school_admin', org_id: orgId, email }),
-      })
+      const isTeacher = inviteRole === 'teacher'
+      const body = isTeacher
+        ? { type: 'teacher', org_id: orgId, email }
+        : { type: 'school_admin', org_id: orgId, email, role: inviteRole }
+      await apiFetch('/invites', { method: 'POST', body: JSON.stringify(body) })
       setInviteEmail('')
       setInviteOk(true)
       setTimeout(() => setInviteOk(false), 3000)
@@ -205,6 +216,22 @@ export default function OrgDetail() {
       setInviteErr(e?.message || 'Invite failed')
     }
     setInviting(false)
+  }
+
+  async function generateJoinCode(cls) {
+    setJoinBusy(b => ({ ...b, [cls.class_id]: true }))
+    try {
+      const inv = await apiPost('/invites', { type: 'student_class', class_id: cls.class_id })
+      setClasses(prev => prev.map(c => c.class_id === cls.class_id ? { ...c, join_token: inv.token } : c))
+    } catch { /* silent */ }
+    setJoinBusy(b => ({ ...b, [cls.class_id]: false }))
+  }
+
+  function copyJoinLink(token) {
+    const url = `${window.location.origin}/join/${token}`
+    navigator.clipboard.writeText(url).catch(() => {})
+    setCopiedToken(token)
+    setTimeout(() => setCopiedToken(t => t === token ? null : t), 2000)
   }
 
   if (loading) {
@@ -234,14 +261,22 @@ export default function OrgDetail() {
     <div className="admin-root">
       <HeaderModern page="admin" />
       <div className="admin-page">
-        <div className="co-topbar">
-          <h1 className="co-page-title">{orgName}</h1>
-          <p className="co-page-sub">Org ID: {orgId}</p>
+        <div className="pa-header" style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+          <div>
+            <div className="pa-header-title">{orgName}</div>
+            <div className="pa-header-sub">Org ID: {orgId}</div>
+          </div>
+          <button className="pa-btn pa-btn--ghost" onClick={() => navigate('/platform')}>Back</button>
         </div>
 
-        <div className="co-body">
-          <div className="co-main">
+        <div className="admin-tabs">
+          <button className={`admin-tab${tab === 'info' ? ' admin-tab--active' : ''}`} onClick={() => setTab('info')}>Info</button>
+          <button className={`admin-tab${tab === 'members' ? ' admin-tab--active' : ''}`} onClick={() => setTab('members')}>Members {members.length > 0 && `(${members.length})`}</button>
+          <button className={`admin-tab${tab === 'classes' ? ' admin-tab--active' : ''}`} onClick={() => setTab('classes')}>Classes {classes.length > 0 && `(${classes.length})`}</button>
+        </div>
 
+        {tab === 'info' && (
+          <div className="od-tab-body">
             <Section title="Organization details">
               <div className="co-row">
                 <Field label="Name *">
@@ -338,10 +373,63 @@ export default function OrgDetail() {
               </div>
             </Section>
 
-            <Section title={`Members (${members.length})`}>
+            <div className="od-save-row">
+              {saveErr && <div className="pa-error" style={{ marginBottom: 8 }}>{saveErr}</div>}
+              {savedOk && <div className="pa-success" style={{ marginBottom: 8 }}>Saved</div>}
+              <button className="pa-btn" onClick={save} disabled={saving || !form.name.trim()}>
+                {saving ? 'Saving...' : 'Save changes'}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {tab === 'members' && (
+          <div className="od-tab-body">
+            <div className="pa-section">
+              <div className="pa-section-header">
+                <span className="pa-section-title">Invite member</span>
+              </div>
+              <form className="od-invite-row" onSubmit={sendInvite}>
+                <select
+                  className="pa-input od-invite-role"
+                  value={inviteRole}
+                  onChange={e => setInviteRole(e.target.value)}
+                >
+                  <option value="school_admin">School admin</option>
+                  <option value="district_admin">District admin</option>
+                  <option value="teacher">Teacher</option>
+                </select>
+                <input
+                  className="pa-input od-invite-email"
+                  type="email"
+                  value={inviteEmail}
+                  onChange={e => setInviteEmail(e.target.value)}
+                  placeholder="user@school.edu"
+                />
+                <button className="pa-btn" type="submit" disabled={inviting || !inviteEmail.trim()}>
+                  {inviting ? '...' : 'Send invite'}
+                </button>
+              </form>
+              {inviteErr && <div className="pa-error" style={{ marginTop: 8 }}>{inviteErr}</div>}
+              {inviteOk && <div className="pa-success" style={{ marginTop: 8 }}>Invite sent</div>}
+            </div>
+
+            <div className="pa-section">
+              <div className="pa-section-title" style={{ marginBottom: 16 }}>Members ({members.length})</div>
               {memberErr && <div className="pa-error" style={{ marginBottom: 12 }}>{memberErr}</div>}
               {members.length === 0 ? (
-                <div className="pa-empty">No members yet.</div>
+                <div className="od-empty-state">
+                  <div className="od-empty-icon">
+                    <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                      <circle cx="9" cy="7" r="4"/>
+                      <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+                      <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+                    </svg>
+                  </div>
+                  <div className="od-empty-title">No members yet</div>
+                  <div className="od-empty-sub">Use the invite form above to add teachers or admins to this org.</div>
+                </div>
               ) : (
                 <table className="pa-table">
                   <thead>
@@ -383,67 +471,63 @@ export default function OrgDetail() {
                   </tbody>
                 </table>
               )}
-            </Section>
-
+            </div>
           </div>
+        )}
 
-          <div className="co-sidebar">
-            <div className="co-sidebar-card co-sidebar-summary">
-              <div className="co-sidebar-title">Summary</div>
-              <div className="co-summary-row">
-                <span className="co-summary-label">Name</span>
-                <span className="co-summary-val">{form.name || <span className="pa-dim">--</span>}</span>
-              </div>
-              <div className="co-summary-row">
-                <span className="co-summary-label">Type</span>
-                <span className="co-summary-val">{form.type}</span>
-              </div>
-              {form.city && (
-                <div className="co-summary-row">
-                  <span className="co-summary-label">Location</span>
-                  <span className="co-summary-val">{[form.city, form.state].filter(Boolean).join(', ')}</span>
+        {tab === 'classes' && (
+          <div className="od-tab-body">
+            <div className="pa-section">
+              {classes.length === 0 ? (
+                <div className="od-empty-state">
+                  <div className="od-empty-icon">
+                    <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/>
+                      <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>
+                    </svg>
+                  </div>
+                  <div className="od-empty-title">No classes yet</div>
+                  <div className="od-empty-sub">Classes are created by teachers inside the app. They will appear here once added.</div>
                 </div>
+              ) : (
+                <table className="pa-table">
+                  <thead>
+                    <tr>
+                      <th>Name</th>
+                      <th>Teacher</th>
+                      <th>Students</th>
+                      <th>Student join link</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {classes.map(cls => (
+                      <tr key={cls.class_id}>
+                        <td>{cls.name}</td>
+                        <td className="pa-dim">{cls.teacher_id}</td>
+                        <td className="pa-dim">{(cls.student_ids || []).length}</td>
+                        <td>
+                          {cls.join_token ? (
+                            <button className="od-copy-btn" onClick={() => copyJoinLink(cls.join_token)}>
+                              {copiedToken === cls.join_token ? 'Copied!' : 'Copy link'}
+                            </button>
+                          ) : (
+                            <button
+                              className="od-copy-btn od-copy-btn--generate"
+                              disabled={joinBusy[cls.class_id]}
+                              onClick={() => generateJoinCode(cls)}
+                            >
+                              {joinBusy[cls.class_id] ? '...' : 'Generate'}
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               )}
-              <div className="co-summary-row">
-                <span className="co-summary-label">Members</span>
-                <span className="co-summary-val">{members.length}</span>
-              </div>
             </div>
-
-            <div className="co-sidebar-card">
-              <div className="co-sidebar-title">Invite school admin</div>
-              <form onSubmit={sendInvite}>
-                <input
-                  className="pa-input"
-                  type="email"
-                  value={inviteEmail}
-                  onChange={e => setInviteEmail(e.target.value)}
-                  placeholder="principal@school.edu"
-                  style={{ marginBottom: 10 }}
-                />
-                {inviteErr && <div className="pa-error" style={{ marginBottom: 8 }}>{inviteErr}</div>}
-                {inviteOk && <div className="pa-success" style={{ marginBottom: 8 }}>Invite sent</div>}
-                <button className="pa-btn co-submit-btn" type="submit" disabled={inviting || !inviteEmail.trim()}>
-                  {inviting ? 'Sending...' : 'Send invite'}
-                </button>
-              </form>
-            </div>
-
-            {saveErr && <div className="pa-error">{saveErr}</div>}
-            {savedOk && <div className="pa-success">Saved</div>}
-
-            <button
-              className="pa-btn co-submit-btn"
-              onClick={save}
-              disabled={saving || !form.name.trim()}
-            >
-              {saving ? 'Saving...' : 'Save changes'}
-            </button>
-            <button className="pa-btn pa-btn--ghost co-cancel-btn" onClick={() => navigate('/platform')}>
-              Back
-            </button>
           </div>
-        </div>
+        )}
       </div>
     </div>
   )
