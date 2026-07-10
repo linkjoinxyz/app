@@ -22,7 +22,7 @@ function OrgsTab() {
     <div className="pa-section">
       <div className="pa-section-header">
         <span className="pa-section-title">Organizations</span>
-        <button className="pa-btn pa-btn--icon" onClick={() => navigate('/platform/orgs/new')}>+</button>
+        <button className="pa-btn pa-btn--icon" aria-label="Create organization" title="Create organization" onClick={() => navigate('/platform/orgs/new')}>+</button>
       </div>
 
       {loading ? (
@@ -52,13 +52,20 @@ function OrgsTab() {
 function UsersTab() {
   const [q, setQ] = useState('')
   const [results, setResults] = useState(null)
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(true)
   const [patching, setPatching] = useState({})
   const [err, setErr] = useState('')
+  const [confirmAdmin, setConfirmAdmin] = useState(null)
+
+  useEffect(() => {
+    apiGet('/admin/users/search?q=')
+      .then(data => setResults(Array.isArray(data) ? data : []))
+      .catch(() => setResults([]))
+      .finally(() => setLoading(false))
+  }, [])
 
   async function search(e) {
     e.preventDefault()
-    if (!q.trim()) return
     setLoading(true); setErr(''); setResults(null)
     try {
       const data = await apiGet(`/admin/users/search?q=${encodeURIComponent(q.trim())}`)
@@ -69,7 +76,9 @@ function UsersTab() {
     setLoading(false)
   }
 
-  async function togglePlatformAdmin(u) {
+  async function doTogglePlatformAdmin() {
+    const u = confirmAdmin
+    setConfirmAdmin(null)
     const next = u.admin !== 'true'
     setPatching(p => ({ ...p, [u.user_id]: true }))
     try {
@@ -85,13 +94,16 @@ function UsersTab() {
     <div className="pa-section">
       <div className="pa-section-header">
         <span className="pa-section-title">Users</span>
+        {results && <span className="pa-dim" style={{ fontSize: 13 }}>{results.length}{!q.trim() && ' most recent'}</span>}
       </div>
       <form className="pa-search-row" onSubmit={search}>
-        <input className="pa-input pa-search-input" value={q} onChange={e => setQ(e.target.value)} placeholder="Search by email..." />
+        <input className="pa-input pa-search-input" value={q} onChange={e => setQ(e.target.value)} placeholder="Filter by email..." aria-label="Search users by email" />
         <button className="pa-btn" type="submit" disabled={loading}>{loading ? '...' : 'Search'}</button>
       </form>
       {err && <div className="pa-error">{err}</div>}
-      {results && (results.length === 0 ? (
+      {loading ? (
+        <div className="pa-empty">Loading...</div>
+      ) : results && (results.length === 0 ? (
         <div className="pa-empty">No users found.</div>
       ) : (
         <table className="pa-table">
@@ -106,8 +118,9 @@ function UsersTab() {
                 <td>
                   <button
                     className={`pa-toggle${u.admin === 'true' ? ' pa-toggle--on' : ''}`}
-                    onClick={() => togglePlatformAdmin(u)}
+                    onClick={() => setConfirmAdmin(u)}
                     disabled={patching[u.user_id]}
+                    aria-label={`Platform admin: ${u.admin === 'true' ? 'Yes' : 'No'} for ${u.username}`}
                   >
                     {u.admin === 'true' ? 'Yes' : 'No'}
                   </button>
@@ -117,6 +130,30 @@ function UsersTab() {
           </tbody>
         </table>
       ))}
+
+      {confirmAdmin && (
+        <div className="pa-modal-backdrop" onClick={() => setConfirmAdmin(null)}>
+          <div className="pa-modal" onClick={e => e.stopPropagation()}>
+            <div className="pa-modal-title">
+              {confirmAdmin.admin === 'true' ? 'Revoke platform admin access' : 'Grant platform admin access'}
+            </div>
+            <div className="pa-modal-desc">
+              {confirmAdmin.admin === 'true'
+                ? `Remove platform admin access from ${confirmAdmin.username}? They will no longer be able to manage organizations or users.`
+                : `Grant ${confirmAdmin.username} full platform admin access? They will be able to manage all organizations, users, and invites.`}
+            </div>
+            <div className="pa-modal-actions">
+              <button className="pa-btn pa-btn--ghost" onClick={() => setConfirmAdmin(null)}>Cancel</button>
+              <button
+                className={`pa-btn${confirmAdmin.admin !== 'true' ? ' pa-btn--danger' : ''}`}
+                onClick={doTogglePlatformAdmin}
+              >
+                {confirmAdmin.admin === 'true' ? 'Revoke access' : 'Grant access'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

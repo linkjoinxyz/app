@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useId, Children, cloneElement } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { apiFetch, apiGet, apiPost } from '../api/client.js'
+import { apiFetch, apiGet, apiPost, apiDelete } from '../api/client.js'
 import HeaderModern from '../components/HeaderModern.jsx'
 import '../styles/platform-admin.css'
 import '../styles/create-org.css'
@@ -45,6 +45,225 @@ const ROLE_LABELS = {
   district_admin: 'District Admin',
 }
 
+function ConfirmModal({ title, body, confirmLabel = 'Confirm', danger = false, onConfirm, onCancel, busy }) {
+  return (
+    <div className="pa-modal-backdrop" onClick={onCancel}>
+      <div className="pa-modal" onClick={e => e.stopPropagation()}>
+        <div className="pa-modal-title">{title}</div>
+        {body && <div className="pa-modal-desc">{body}</div>}
+        <div className="pa-modal-actions">
+          <button className="pa-btn pa-btn--ghost" onClick={onCancel} disabled={busy}>Cancel</button>
+          <button className={`pa-btn${danger ? ' pa-btn--danger' : ''}`} onClick={onConfirm} disabled={busy}>
+            {busy ? '...' : confirmLabel}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+const IMPORT_ROLE_LABELS = { teacher: 'Teacher', school_admin: 'School Admin', district_admin: 'District Admin', parent: 'Parent/Guardian' }
+
+function ImportModal({ orgName, importRole, setImportRole, importRows, setImportRows, importBusy, importResults, importErr, parseImportCSV, onSubmit, onClose }) {
+  function handleFile(e) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = ev => {
+      const rows = parseImportCSV(ev.target.result)
+      setImportRows(rows)
+    }
+    reader.readAsText(file)
+  }
+
+  function handlePaste(e) {
+    const text = e.clipboardData?.getData('text') || ''
+    if (text.trim()) {
+      e.preventDefault()
+      const rows = parseImportCSV(text)
+      setImportRows(rows)
+    }
+  }
+
+  const created = importResults ? importResults.filter(r => r.status === 'created').length : 0
+  const updated = importResults ? importResults.filter(r => r.status === 'updated').length : 0
+  const errors = importResults ? importResults.filter(r => r.status === 'error') : []
+
+  return (
+    <div className="pa-modal-backdrop" onClick={onClose}>
+      <div className="pa-modal od-import-modal" onClick={e => e.stopPropagation()}>
+        <div className="pa-modal-title">Bulk import members</div>
+        <div className="pa-modal-desc" style={{ marginBottom: 16 }}>
+          Import staff accounts for <strong>{orgName}</strong>. Each person will receive a welcome email with a temporary password.
+        </div>
+
+        {!importResults ? (
+          <>
+            <div className="od-import-format">
+              <strong>CSV format:</strong> email, role (optional), first_name (optional), last_name (optional)<br />
+              <span className="pa-dim">Roles: teacher, school_admin, district_admin, parent</span>
+            </div>
+
+            <div className="od-import-role-row">
+              <label className="pa-label" style={{ marginBottom: 4 }}>Default role (used when CSV has no role column)</label>
+              <select className="pa-input" value={importRole} onChange={e => setImportRole(e.target.value)}>
+                {Object.entries(IMPORT_ROLE_LABELS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+              </select>
+            </div>
+
+            <div className="od-import-drop" onPaste={handlePaste}>
+              <input type="file" accept=".csv,.txt" id="od-csv-file" style={{ display: 'none' }} onChange={handleFile} />
+              <label htmlFor="od-csv-file" className="od-import-drop-label">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+                </svg>
+                <span>Click to choose a CSV file, or paste CSV data here</span>
+              </label>
+            </div>
+
+            {importRows.length > 0 && (
+              <div className="od-import-preview">
+                <div className="od-import-preview-header">Preview: {importRows.length} row{importRows.length !== 1 ? 's' : ''}</div>
+                <table className="pa-table" style={{ marginTop: 8 }}>
+                  <thead><tr><th>Email</th><th>Role</th><th>Name</th></tr></thead>
+                  <tbody>
+                    {importRows.slice(0, 8).map((r, i) => (
+                      <tr key={i}>
+                        <td>{r.email}</td>
+                        <td>{IMPORT_ROLE_LABELS[r.role] || r.role}</td>
+                        <td className="pa-dim">{[r.first_name, r.last_name].filter(Boolean).join(' ') || <em>not provided</em>}</td>
+                      </tr>
+                    ))}
+                    {importRows.length > 8 && <tr><td colSpan={3} className="pa-dim">...and {importRows.length - 8} more</td></tr>}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {importErr && <div className="pa-error" style={{ marginTop: 12 }}>{importErr}</div>}
+
+            <div className="pa-modal-actions">
+              <button className="pa-btn pa-btn--ghost" onClick={onClose} disabled={importBusy}>Cancel</button>
+              <button className="pa-btn" onClick={onSubmit} disabled={importBusy || importRows.length === 0}>
+                {importBusy ? 'Importing...' : `Import ${importRows.length > 0 ? importRows.length + ' ' : ''}account${importRows.length !== 1 ? 's' : ''}`}
+              </button>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="od-import-results">
+              {created > 0 && <div className="od-import-stat od-import-stat--ok">{created} account{created !== 1 ? 's' : ''} created</div>}
+              {updated > 0 && <div className="od-import-stat od-import-stat--info">{updated} existing account{updated !== 1 ? 's' : ''} updated</div>}
+              {errors.length > 0 && (
+                <>
+                  <div className="od-import-stat od-import-stat--err">{errors.length} error{errors.length !== 1 ? 's' : ''}</div>
+                  <ul className="od-import-errors">
+                    {errors.map((e, i) => <li key={i}><strong>{e.email}</strong>: {e.error}</li>)}
+                  </ul>
+                </>
+              )}
+            </div>
+            <div className="pa-modal-actions">
+              <button className="pa-btn" onClick={onClose}>Done</button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function ParentImportModal({ orgName, rows, setRows, busy, results, err, parseCSV, onSubmit, onClose }) {
+  function handleFile(e) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = ev => setRows(parseCSV(ev.target.result))
+    reader.readAsText(file)
+  }
+
+  function handlePaste(e) {
+    const text = e.clipboardData?.getData('text') || ''
+    if (text.trim()) { e.preventDefault(); setRows(parseCSV(text)) }
+  }
+
+  const created = results ? results.filter(r => r.status === 'created').length : 0
+  const updated = results ? results.filter(r => r.status === 'updated').length : 0
+  const errors = results ? results.filter(r => r.status === 'error') : []
+
+  return (
+    <div className="pa-modal-backdrop" onClick={onClose}>
+      <div className="pa-modal od-import-modal" onClick={e => e.stopPropagation()}>
+        <div className="pa-modal-title">Import parent accounts</div>
+        <div className="pa-modal-desc" style={{ marginBottom: 16 }}>
+          Link parent/guardian accounts to student accounts for <strong>{orgName}</strong>. Each new parent receives a welcome email with portal access.
+        </div>
+
+        {!results ? (
+          <>
+            <div className="od-import-format">
+              <strong>CSV format:</strong> parent_email, student_email (one row per relationship)<br />
+              <span className="pa-dim">Students must already have accounts in the system.</span>
+            </div>
+
+            <div className="od-import-drop" onPaste={handlePaste}>
+              <input type="file" accept=".csv,.txt" id="od-parent-csv-file" style={{ display: 'none' }} onChange={handleFile} />
+              <label htmlFor="od-parent-csv-file" className="od-import-drop-label">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+                </svg>
+                <span>Click to choose a CSV file, or paste CSV data here</span>
+              </label>
+            </div>
+
+            {rows.length > 0 && (
+              <div className="od-import-preview">
+                <div className="od-import-preview-header">Preview: {rows.length} relationship{rows.length !== 1 ? 's' : ''}</div>
+                <table className="pa-table" style={{ marginTop: 8 }}>
+                  <thead><tr><th>Parent email</th><th>Student email</th></tr></thead>
+                  <tbody>
+                    {rows.slice(0, 8).map((r, i) => (
+                      <tr key={i}><td>{r.parent_email}</td><td className="pa-dim">{r.student_email}</td></tr>
+                    ))}
+                    {rows.length > 8 && <tr><td colSpan={2} className="pa-dim">...and {rows.length - 8} more</td></tr>}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {err && <div className="pa-error" style={{ marginTop: 12 }}>{err}</div>}
+
+            <div className="pa-modal-actions">
+              <button className="pa-btn pa-btn--ghost" onClick={onClose} disabled={busy}>Cancel</button>
+              <button className="pa-btn" onClick={onSubmit} disabled={busy || rows.length === 0}>
+                {busy ? 'Importing...' : `Import ${rows.length > 0 ? rows.length + ' ' : ''}relationship${rows.length !== 1 ? 's' : ''}`}
+              </button>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="od-import-results">
+              {created > 0 && <div className="od-import-stat od-import-stat--ok">{created} parent account{created !== 1 ? 's' : ''} created</div>}
+              {updated > 0 && <div className="od-import-stat od-import-stat--info">{updated} existing account{updated !== 1 ? 's' : ''} updated</div>}
+              {errors.length > 0 && (
+                <>
+                  <div className="od-import-stat od-import-stat--err">{errors.length} error{errors.length !== 1 ? 's' : ''}</div>
+                  <ul className="od-import-errors">
+                    {errors.map((e, i) => <li key={i}><strong>{e.parent_email}</strong> / {e.student_email}: {e.error}</li>)}
+                  </ul>
+                </>
+              )}
+            </div>
+            <div className="pa-modal-actions">
+              <button className="pa-btn" onClick={onClose}>Done</button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
 function Section({ title, children }) {
   return (
     <div className="co-section">
@@ -55,10 +274,13 @@ function Section({ title, children }) {
 }
 
 function Field({ label, hint, children, half }) {
+  const id = useId()
+  const arr = Children.toArray(children)
+  const isSimple = arr.length === 1 && (arr[0].type === 'input' || arr[0].type === 'select')
   return (
     <div className={`co-field${half ? ' co-field--half' : ''}`}>
-      <label className="pa-label">{label}</label>
-      {children}
+      <label className="pa-label" htmlFor={isSimple ? id : undefined}>{label}</label>
+      {isSimple ? cloneElement(arr[0], { id }) : children}
       {hint && <div className="co-hint">{hint}</div>}
     </div>
   )
@@ -94,6 +316,26 @@ export default function OrgDetail() {
   const [joinBusy, setJoinBusy] = useState({})
   const [copiedToken, setCopiedToken] = useState(null)
 
+  const [isDirty, setIsDirty] = useState(false)
+  const [confirmLeave, setConfirmLeave] = useState(false)
+  const [confirmRemove, setConfirmRemove] = useState(null)
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [deleteErr, setDeleteErr] = useState('')
+
+  const [importModal, setImportModal] = useState(false)
+  const [importRows, setImportRows] = useState([])
+  const [importRole, setImportRole] = useState('teacher')
+  const [importBusy, setImportBusy] = useState(false)
+  const [importResults, setImportResults] = useState(null)
+  const [importErr, setImportErr] = useState('')
+
+  const [parentImportModal, setParentImportModal] = useState(false)
+  const [parentImportRows, setParentImportRows] = useState([])
+  const [parentImportBusy, setParentImportBusy] = useState(false)
+  const [parentImportResults, setParentImportResults] = useState(null)
+  const [parentImportErr, setParentImportErr] = useState('')
+
   useEffect(() => {
     Promise.all([
       apiGet(`/admin/orgs/${orgId}`),
@@ -128,6 +370,7 @@ export default function OrgDetail() {
 
   function set(key, val) {
     setForm(prev => ({ ...prev, [key]: val }))
+    setIsDirty(true)
   }
 
   function toggleGrade(g) {
@@ -162,6 +405,7 @@ export default function OrgDetail() {
         }),
       })
       setOrgName(form.name.trim())
+      setIsDirty(false)
       setSavedOk(true)
       setTimeout(() => setSavedOk(false), 2500)
     } catch (e) {
@@ -186,7 +430,12 @@ export default function OrgDetail() {
   }
 
   async function removeMember(member) {
-    if (!window.confirm(`Remove ${member.username} from this org?`)) return
+    setConfirmRemove(member)
+  }
+
+  async function doRemoveMember() {
+    const member = confirmRemove
+    setConfirmRemove(null)
     setMemberBusy(b => ({ ...b, [member.user_id]: true }))
     setMemberErr('')
     try {
@@ -196,6 +445,19 @@ export default function OrgDetail() {
       setMemberErr(e?.message || 'Remove failed')
     }
     setMemberBusy(b => ({ ...b, [member.user_id]: false }))
+  }
+
+  async function deleteOrg() {
+    setDeleting(true)
+    setDeleteErr('')
+    try {
+      await apiDelete(`/admin/orgs/${orgId}`)
+      navigate('/platform')
+    } catch (e) {
+      setDeleteErr(e?.message || 'Delete failed')
+      setDeleting(false)
+      setConfirmDelete(false)
+    }
   }
 
   async function sendInvite(e) {
@@ -218,12 +480,17 @@ export default function OrgDetail() {
     setInviting(false)
   }
 
+  const [joinErr, setJoinErr] = useState({})
+
   async function generateJoinCode(cls) {
     setJoinBusy(b => ({ ...b, [cls.class_id]: true }))
+    setJoinErr(e => ({ ...e, [cls.class_id]: '' }))
     try {
       const inv = await apiPost('/invites', { type: 'student_class', class_id: cls.class_id })
       setClasses(prev => prev.map(c => c.class_id === cls.class_id ? { ...c, join_token: inv.token } : c))
-    } catch { /* silent */ }
+    } catch (e) {
+      setJoinErr(err => ({ ...err, [cls.class_id]: e?.message || 'Failed to generate code' }))
+    }
     setJoinBusy(b => ({ ...b, [cls.class_id]: false }))
   }
 
@@ -232,6 +499,78 @@ export default function OrgDetail() {
     navigator.clipboard.writeText(url).catch(() => {})
     setCopiedToken(token)
     setTimeout(() => setCopiedToken(t => t === token ? null : t), 2000)
+  }
+
+  function parseImportCSV(text) {
+    const lines = text.trim().split(/\r?\n/).filter(l => l.trim())
+    if (!lines.length) return []
+    const firstLower = lines[0].toLowerCase()
+    const hasHeader = firstLower.includes('email') || firstLower.includes('first') || firstLower.includes('last') || firstLower.includes('role')
+    const dataLines = hasHeader ? lines.slice(1) : lines
+    return dataLines.map(line => {
+      const cols = line.split(',').map(c => c.trim().replace(/^"|"$/g, ''))
+      const email = cols[0] || ''
+      const roleCol = (cols[1] || '').toLowerCase()
+      const validRole = ['teacher', 'school_admin', 'district_admin', 'parent'].includes(roleCol)
+      const first_name = cols[validRole ? 2 : 1] || ''
+      const last_name = cols[validRole ? 3 : 2] || ''
+      return { email, role: validRole ? roleCol : importRole, first_name, last_name }
+    }).filter(r => r.email)
+  }
+
+  async function submitImport() {
+    setImportBusy(true)
+    setImportErr('')
+    try {
+      const data = await apiPost(`/admin/orgs/${orgId}/import`, { rows: importRows })
+      setImportResults(data.results || [])
+      const created = (data.results || []).filter(r => r.status === 'created').length
+      if (created > 0) {
+        const fresh = await apiGet(`/admin/orgs/${orgId}`)
+        setMembers(fresh.members || [])
+      }
+    } catch (e) {
+      setImportErr(e?.message || 'Import failed')
+    }
+    setImportBusy(false)
+  }
+
+  function closeImportModal() {
+    setImportModal(false)
+    setImportRows([])
+    setImportResults(null)
+    setImportErr('')
+  }
+
+  function parseParentCSV(text) {
+    const lines = text.trim().split(/\r?\n/).filter(l => l.trim())
+    if (!lines.length) return []
+    const firstLower = lines[0].toLowerCase()
+    const hasHeader = firstLower.includes('parent') || firstLower.includes('student')
+    const dataLines = hasHeader ? lines.slice(1) : lines
+    return dataLines.map(line => {
+      const cols = line.split(',').map(c => c.trim().replace(/^"|"$/g, ''))
+      return { parent_email: cols[0] || '', student_email: cols[1] || '' }
+    }).filter(r => r.parent_email && r.student_email)
+  }
+
+  async function submitParentImport() {
+    setParentImportBusy(true)
+    setParentImportErr('')
+    try {
+      const data = await apiPost(`/admin/orgs/${orgId}/import-parents`, { rows: parentImportRows })
+      setParentImportResults(data.results || [])
+    } catch (e) {
+      setParentImportErr(e?.message || 'Import failed')
+    }
+    setParentImportBusy(false)
+  }
+
+  function closeParentImportModal() {
+    setParentImportModal(false)
+    setParentImportRows([])
+    setParentImportResults(null)
+    setParentImportErr('')
   }
 
   if (loading) {
@@ -266,7 +605,7 @@ export default function OrgDetail() {
             <div className="pa-header-title">{orgName}</div>
             <div className="pa-header-sub">Org ID: {orgId}</div>
           </div>
-          <button className="pa-btn pa-btn--ghost" onClick={() => navigate('/platform')}>Back</button>
+          <button className="pa-btn pa-btn--ghost" onClick={() => isDirty ? setConfirmLeave(true) : navigate('/platform')}>Back</button>
         </div>
 
         <div className="admin-tabs">
@@ -373,12 +712,19 @@ export default function OrgDetail() {
               </div>
             </Section>
 
-            <div className="od-save-row">
-              {saveErr && <div className="pa-error" style={{ marginBottom: 8 }}>{saveErr}</div>}
-              {savedOk && <div className="pa-success" style={{ marginBottom: 8 }}>Saved</div>}
-              <button className="pa-btn" onClick={save} disabled={saving || !form.name.trim()}>
-                {saving ? 'Saving...' : 'Save changes'}
-              </button>
+            {savedOk && <div className="pa-success" style={{ marginTop: 16 }}>Changes saved</div>}
+            {saveErr && <div className="pa-error" style={{ marginTop: 16 }}>{saveErr}</div>}
+
+            <div className="od-danger-zone">
+              <div className="od-danger-title">Danger zone</div>
+              {deleteErr && <div className="pa-error" style={{ marginBottom: 10 }}>{deleteErr}</div>}
+              <div className="od-danger-row">
+                <div>
+                  <div className="od-danger-label">Delete this organization</div>
+                  <div className="od-danger-sub">Removes the org and disconnects all {members.length} member{members.length !== 1 ? 's' : ''}. This cannot be undone.</div>
+                </div>
+                <button className="pa-btn pa-btn--danger" onClick={() => setConfirmDelete(true)}>Delete org</button>
+              </div>
             </div>
           </div>
         )}
@@ -407,15 +753,37 @@ export default function OrgDetail() {
                   placeholder="user@school.edu"
                 />
                 <button className="pa-btn" type="submit" disabled={inviting || !inviteEmail.trim()}>
-                  {inviting ? '...' : 'Send invite'}
+                  {inviting ? 'Sending...' : 'Send invite'}
                 </button>
               </form>
               {inviteErr && <div className="pa-error" style={{ marginTop: 8 }}>{inviteErr}</div>}
               {inviteOk && <div className="pa-success" style={{ marginTop: 8 }}>Invite sent</div>}
+
+              <div className="od-student-note">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: 1 }}>
+                  <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+                </svg>
+                <span>
+                  <strong>Adding students:</strong> Students join via class join codes, not email invites.
+                  Add teachers first, then teachers create classes, then use the{' '}
+                  <button className="od-tab-link" onClick={() => setTab('classes')}>Classes tab</button>{' '}
+                  to generate a shareable join link.
+                </span>
+              </div>
             </div>
 
             <div className="pa-section">
-              <div className="pa-section-title" style={{ marginBottom: 16 }}>Members ({members.length})</div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+                <div className="pa-section-title">Members ({members.length})</div>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button className="pa-btn pa-btn--ghost od-import-btn" onClick={() => { setImportModal(true); setImportResults(null); setImportRows([]); setImportErr('') }}>
+                    Import staff CSV
+                  </button>
+                  <button className="pa-btn pa-btn--ghost od-import-btn" onClick={() => { setParentImportModal(true); setParentImportResults(null); setParentImportRows([]); setParentImportErr('') }}>
+                    Import parents CSV
+                  </button>
+                </div>
+              </div>
               {memberErr && <div className="pa-error" style={{ marginBottom: 12 }}>{memberErr}</div>}
               {members.length === 0 ? (
                 <div className="od-empty-state">
@@ -511,13 +879,16 @@ export default function OrgDetail() {
                               {copiedToken === cls.join_token ? 'Copied!' : 'Copy link'}
                             </button>
                           ) : (
-                            <button
-                              className="od-copy-btn od-copy-btn--generate"
-                              disabled={joinBusy[cls.class_id]}
-                              onClick={() => generateJoinCode(cls)}
-                            >
-                              {joinBusy[cls.class_id] ? '...' : 'Generate'}
-                            </button>
+                            <>
+                              <button
+                                className="od-copy-btn od-copy-btn--generate"
+                                disabled={joinBusy[cls.class_id]}
+                                onClick={() => generateJoinCode(cls)}
+                              >
+                                {joinBusy[cls.class_id] ? 'Generating...' : 'Generate'}
+                              </button>
+                              {joinErr[cls.class_id] && <div className="pa-error" style={{ marginTop: 4, fontSize: 11 }}>{joinErr[cls.class_id]}</div>}
+                            </>
                           )}
                         </td>
                       </tr>
@@ -529,6 +900,81 @@ export default function OrgDetail() {
           </div>
         )}
       </div>
+
+      {isDirty && (
+        <div className="od-save-bar">
+          <span className="od-save-bar-msg">You have unsaved changes</span>
+          <div className="od-save-bar-actions">
+            <button className="pa-btn pa-btn--ghost od-save-bar-discard" onClick={() => { setConfirmLeave(true) }}>Discard</button>
+            <button className="pa-btn" onClick={save} disabled={saving || !form.name.trim()}>
+              {saving ? 'Saving...' : 'Save changes'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {confirmLeave && (
+        <ConfirmModal
+          title="Unsaved changes"
+          body="You have unsaved changes to this org. Leave without saving?"
+          confirmLabel="Leave"
+          onConfirm={() => navigate('/platform')}
+          onCancel={() => setConfirmLeave(false)}
+        />
+      )}
+
+      {confirmRemove && (
+        <ConfirmModal
+          title="Remove member"
+          body={`Remove ${confirmRemove.username} from this org? They will lose access immediately.`}
+          confirmLabel="Remove"
+          danger
+          onConfirm={doRemoveMember}
+          onCancel={() => setConfirmRemove(null)}
+        />
+      )}
+
+      {confirmDelete && (
+        <ConfirmModal
+          title={`Delete "${orgName}"?`}
+          body={`This will permanently delete the organization and disconnect all ${members.length} member${members.length !== 1 ? 's' : ''}. This cannot be undone.`}
+          confirmLabel="Delete organization"
+          danger
+          busy={deleting}
+          onConfirm={deleteOrg}
+          onCancel={() => { setConfirmDelete(false); setDeleteErr('') }}
+        />
+      )}
+
+      {importModal && (
+        <ImportModal
+          orgName={orgName}
+          importRole={importRole}
+          setImportRole={setImportRole}
+          importRows={importRows}
+          setImportRows={setImportRows}
+          importBusy={importBusy}
+          importResults={importResults}
+          importErr={importErr}
+          parseImportCSV={parseImportCSV}
+          onSubmit={submitImport}
+          onClose={closeImportModal}
+        />
+      )}
+
+      {parentImportModal && (
+        <ParentImportModal
+          orgName={orgName}
+          rows={parentImportRows}
+          setRows={setParentImportRows}
+          busy={parentImportBusy}
+          results={parentImportResults}
+          err={parentImportErr}
+          parseCSV={parseParentCSV}
+          onSubmit={submitParentImport}
+          onClose={closeParentImportModal}
+        />
+      )}
     </div>
   )
 }

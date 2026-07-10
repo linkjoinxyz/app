@@ -2294,3 +2294,62 @@ button.iv-status-pill { cursor: pointer; }
 }
 
 .admin-btn--ghost:hover { background: rgba(255,255,255,0.1); }
+
+/* At-risk students section */
+.iv-atrisk-section {
+  margin-bottom: 20px;
+  border: 1px solid rgba(251,191,36,0.2);
+  border-radius: 10px;
+  overflow: hidden;
+  background: rgba(251,191,36,0.03);
+}
+.iv-atrisk-header {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 12px 16px;
+  border-bottom: 1px solid rgba(251,191,36,0.12);
+}
+.iv-atrisk-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: rgba(251,191,36,0.9);
+}
+.iv-atrisk-sub {
+  font-size: 12px;
+  color: rgba(255,255,255,0.35);
+}
+.iv-atrisk-list {
+  display: flex;
+  flex-direction: column;
+}
+.iv-atrisk-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 16px;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+}
+.iv-atrisk-row:last-child { border-bottom: none; }
+.iv-atrisk-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  flex: 1;
+}
+.iv-atrisk-create-btn {
+  background: rgba(43,143,216,0.15);
+  border: 1px solid rgba(43,143,216,0.3);
+  color: #60a5fa;
+  border-radius: 6px;
+  padding: 5px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s;
+}
+.iv-atrisk-create-btn:hover:not(:disabled) { background: rgba(43,143,216,0.25); }
+.iv-atrisk-create-btn:disabled { opacity: 0.5; cursor: not-allowed; }

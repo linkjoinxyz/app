@@ -498,6 +498,122 @@
   min-width: 200px;
 }
 
+/* Sticky unsaved-changes bar */
+.od-save-bar {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  background: #1a2d42;
+  border: 1px solid rgba(43,143,216,0.3);
+  border-radius: 12px;
+  padding: 12px 20px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.5), 0 0 0 1px rgba(43,143,216,0.1) inset;
+  z-index: 100;
+  white-space: nowrap;
+}
+
+.od-save-bar-msg {
+  font-size: 13px;
+  color: rgba(255,255,255,0.55);
+}
+
+.od-save-bar-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.od-save-bar-discard {
+  font-size: 13px;
+  padding: 6px 12px;
+}
+
+/* Danger button */
+.pa-btn--danger {
+  background: rgba(239,68,68,0.15);
+  color: #f87171;
+  border: 1px solid rgba(239,68,68,0.25);
+}
+.pa-btn--danger:hover:not(:disabled) {
+  background: rgba(239,68,68,0.25);
+  border-color: rgba(239,68,68,0.5);
+}
+
+/* Danger zone in OrgDetail Info tab */
+.od-danger-zone {
+  margin-top: 40px;
+  padding-top: 24px;
+  border-top: 1px solid rgba(239,68,68,0.15);
+}
+
+.od-danger-title {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: rgba(239,68,68,0.5);
+  margin-bottom: 16px;
+}
+
+.od-danger-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+
+.od-danger-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: rgba(255,255,255,0.7);
+  margin-bottom: 4px;
+}
+
+.od-danger-sub {
+  font-size: 13px;
+  color: rgba(255,255,255,0.35);
+}
+
+/* Student join flow note */
+.od-student-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 14px;
+  padding: 12px 14px;
+  background: rgba(96,165,250,0.06);
+  border: 1px solid rgba(96,165,250,0.15);
+  border-radius: 8px;
+  font-size: 13px;
+  color: rgba(255,255,255,0.55);
+  line-height: 1.5;
+}
+
+.od-student-note svg {
+  color: rgba(96,165,250,0.6);
+}
+
+.od-student-note strong {
+  color: rgba(255,255,255,0.75);
+  font-weight: 600;
+}
+
+.od-tab-link {
+  background: none;
+  border: none;
+  padding: 0;
+  color: #60a5fa;
+  font-size: inherit;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.od-tab-link:hover { color: #93c5fd; }
+
 .od-empty-state {
   display: flex;
   flex-direction: column;
@@ -525,3 +641,53 @@
   max-width: 320px;
   line-height: 1.5;
 }
+
+/* Bulk import modal */
+.od-import-modal {
+  max-width: 600px;
+  width: 100%;
+}
+.od-import-format {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 8px;
+  padding: 12px 16px;
+  font-size: 12px;
+  color: rgba(255,255,255,0.5);
+  margin-bottom: 16px;
+  line-height: 1.6;
+}
+.od-import-role-row {
+  margin-bottom: 16px;
+}
+.od-import-drop {
+  border: 2px dashed rgba(255,255,255,0.12);
+  border-radius: 10px;
+  padding: 28px 20px;
+  text-align: center;
+  margin-bottom: 16px;
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+.od-import-drop:hover,
+.od-import-drop:focus-within { border-color: rgba(43,143,216,0.5); }
+.od-import-drop-label {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  color: rgba(255,255,255,0.4);
+  font-size: 13px;
+}
+.od-import-drop-label svg { color: rgba(255,255,255,0.25); }
+.od-import-preview { margin-bottom: 8px; }
+.od-import-preview-header { font-size: 12px; font-weight: 600; color: rgba(255,255,255,0.5); text-transform: uppercase; letter-spacing: 0.06em; }
+.od-import-results { margin-bottom: 20px; }
+.od-import-stat { font-size: 14px; font-weight: 600; margin-bottom: 6px; }
+.od-import-stat--ok { color: #4ade80; }
+.od-import-stat--info { color: #60a5fa; }
+.od-import-stat--err { color: #f87171; }
+.od-import-errors { margin: 8px 0 0 16px; padding: 0; font-size: 12px; color: rgba(255,255,255,0.5); list-style: disc; }
+.od-import-errors li { margin-bottom: 4px; }
+.od-import-btn { font-size: 12px; padding: 6px 14px; }

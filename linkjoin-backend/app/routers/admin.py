@@ -1,11 +1,77 @@
+import secrets
+import string
 from datetime import datetime, timezone
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from app.auth import get_confirmed_user
+from app.config import get_settings
 from app.database import motor_db
-from app.utils import configure_data
+from app.email_service import send_email
+from app.utils import configure_data, gen_id
 from app.websocket_manager import manager
 from app.audit import log_audit
 from app.roles import TEACHER_ROLES
+from argon2 import PasswordHasher
+
+_hasher = PasswordHasher()
+_settings = get_settings()
+
+VALID_IMPORT_ROLES = {"school_admin", "district_admin", "teacher", "parent"}
+
+
+def _gen_temp_password() -> str:
+    upper = secrets.choice(string.ascii_uppercase)
+    lower = "".join(secrets.choice(string.ascii_lowercase) for _ in range(4))
+    digits = "".join(secrets.choice(string.digits) for _ in range(3))
+    pw = list(f"Lj{upper}{lower}{digits}!")
+    secrets.SystemRandom().shuffle(pw[2:])
+    return "".join(pw)
+
+
+def _welcome_email_html(email: str, org_name: str, role: str, temp_password: str, app_url: str) -> str:
+    role_labels = {
+        "school_admin": "School Administrator",
+        "district_admin": "District Administrator",
+        "teacher": "Teacher",
+        "parent": "Parent/Guardian",
+    }
+    role_label = role_labels.get(role, role.title())
+    login_url = f"{app_url}/login"
+    return f"""<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#060F1A;font-family:Arial,Helvetica,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#060F1A;padding:40px 0;">
+    <tr><td align="center">
+      <table width="560" cellpadding="0" cellspacing="0" style="background:#0d1a2a;border-radius:12px;border:1px solid rgba(255,255,255,0.08);overflow:hidden;">
+        <tr><td style="background:#2b8fd8;padding:20px 32px;">
+          <span style="color:#fff;font-size:20px;font-weight:700;letter-spacing:-0.3px;">LinkJoin</span>
+        </td></tr>
+        <tr><td style="padding:32px;">
+          <p style="color:#e8edf2;font-size:16px;margin:0 0 8px;">Welcome to {org_name} on LinkJoin.</p>
+          <p style="color:rgba(255,255,255,0.5);font-size:13px;margin:0 0 24px;">You have been added as a <strong style="color:#e8edf2;">{role_label}</strong>. Use the credentials below to sign in.</p>
+          <table width="100%" cellpadding="0" cellspacing="0" style="background:rgba(255,255,255,0.04);border-radius:8px;border:1px solid rgba(255,255,255,0.08);margin-bottom:28px;">
+            <tr><td style="padding:20px 24px;">
+              <div style="margin-bottom:14px;">
+                <span style="color:rgba(255,255,255,0.4);font-size:11px;text-transform:uppercase;letter-spacing:0.08em;">Email</span><br>
+                <span style="color:#e8edf2;font-size:14px;font-weight:600;">{email}</span>
+              </div>
+              <div>
+                <span style="color:rgba(255,255,255,0.4);font-size:11px;text-transform:uppercase;letter-spacing:0.08em;">Temporary password</span><br>
+                <span style="color:#e8edf2;font-size:16px;font-weight:700;letter-spacing:0.05em;font-family:monospace;">{temp_password}</span>
+              </div>
+            </td></tr>
+          </table>
+          <p style="color:rgba(255,255,255,0.4);font-size:12px;margin:0 0 20px;">You will be prompted to set a new password on first login.</p>
+          <a href="{login_url}" style="display:inline-block;background:#2b8fd8;color:#fff;text-decoration:none;font-size:14px;font-weight:600;padding:12px 24px;border-radius:8px;">Sign in to LinkJoin</a>
+        </td></tr>
+        <tr><td style="padding:16px 32px;border-top:1px solid rgba(255,255,255,0.06);">
+          <p style="color:rgba(255,255,255,0.3);font-size:12px;margin:0;">LinkJoin - School meeting management</p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>"""
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -151,15 +217,190 @@ async def list_all_orgs(user: dict = Depends(get_confirmed_user)):
 async def search_users(q: str = "", user: dict = Depends(get_confirmed_user)):
     if user.get("admin") != "true":
         raise HTTPException(status_code=403, detail="Platform admin access required")
-    if not q.strip():
-        raise HTTPException(status_code=422, detail="q is required")
     results = []
-    async for u in motor_db.login.find(
-        {"username": {"$regex": q.strip(), "$options": "i"}},
-        {"password": 0, "_id": 0},
-    ).limit(20):
-        results.append(u)
+    if q.strip():
+        query: dict = {"username": {"$regex": q.strip(), "$options": "i"}}
+        async for u in motor_db.login.find(query, {"password": 0, "_id": 0}).limit(20):
+            results.append(u)
+    else:
+        async for u in motor_db.login.find({}, {"password": 0, "_id": 0}).sort("created_at", -1).limit(20):
+            results.append(u)
     return results
+
+
+@router.delete("/orgs/{org_id}", status_code=204)
+async def delete_org(org_id: str, user: dict = Depends(get_confirmed_user)):
+    if user.get("admin") != "true":
+        raise HTTPException(status_code=403, detail="Platform admin access required")
+    org = await motor_db.orgs.find_one({"org_id": org_id})
+    if not org:
+        raise HTTPException(status_code=404, detail="Org not found")
+    await motor_db.orgs.delete_one({"org_id": org_id})
+    await motor_db.login.update_many(
+        {"org_id": org_id},
+        {"$set": {"account_type": "personal", "role": None, "org_id": None}},
+    )
+    await log_audit(user["username"], "admin.delete_org", detail={"org_id": org_id, "org_name": org.get("name")})
+
+
+@router.post("/orgs/{org_id}/import")
+async def import_org_members(
+    org_id: str,
+    body: dict,
+    background_tasks: BackgroundTasks,
+    user: dict = Depends(get_confirmed_user),
+):
+    if user.get("admin") != "true":
+        raise HTTPException(status_code=403, detail="Platform admin access required")
+    org = await motor_db.orgs.find_one({"org_id": org_id})
+    if not org:
+        raise HTTPException(status_code=404, detail="Org not found")
+    org_name = org.get("name", "your school")
+
+    rows = body.get("rows", [])
+    if not rows or not isinstance(rows, list):
+        raise HTTPException(status_code=422, detail="rows must be a non-empty list")
+
+    results = []
+    for row in rows:
+        email = (row.get("email") or "").strip().lower()
+        role = (row.get("role") or "").strip()
+        first_name = (row.get("first_name") or "").strip()
+        last_name = (row.get("last_name") or "").strip()
+
+        if not email or "@" not in email:
+            results.append({"email": email or "(blank)", "status": "error", "error": "Invalid email"})
+            continue
+        if role not in VALID_IMPORT_ROLES:
+            results.append({"email": email, "status": "error", "error": f"Invalid role '{role}'"})
+            continue
+
+        existing = await motor_db.login.find_one({"username": email}, {"_id": 0, "user_id": 1})
+        if existing:
+            await motor_db.login.update_one(
+                {"username": email},
+                {"$set": {"role": role, "org_id": org_id, "account_type": "institutional"}},
+            )
+            results.append({"email": email, "status": "updated"})
+            await log_audit(user["username"], "admin.import_member_updated", detail={"email": email, "role": role, "org_id": org_id})
+            continue
+
+        temp_pw = _gen_temp_password()
+        hashed = _hasher.hash(temp_pw)
+        new_user = {
+            "username": email,
+            "password": hashed,
+            "user_id": gen_id(),
+            "account_type": "institutional",
+            "role": role,
+            "org_id": org_id,
+            "org_name": org_name,
+            "first_name": first_name,
+            "last_name": last_name,
+            "premium": "false",
+            "confirmed": "true",
+            "must_reset_password": True,
+            "created_at": datetime.now(timezone.utc),
+            "tutorial": "true",
+            "popup_check_done": "false",
+            "offset": 0,
+            "notes": "",
+        }
+        await motor_db.login.insert_one(new_user)
+        await log_audit(user["username"], "admin.import_member_created", detail={"email": email, "role": role, "org_id": org_id})
+
+        app_url = _settings.frontend_url
+        html = _welcome_email_html(email, org_name, role, temp_pw, app_url)
+        background_tasks.add_task(send_email, html, f"Welcome to {org_name} on LinkJoin", email)
+
+        results.append({"email": email, "status": "created"})
+
+    return {"results": results}
+
+
+@router.post("/orgs/{org_id}/import-parents")
+async def import_org_parents(
+    org_id: str,
+    body: dict,
+    background_tasks: BackgroundTasks,
+    user: dict = Depends(get_confirmed_user),
+):
+    if user.get("admin") != "true":
+        raise HTTPException(status_code=403, detail="Platform admin access required")
+    org = await motor_db.orgs.find_one({"org_id": org_id})
+    if not org:
+        raise HTTPException(status_code=404, detail="Org not found")
+    org_name = org.get("name", "your school")
+
+    rows = body.get("rows", [])
+    if not rows or not isinstance(rows, list):
+        raise HTTPException(status_code=422, detail="rows must be a non-empty list")
+
+    app_url = _settings.frontend_url
+    results = []
+    for row in rows:
+        parent_email = (row.get("parent_email") or "").strip().lower()
+        student_email = (row.get("student_email") or "").strip().lower()
+
+        if not parent_email or "@" not in parent_email or not student_email or "@" not in student_email:
+            results.append({"parent_email": parent_email or "(blank)", "student_email": student_email or "(blank)", "status": "error", "error": "Invalid email"})
+            continue
+
+        student = await motor_db.login.find_one({"username": student_email}, {"user_id": 1, "_id": 0})
+        if not student:
+            results.append({"parent_email": parent_email, "student_email": student_email, "status": "error", "error": "Student not found"})
+            continue
+        student_user_id = student["user_id"]
+
+        existing_parent = await motor_db.login.find_one({"username": parent_email}, {"user_id": 1, "_id": 0})
+        if not existing_parent:
+            temp_pw = _gen_temp_password()
+            parent_user_id = gen_id()
+            await motor_db.login.insert_one({
+                "username": parent_email,
+                "password": _hasher.hash(temp_pw),
+                "user_id": parent_user_id,
+                "account_type": "institutional",
+                "role": "parent",
+                "org_id": org_id,
+                "confirmed": "true",
+                "must_reset_password": True,
+                "created_at": datetime.now(timezone.utc),
+                "premium": "false",
+                "tutorial": "true",
+                "popup_check_done": "false",
+                "offset": 0,
+                "notes": "",
+            })
+            html = _welcome_email_html(parent_email, org_name, "parent", temp_pw, app_url)
+            background_tasks.add_task(send_email, html, f"Welcome to {org_name} on LinkJoin - Parent Portal", parent_email)
+            status = "created"
+        else:
+            parent_user_id = existing_parent["user_id"]
+            await motor_db.login.update_one(
+                {"username": parent_email},
+                {"$set": {"role": "parent", "org_id": org_id}},
+            )
+            status = "updated"
+
+        existing_link = await motor_db.parent_links.find_one({
+            "parent_user_id": parent_user_id,
+            "student_user_id": student_user_id,
+        })
+        if not existing_link:
+            await motor_db.parent_links.insert_one({
+                "link_id": gen_id(),
+                "parent_user_id": parent_user_id,
+                "student_user_id": student_user_id,
+                "org_id": org_id,
+                "linked_at": datetime.now(timezone.utc),
+                "linked_by": user["username"],
+            })
+
+        await log_audit(user["username"], "admin.import_parent", detail={"parent_email": parent_email, "student_email": student_email, "org_id": org_id})
+        results.append({"parent_email": parent_email, "student_email": student_email, "status": status})
+
+    return {"results": results}
 
 
 @router.get("/orgs/{org_id}/classes")

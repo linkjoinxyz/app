@@ -1,5 +1,5 @@
 import secrets
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from app.auth import get_confirmed_user
 from app.config import get_settings
@@ -170,6 +170,98 @@ async def _assert_access(intervention, user):
             raise HTTPException(status_code=403, detail="Access denied")
     else:
         raise HTTPException(status_code=403, detail="Access denied")
+
+
+_DAY_TO_WEEKDAY = {'Sun': 6, 'Mon': 0, 'Tue': 1, 'Wed': 2, 'Thu': 3, 'Fri': 4, 'Sat': 5}
+_LOOKBACK_DAYS = 28
+_TARDY_THRESHOLD_MINUTES = 5
+_TARDY_RATE_FLAG = 0.33
+_ATTENDANCE_RATE_FLAG = 0.5
+_MIN_SESSIONS_TO_FLAG = 3
+
+
+@router.get("/at-risk")
+async def get_at_risk_students(user: dict = Depends(get_confirmed_user)):
+    """Students with attendance flags who have no open intervention case yet."""
+    require_teacher(user)
+    role = user.get("role")
+
+    if role in ("school_admin", "district_admin"):
+        class_docs = await motor_db.classes.find({"org_id": user.get("org_id")}).to_list(None)
+    else:
+        class_docs = await motor_db.classes.find({"teacher_id": user.get("user_id")}).to_list(None)
+
+    if not class_docs:
+        return []
+
+    class_map = {c["class_id"]: c for c in class_docs}
+    class_ids = list(class_map.keys())
+
+    open_ivs = await motor_db.interventions.find(
+        {"class_id": {"$in": class_ids}, "status": {"$ne": "resolved"}},
+        {"class_id": 1, "student_email": 1, "flag_type": 1},
+    ).to_list(None)
+    open_keys = {(iv["class_id"], iv["student_email"], iv["flag_type"]) for iv in open_ivs}
+
+    now = datetime.now(timezone.utc)
+    cutoff = now - timedelta(days=_LOOKBACK_DAYS)
+
+    pipeline = [
+        {"$match": {"class_id": {"$in": class_ids}, "opened_at": {"$gte": cutoff}}},
+        {"$group": {
+            "_id": {"class_id": "$class_id", "student_email": "$student_email"},
+            "total": {"$sum": 1},
+            "tardy": {"$sum": {"$cond": [{"$gt": ["$minutes_late", _TARDY_THRESHOLD_MINUTES]}, 1, 0]}},
+        }},
+    ]
+
+    results = []
+    async for doc in motor_db.attendance.aggregate(pipeline):
+        class_id = doc["_id"]["class_id"]
+        student_email = doc["_id"]["student_email"]
+        total = doc["total"]
+        tardy = doc["tardy"]
+
+        if total < _MIN_SESSIONS_TO_FLAG:
+            continue
+
+        cls = class_map.get(class_id)
+        if not cls:
+            continue
+
+        tardy_rate = tardy / total if total > 0 else 0
+        if tardy_rate >= _TARDY_RATE_FLAG and (class_id, student_email, "repeat_tardy") not in open_keys:
+            results.append({
+                "class_id": class_id,
+                "class_name": cls.get("name", ""),
+                "student_email": student_email,
+                "flag_type": "repeat_tardy",
+                "sessions": total,
+                "tardy_count": tardy,
+                "rate": round(tardy_rate, 2),
+            })
+
+        class_days = cls.get("days") or []
+        scheduled_weekdays = {_DAY_TO_WEEKDAY[d] for d in class_days if d in _DAY_TO_WEEKDAY}
+        if scheduled_weekdays:
+            expected = sum(
+                1 for i in range(_LOOKBACK_DAYS)
+                if (cutoff + timedelta(days=i)).weekday() in scheduled_weekdays
+            )
+            if expected >= _MIN_SESSIONS_TO_FLAG and total / expected < _ATTENDANCE_RATE_FLAG:
+                if (class_id, student_email, "low_attendance") not in open_keys:
+                    results.append({
+                        "class_id": class_id,
+                        "class_name": cls.get("name", ""),
+                        "student_email": student_email,
+                        "flag_type": "low_attendance",
+                        "sessions": total,
+                        "expected": expected,
+                        "rate": round(total / expected, 2),
+                    })
+
+    results.sort(key=lambda r: r["rate"])
+    return results[:50]
 
 
 @router.get("")

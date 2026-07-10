@@ -2302,6 +2302,9 @@ function OrgInterventionList({ onBack, initialExpanded = null }) {
   const [assignedDrafts, setAssignedDrafts] = useState({})
   const [assignedSaved, setAssignedSaved] = useState({})
   const [studentProfiles, setStudentProfiles] = useState({})
+  const [atRisk, setAtRisk] = useState([])
+  const [atRiskLoading, setAtRiskLoading] = useState(true)
+  const [creatingCases, setCreatingCases] = useState({})
 
   useEffect(() => {
     setLoading(true)
@@ -2311,6 +2314,30 @@ function OrgInterventionList({ onBack, initialExpanded = null }) {
       : ''
     apiGet(`/interventions${qs}`).then(ivs => setInterventions(Array.isArray(ivs) ? ivs : [])).finally(() => setLoading(false))
   }, [filter])
+
+  useEffect(() => {
+    setAtRiskLoading(true)
+    apiGet('/interventions/at-risk')
+      .then(data => setAtRisk(Array.isArray(data) ? data : []))
+      .catch(() => setAtRisk([]))
+      .finally(() => setAtRiskLoading(false))
+  }, [])
+
+  async function createCaseFromFlag(flag) {
+    const key = `${flag.class_id}:${flag.student_email}:${flag.flag_type}`
+    setCreatingCases(p => ({ ...p, [key]: true }))
+    try {
+      const iv = await apiPost('/interventions', {
+        class_id: flag.class_id,
+        student_email: flag.student_email,
+        flag_type: flag.flag_type,
+      })
+      setAtRisk(prev => prev.filter(f => !(f.class_id === flag.class_id && f.student_email === flag.student_email && f.flag_type === flag.flag_type)))
+      setInterventions(prev => [iv, ...prev])
+      if (filter !== 'active' && filter !== 'mine') setFilter('active')
+    } catch (e) { console.error(e) }
+    setCreatingCases(p => ({ ...p, [key]: false }))
+  }
 
   // Load full student profiles + attendance stats when a mine-tab card is expanded
   useEffect(() => {
@@ -2377,6 +2404,41 @@ function OrgInterventionList({ onBack, initialExpanded = null }) {
 
   return (
     <div>
+      {!atRiskLoading && atRisk.length > 0 && (
+        <div className="iv-atrisk-section">
+          <div className="iv-atrisk-header">
+            <span className="iv-atrisk-title">Attention needed ({atRisk.length})</span>
+            <span className="iv-atrisk-sub">Students with attendance flags but no open intervention case</span>
+          </div>
+          <div className="iv-atrisk-list">
+            {atRisk.map(flag => {
+              const key = `${flag.class_id}:${flag.student_email}:${flag.flag_type}`
+              const busy = !!creatingCases[key]
+              return (
+                <div key={key} className="iv-atrisk-row">
+                  <div className="iv-atrisk-left">
+                    <span className="iv-student-name">{flag.student_email}</span>
+                    <span className="iv-class-chip">{flag.class_name}</span>
+                    <span className={`att-badge ${flag.flag_type === 'repeat_tardy' ? 'att-late' : 'att-slightly-late'}`}>
+                      {flag.flag_type === 'repeat_tardy'
+                        ? `Repeat tardy (${Math.round(flag.rate * 100)}% of sessions)`
+                        : `Low attendance (${Math.round(flag.rate * 100)}% present)`}
+                    </span>
+                  </div>
+                  <button
+                    className="iv-atrisk-create-btn"
+                    disabled={busy}
+                    onClick={() => createCaseFromFlag(flag)}
+                  >
+                    {busy ? 'Opening...' : 'Open case'}
+                  </button>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
       <div className="iv-toolbar">
         <input
           className="iv-search-input"

@@ -42,6 +42,7 @@ import SchoolDashboards from './pages/SchoolDashboards.jsx'
 import Demo from './pages/Demo.jsx'
 import StudentProfile from './pages/StudentProfile.jsx'
 import History from './pages/History.jsx'
+import ParentPortal from './pages/ParentPortal.jsx'
 
 const TEACHER_ROLES = new Set(['teacher', 'school_admin', 'district_admin'])
 
@@ -136,6 +137,7 @@ export default function App() {
       <Route path="/settings" element={<PrivateRoute><Settings /></PrivateRoute>} />
       <Route path="/history" element={<PrivateRoute><History /></PrivateRoute>} />
       <Route path="/profile" element={<PrivateRoute><StudentProfile /></PrivateRoute>} />
+      <Route path="/parent" element={<PrivateRoute><ParentPortal /></PrivateRoute>} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
     </>
