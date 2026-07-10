@@ -21,7 +21,7 @@ def _serialize_incident(doc: dict) -> dict:
 @router.get("/summary")
 async def status_summary():
     """Public endpoint. Returns uptime stats, day-by-day history, and incidents."""
-    now = datetime.now(timezone.utc)
+    now = datetime.utcnow()
     cutoff_90d = now - timedelta(days=90)
     cutoff_30d = now - timedelta(days=30)
 
