@@ -28,7 +28,7 @@ const FAQ_ITEMS = [
       The most common reason is popups being disabled. To enable popups in your browser, see
       the FAQ questions below. If popups are enabled and your meeting is still not opening,
       check that the switch on your link is flipped to blue. If you continue experiencing
-      difficulties, please contact support at <p>seth@linkjoin.xyz</p>.
+      difficulties, please <a href="/contact">contact support</a>.
     </>)
   },
   {
@@ -276,7 +276,7 @@ export default function Home() {
         <div className="column-container">
           <div className="footer-column">
             <p className="title">Contact</p>
-            <a href="mailto:seth@linkjoin.xyz">seth@linkjoin.xyz</a>
+            <a href="/contact">Contact us</a>
             <p style={{ margin: 0 }}>(925) 360-3457</p>
           </div>
           <div className="footer-column">

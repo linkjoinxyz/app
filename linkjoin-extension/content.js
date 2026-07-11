@@ -159,7 +159,8 @@ async function processEmailBody(bodyEl) {
 
         if ([...sessionDismissed].some(url => urlsMatch(url, detectedLink))) return
 
-        const linksData = await chrome.runtime.sendMessage({ type: 'getLinks' })
+        let linksData = null
+        try { linksData = await chrome.runtime.sendMessage({ type: 'getLinks' }) } catch {}
         if (linksData?.links?.some(l => l.link && urlsMatch(l.link, detectedLink))) return
 
         const subject = getEmailSubject()
@@ -256,7 +257,8 @@ if (IS_OUTLOOK) {
 
             if ([...sessionDismissed].some(url => urlsMatch(url, detectedLink))) return
 
-            const linksData = await chrome.runtime.sendMessage({ type: 'getLinks' })
+            let linksData = null
+            try { linksData = await chrome.runtime.sendMessage({ type: 'getLinks' }) } catch {}
             if (linksData?.links?.some(l => l.link && urlsMatch(l.link, detectedLink))) return
 
             if (document.getElementById('lj-overlay') || document.getElementById('lj-analyzing')) return
@@ -278,8 +280,7 @@ if (IS_OUTLOOK) {
                 })
                 .catch(() => {
                     if (!done) { done = true; clearTimeout(fallback); removeAnalyzing(); showOverlay({}, detectedLink) }
-                }
-            )
+                })
         } catch {}
     }
 

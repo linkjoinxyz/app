@@ -13,6 +13,8 @@ export default function SettingsModal({ user, visible, onClose, onShowDeleted, o
   const { closing, handleClose } = useModalClose(onClose)
   const { logout } = useAuth()
   const [tab, setTab] = useState('personal')
+  const [name, setName] = useState(user?.name || '')
+  const [nameSaving, setNameSaving] = useState(false)
   const [sort, setSort] = useState(user?.sort || 'None')
   const [openEarly, setOpenEarly] = useState(user?.open_early || 0)
   const [number, setNumber] = useState(user?.number || '')
@@ -40,6 +42,7 @@ export default function SettingsModal({ user, visible, onClose, onShowDeleted, o
       setNumber(user.number || '')
       setAdminView(user.admin_view === 'true')
       setOrgDisabled(user.org_disabled === 'true')
+      setName(user.name || '')
       setAutoDelete(!!user.auto_delete_past)
       setVacationMode(!!user.vacation_mode)
       setShowCalendar(!!user.show_calendar)
@@ -47,6 +50,18 @@ export default function SettingsModal({ user, visible, onClose, onShowDeleted, o
   }, [user])
 
   if (!visible) return null
+
+  async function saveName() {
+    setNameSaving(true)
+    try {
+      await apiFetch('/users/name', { method: 'PATCH', body: JSON.stringify({ name }) })
+      flashSaved()
+    } catch {
+      flashSaved(false)
+    } finally {
+      setNameSaving(false)
+    }
+  }
 
   async function saveSort(v) {
     setSort(v)
@@ -150,6 +165,24 @@ export default function SettingsModal({ user, visible, onClose, onShowDeleted, o
 
         {tab === 'personal' && (
           <>
+
+            <div className="modal-settings-row" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 8 }}>
+              <div className="modal-settings-name">Display Name</div>
+              <div style={{ display: 'flex', gap: 8, width: '100%' }}>
+                <input
+                  className="modal-input"
+                  value={name}
+                  onChange={e => setName(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && saveName()}
+                  placeholder="Your name (shown to admins)"
+                  maxLength={100}
+                  style={{ flex: 1 }}
+                />
+                <button className="modal-action-btn" onClick={saveName} disabled={nameSaving} style={{ padding: '8px 16px', fontSize: 13 }}>
+                  {nameSaving ? '...' : 'Save'}
+                </button>
+              </div>
+            </div>
 
             <div className="modal-settings-row">
               <div className="modal-settings-name">Sort Links</div>

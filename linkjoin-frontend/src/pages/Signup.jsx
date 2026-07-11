@@ -79,7 +79,7 @@ export default function Signup() {
           try {
             const data = await authApi.googleTokenLogin(response.access_token)
             if (data.access_token) {
-              login(data.access_token, data.email, data.confirmed ?? true)
+              login(data.access_token, data.email, data.confirmed ?? true, data)
               navigate(redirect, { replace: true })
             } else {
               if (alive) { setError('google_signup_failed'); setLoading(false) }
@@ -128,7 +128,7 @@ export default function Signup() {
         countrycode: countryCode, offset, timezone,
       })
       if (data.access_token) {
-        login(data.access_token, data.email, data.confirmed ?? false)
+        login(data.access_token, data.email, data.confirmed ?? false, data)
         navigate(redirect, { replace: true })
       }
     } catch (e) {

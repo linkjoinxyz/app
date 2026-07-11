@@ -1,5 +1,5 @@
-const BASE_URL = 'http://localhost:8000'
-const APP_URL = 'http://localhost:5173'
+const BASE_URL = 'https://linkjoin.azurewebsites.net'
+const APP_URL = 'https://linkjoin.xyz'
 
 async function getAuth() {
     const { token, email } = await chrome.storage.local.get(['token', 'email'])

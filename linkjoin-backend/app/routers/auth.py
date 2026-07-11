@@ -13,8 +13,9 @@ from app.limiter import limiter
 from app.models.user import RegisterRequest, LoginRequest, ResetPasswordRequest, TokenResponse
 from app.config import get_settings
 from app.email_service import send_email
-from app.utils import gen_id, analytics
+from app.utils import gen_id, track_event
 from app.redis_client import get_redis
+from app.audit import log_audit
 from jose import JWTError
 import re
 
@@ -64,20 +65,26 @@ async def register(request: Request, body: RegisterRequest, background_tasks: Ba
         if not re.match(r"^[^@ ]+@[^@ ]+\.[^@ .]{2,}$", email):
             raise HTTPException(status_code=422, detail="invalid_email")
 
+    if body.under_13:
+        raise HTTPException(status_code=403, detail="Users under 13 must be registered by a school administrator.")
+
     if await motor_db.login.find_one({"username": email}):
         raise HTTPException(status_code=409, detail="email_in_use")
 
     account: dict = {
         "username": email,
+        "user_id": secrets.token_urlsafe(16),
+        "account_type": "personal",
         "premium": "false",
         "refer": gen_id(),
-        "tutorial": -1,
+        "onboarding_done": False,
         "popup_check_done": False,
         "offset": body.offset,
         "notes": {},
         "confirmed": "false",
         "timezone": body.timezone or "",
         "org_name": email.split("@")[1],
+        "created_at": datetime.now(timezone.utc),
     }
 
     if body.jwt:
@@ -103,13 +110,28 @@ async def register(request: Request, body: RegisterRequest, background_tasks: Ba
             "LinkJoin: Confirm email address",
             email,
         )
-        await analytics("signups")
+        await track_event("signup")
+        await log_audit(email, "auth.register", ip=request.client.host if request.client else None)
         access_token = create_token(email)
-        return {"access_token": access_token, "token_type": "bearer", "email": email, "confirmed": False}
+        return {
+            "access_token": access_token, "token_type": "bearer", "email": email, "confirmed": False,
+            "account_type": account.get("account_type", "personal"),
+            "role": account.get("role"),
+            "org_id": account.get("org_id"),
+            "admin": account.get("admin"),
+            "onboarding_done": bool(account.get("onboarding_done", False)),
+        }
 
-    await analytics("signups")
+    await track_event("signup")
+    await log_audit(email, "auth.register", ip=request.client.host if request.client else None)
     access_token = create_token(email)
-    return {"access_token": access_token, "token_type": "bearer", "email": email, "confirmed": True}
+    return {
+        "access_token": access_token, "token_type": "bearer", "email": email, "confirmed": True,
+        "account_type": account.get("account_type", "personal"),
+        "role": account.get("role"),
+        "org_id": account.get("org_id"),
+        "admin": account.get("admin"),
+    }
 
 
 @router.get("/confirm")
@@ -137,9 +159,17 @@ async def confirm_email(token: str):
 
     await motor_db.login.update_one({"username": email}, {"$set": {"confirmed": "true"}})
     await _blacklist_token(payload)
-    await analytics("signups")
+    await track_event("signup")
+    user = await motor_db.login.find_one({"username": email})
     access_token = create_token(email)
-    return TokenResponse(access_token=access_token, email=email)
+    return {
+        "access_token": access_token, "token_type": "bearer", "email": email,
+        "account_type": user.get("account_type", "personal") if user else "personal",
+        "role": user.get("role") if user else None,
+        "org_id": user.get("org_id") if user else None,
+        "admin": user.get("admin") if user else None,
+        "onboarding_done": bool(user.get("onboarding_done", False)) if user else False,
+    }
 
 
 @router.post("/resend-confirmation")
@@ -198,13 +228,57 @@ async def login(request: Request, body: LoginRequest):
     if not user:
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
+    consent = user.get("parental_consent")
+    if consent and consent.get("required") and consent.get("status") == "pending":
+        raise HTTPException(
+            status_code=403,
+            detail="parental_consent_pending"
+        )
+
     if user.get("offset") is None:
         await motor_db.login.update_one({"username": email}, {"$set": {"offset": "0.0"}})
 
-    await analytics("logins")
+    await track_event("login")
+    ip = request.client.host if request.client else None
+    await log_audit(email, "auth.login", ip=ip)
+
+    is_admin_role = user.get("role") in {"school_admin", "district_admin"} or user.get("admin") == "true"
+    force_mfa = user.get("mfa_enabled") or (is_admin_role and user.get("number"))
+    if force_mfa:
+        from app.routers.mfa import _send_mfa_code
+        await _send_mfa_code(user)
+        mfa_session = create_token(email, minutes=10, extra={"scope": "mfa_only"})
+        return {"mfa_required": True, "mfa_session": mfa_session}
+
     access_token = create_token(email)
     confirmed = user.get("confirmed") == "true"
-    return {"access_token": access_token, "token_type": "bearer", "email": email, "confirmed": confirmed}
+    return {
+        "access_token": access_token, "token_type": "bearer", "email": email, "confirmed": confirmed,
+        "account_type": user.get("account_type", "personal"),
+        "role": user.get("role"),
+        "org_id": user.get("org_id"),
+        "admin": user.get("admin"),
+        "onboarding_done": bool(user.get("onboarding_done", True)),
+        "mfa_enabled": bool(user.get("mfa_enabled", False)),
+        "must_change_password": bool(user.get("must_change_password", False)),
+        "mfa_setup_required": is_admin_role and not user.get("mfa_enabled") and not user.get("number"),
+    }
+
+
+@router.post("/set-password")
+async def set_password(body: dict, user: dict = Depends(get_confirmed_user)):
+    new_password = body.get("new_password", "")
+    confirm_password = body.get("confirm_password", "")
+    if len(new_password) < 8:
+        raise HTTPException(status_code=422, detail="Password must be at least 8 characters")
+    if new_password != confirm_password:
+        raise HTTPException(status_code=422, detail="Passwords do not match")
+    email = user["username"]
+    await motor_db.login.update_one(
+        {"username": email},
+        {"$set": {"password": hasher.hash(new_password)}, "$unset": {"must_change_password": ""}}
+    )
+    return {"ok": True}
 
 
 class GoogleCodeRequest(BaseModel):
@@ -252,9 +326,11 @@ async def google_code_exchange(request: Request, body: GoogleCodeRequest):
     if not user:
         account = {
             "username": email,
+            "user_id": secrets.token_urlsafe(16),
+            "account_type": "personal",
             "premium": "false",
             "refer": gen_id(),
-            "tutorial": -1,
+            "onboarding_done": False,
             "popup_check_done": False,
             "offset": 0,
             "notes": {},
@@ -263,12 +339,29 @@ async def google_code_exchange(request: Request, body: GoogleCodeRequest):
             "org_name": email.split("@")[1],
         }
         await motor_db.login.insert_one(account)
-        await analytics("signups")
+        await track_event("signup")
         user = account
+
+    is_admin_role = user.get("role") in {"school_admin", "district_admin"} or user.get("admin") == "true"
+    force_mfa = user.get("mfa_enabled") or (is_admin_role and user.get("number"))
+    if force_mfa:
+        from app.routers.mfa import _send_mfa_code
+        await _send_mfa_code(user)
+        mfa_session = create_token(email, minutes=10, extra={"scope": "mfa_only"})
+        return {"mfa_required": True, "mfa_session": mfa_session}
 
     access_token = create_token(email)
     confirmed = user.get("confirmed") == "true"
-    return {"access_token": access_token, "token_type": "bearer", "email": email, "confirmed": confirmed}
+    return {
+        "access_token": access_token, "token_type": "bearer", "email": email, "confirmed": confirmed,
+        "account_type": user.get("account_type", "personal"),
+        "role": user.get("role"),
+        "org_id": user.get("org_id"),
+        "admin": user.get("admin"),
+        "onboarding_done": bool(user.get("onboarding_done", True)),
+        "must_change_password": bool(user.get("must_change_password", False)),
+        "mfa_setup_required": is_admin_role and not user.get("mfa_enabled") and not user.get("number"),
+    }
 
 
 @router.post("/google-token")
@@ -296,9 +389,11 @@ async def google_token_auth(request: Request, body: dict):
     if not user:
         account = {
             "username": email,
+            "user_id": secrets.token_urlsafe(16),
+            "account_type": "personal",
             "premium": "false",
             "refer": gen_id(),
-            "tutorial": -1,
+            "onboarding_done": False,
             "popup_check_done": False,
             "offset": 0,
             "notes": {},
@@ -307,12 +402,29 @@ async def google_token_auth(request: Request, body: dict):
             "org_name": email.split("@")[1],
         }
         await motor_db.login.insert_one(account)
-        await analytics("signups")
+        await track_event("signup")
         user = account
+
+    is_admin_role = user.get("role") in {"school_admin", "district_admin"} or user.get("admin") == "true"
+    force_mfa = user.get("mfa_enabled") or (is_admin_role and user.get("number"))
+    if force_mfa:
+        from app.routers.mfa import _send_mfa_code
+        await _send_mfa_code(user)
+        mfa_session = create_token(email, minutes=10, extra={"scope": "mfa_only"})
+        return {"mfa_required": True, "mfa_session": mfa_session}
 
     access_token_jwt = create_token(email)
     confirmed = user.get("confirmed") == "true"
-    return {"access_token": access_token_jwt, "token_type": "bearer", "email": email, "confirmed": confirmed}
+    return {
+        "access_token": access_token_jwt, "token_type": "bearer", "email": email, "confirmed": confirmed,
+        "account_type": user.get("account_type", "personal"),
+        "role": user.get("role"),
+        "org_id": user.get("org_id"),
+        "admin": user.get("admin"),
+        "onboarding_done": bool(user.get("onboarding_done", True)),
+        "must_change_password": bool(user.get("must_change_password", False)),
+        "mfa_setup_required": is_admin_role and not user.get("mfa_enabled") and not user.get("number"),
+    }
 
 
 @router.post("/forgot-password")
@@ -408,6 +520,7 @@ async def reset_password_with_token(token: str, body: ResetPasswordRequest):
         raise HTTPException(status_code=404, detail="User not found")
 
     await _blacklist_token(payload)
+    await log_audit(email, "auth.password_changed")
     return {"message": "Password updated"}
 
 
@@ -418,4 +531,5 @@ async def logout(user: dict = Depends(get_confirmed_user)):
     if jti and exp:
         ttl = max(1, int(exp - datetime.now(timezone.utc).timestamp()))
         await get_redis().setex(f"jti:{jti}", ttl, "1")
+    await log_audit(user["username"], "auth.logout")
     return {"message": "Logged out"}

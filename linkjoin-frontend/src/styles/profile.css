@@ -1,0 +1,190 @@
+.profile-root {
+  min-height: 100vh;
+  background: var(--dark, #060F1A);
+  font-family: 'Montserrat', sans-serif;
+  color: #fff;
+}
+
+.profile-page {
+  display: flex;
+  justify-content: center;
+  padding: 48px 24px 80px;
+}
+
+.profile-card {
+  width: 100%;
+  max-width: 480px;
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+}
+
+/* ── Avatar ── */
+.profile-avatar-section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+}
+
+.profile-avatar-wrap {
+  width: 100px;
+  height: 100px;
+  border-radius: 50%;
+  position: relative;
+  cursor: pointer;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.profile-avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+  display: block;
+}
+
+.profile-avatar-initials {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 38px;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: -0.01em;
+}
+
+.profile-avatar-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,0);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  color: rgba(255,255,255,0.9);
+  transition: background 0.15s;
+}
+
+.profile-avatar-wrap:hover .profile-avatar-overlay {
+  background: rgba(0,0,0,0.45);
+}
+
+.profile-avatar-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.profile-avatar-upload-btn {
+  background: rgba(43,143,216,0.18);
+  border: 1px solid rgba(43,143,216,0.4);
+  color: #fff;
+  border-radius: 6px;
+  padding: 6px 14px;
+  font: 600 12px Montserrat, sans-serif;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.profile-avatar-upload-btn:hover { background: rgba(43,143,216,0.32); }
+.profile-avatar-upload-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.profile-avatar-remove-btn {
+  background: none;
+  border: none;
+  color: rgba(255,80,80,0.7);
+  font: 400 12px Montserrat, sans-serif;
+  cursor: pointer;
+  padding: 6px 4px;
+  transition: color 0.15s;
+}
+.profile-avatar-remove-btn:hover { color: #ff5050; }
+.profile-avatar-remove-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* ── Email badge ── */
+.profile-email-badge {
+  text-align: center;
+  font-size: 13px;
+  color: rgba(255,255,255,0.4);
+  letter-spacing: 0.01em;
+  margin-top: -16px;
+}
+
+/* ── Fields ── */
+.profile-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.profile-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: rgba(255,255,255,0.4);
+}
+
+.profile-field-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.profile-input {
+  flex: 1;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 8px;
+  padding: 11px 14px;
+  color: #fff;
+  font: 500 14px Montserrat, sans-serif;
+  outline: none;
+  transition: border-color 0.15s;
+}
+.profile-input:focus { border-color: rgba(43,143,216,0.55); }
+.profile-input::placeholder { color: rgba(255,255,255,0.25); }
+
+.profile-country-select {
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 8px;
+  padding: 11px 10px;
+  color: #fff;
+  font: 500 14px Montserrat, sans-serif;
+  outline: none;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.profile-save-btn {
+  background: rgba(43,143,216,0.2);
+  border: 1px solid rgba(43,143,216,0.45);
+  color: #fff;
+  border-radius: 8px;
+  padding: 11px 20px;
+  font: 600 13px Montserrat, sans-serif;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s;
+  flex-shrink: 0;
+}
+.profile-save-btn:hover { background: rgba(43,143,216,0.35); }
+.profile-save-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.profile-status-ok {
+  font-size: 12px;
+  color: rgba(72,197,120,0.85);
+}
+.profile-status-err {
+  font-size: 12px;
+  color: rgba(255,80,80,0.8);
+}
+
+@media (max-width: 520px) {
+  .profile-page { padding: 32px 16px 60px; }
+}

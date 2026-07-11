@@ -28,6 +28,7 @@ export async function apiFetch(path, options = {}) {
       : (typeof detail === 'string' ? detail : 'Request failed')
     throw Object.assign(new Error(message), { status: res.status, body })
   }
+  if (res.status === 204 || res.headers.get('content-length') === '0') return null
   return res.json()
 }
 
@@ -47,6 +48,21 @@ export function apiPatch(path, data) {
   return apiFetch(path, { method: 'PATCH', body: JSON.stringify(data) })
 }
 
-export function apiDelete(path) {
-  return apiFetch(path, { method: 'DELETE' })
+export function apiDelete(path, data) {
+  return apiFetch(path, { method: 'DELETE', ...(data ? { body: JSON.stringify(data) } : {}) })
+}
+
+export async function apiDownload(path, filename) {
+  const token = getToken()
+  const res = await fetch(`${BASE}${path}`, {
+    headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+  })
+  if (!res.ok) throw new Error('Download failed')
+  const blob = await res.blob()
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  a.click()
+  URL.revokeObjectURL(url)
 }

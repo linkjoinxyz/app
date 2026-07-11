@@ -1,9 +1,9 @@
 import { useState } from 'react'
-import PublicHeader from '../components/PublicHeader.jsx'
+import NhNav from '../components/NhNav.jsx'
 import PublicFooter from '../components/PublicFooter.jsx'
+import { apiFetch } from '../api/client.js'
+import '../styles/new-homepage.css'
 import '../styles/contact.css'
-
-const API = import.meta.env.VITE_API_URL || ''
 
 export default function Contact() {
   const [form, setForm] = useState({ first_name: '', last_name: '', email: '', message: '' })
@@ -17,12 +17,7 @@ export default function Contact() {
     e.preventDefault()
     setStatus('sending')
     try {
-      const res = await fetch(`${API}/contact`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
-      })
-      if (!res.ok) throw new Error()
+      await apiFetch('/contact', { method: 'POST', body: JSON.stringify(form) })
       setStatus('sent')
     } catch {
       setStatus('error')
@@ -32,7 +27,7 @@ export default function Contact() {
 
   return (
     <div className="ct-page">
-      <PublicHeader />
+      <NhNav />
 
       <main className="ct-main">
         <div className="ct-body">
@@ -97,7 +92,7 @@ export default function Contact() {
               </div>
 
               {status === 'error' && (
-                <p className="ct-error">Something went wrong. Please try again or email us directly at seth@linkjoin.xyz.</p>
+                <p className="ct-error">Something went wrong. Please try again.</p>
               )}
 
               <button type="submit" className="ct-submit" disabled={status === 'sending'}>

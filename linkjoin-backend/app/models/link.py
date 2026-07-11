@@ -19,6 +19,26 @@ def _validate_date_str(v: Optional[str]) -> Optional[str]:
     return v
 
 
+def _validate_time(v: str) -> str:
+    if not v:
+        return v
+    if not re.match(r"^\d{1,2}:\d{2}$", v):
+        raise ValueError("Time must be H:MM or HH:MM")
+    h, m = map(int, v.split(":"))
+    if not (0 <= h <= 23 and 0 <= m <= 59):
+        raise ValueError("Invalid time value")
+    return v
+
+
+def _validate_days(v: list) -> list:
+    if not v:
+        return v
+    invalid = set(v) - VALID_DAYS
+    if invalid:
+        raise ValueError(f"Invalid days: {invalid}")
+    return v
+
+
 class CreateLinkRequest(BaseModel):
     name: str
     link: str
@@ -29,6 +49,7 @@ class CreateLinkRequest(BaseModel):
     end_date: Optional[str] = None
     text: Optional[str] = "false"
     password: Optional[str] = None
+    active: Optional[str] = "true"
 
     @field_validator("name")
     @classmethod
@@ -40,22 +61,12 @@ class CreateLinkRequest(BaseModel):
     @field_validator("time")
     @classmethod
     def validate_time(cls, v):
-        if not re.match(r"^\d{1,2}:\d{2}$", v):
-            raise ValueError("Time must be H:MM or HH:MM")
-        h, m = map(int, v.split(":"))
-        if not (0 <= h <= 23 and 0 <= m <= 59):
-            raise ValueError("Invalid time value")
-        return v
+        return _validate_time(v)
 
     @field_validator("days")
     @classmethod
     def validate_days(cls, v):
-        if not v:
-            raise ValueError("At least one day required")
-        invalid = set(v) - VALID_DAYS
-        if invalid:
-            raise ValueError(f"Invalid days: {invalid}")
-        return v
+        return _validate_days(v)
 
     @field_validator("repeats")
     @classmethod
@@ -92,22 +103,12 @@ class UpdateLinkRequest(BaseModel):
     @field_validator("time")
     @classmethod
     def validate_time(cls, v):
-        if not re.match(r"^\d{1,2}:\d{2}$", v):
-            raise ValueError("Time must be H:MM or HH:MM")
-        h, m = map(int, v.split(":"))
-        if not (0 <= h <= 23 and 0 <= m <= 59):
-            raise ValueError("Invalid time value")
-        return v
+        return _validate_time(v)
 
     @field_validator("days")
     @classmethod
     def validate_days(cls, v):
-        if not v:
-            raise ValueError("At least one day required")
-        invalid = set(v) - VALID_DAYS
-        if invalid:
-            raise ValueError(f"Invalid days: {invalid}")
-        return v
+        return _validate_days(v)
 
     @field_validator("repeats")
     @classmethod
@@ -148,5 +149,3 @@ class AcceptLinkRequest(BaseModel):
     link: dict
     accept: bool
     type: Optional[str] = "link"
-
-

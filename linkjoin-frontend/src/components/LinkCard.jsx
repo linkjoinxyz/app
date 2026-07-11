@@ -1,7 +1,9 @@
 import { useState, useRef, useEffect } from 'react'
 import { createPortal } from 'react-dom'
+import { useNavigate } from 'react-router-dom'
 import { linksApi } from '../api/links.js'
 import { openSafeUrl } from '../utils.js'
+import { useAuth } from '../context/AuthContext.jsx'
 
 const DAYS_SHORT = { Sun: 'Su', Mon: 'M', Tue: 'Tu', Wed: 'W', Thu: 'Th', Fri: 'F', Sat: 'Sa' }
 
@@ -14,15 +16,20 @@ function detectPlatform(url) {
   return null
 }
 
-function formatTime(time24) {
-  if (!time24) return ''
-  const [h, m] = time24.split(':').map(Number)
+function formatTime(t) {
+  if (!t) return ''
+  if (/[AP]M/i.test(t)) return t
+  const [h, m] = t.split(':').map(Number)
+  if (isNaN(h) || isNaN(m)) return t
   const period = h >= 12 ? 'PM' : 'AM'
   const hour = h % 12 || 12
   return `${hour}:${String(m).padStart(2, '0')} ${period}`
 }
 
-export default function LinkCard({ link, isPending, onEdit, onShare, onDelete, onNotes, onToggle, isNext }) {
+export default function LinkCard({ link, isPending, onEdit, onShare, onDelete, onNotes, onToggle, isNext, conflicts = [] }) {
+  const { role } = useAuth()
+  const navigate = useNavigate()
+  const canShare = !(role === 'student' && link.share_id)
   const [menuOpen, setMenuOpen] = useState(false)
   const [menuPos, setMenuPos] = useState({ top: 0, right: 0 })
   const [copied, setCopied] = useState(false)
@@ -108,7 +115,20 @@ export default function LinkCard({ link, isPending, onEdit, onShare, onDelete, o
         <div className="name">{link.name}</div>
         <div className="description">Click to open</div>
       </div>
-      {platform && <span className={`lk-badge lk-badge-${platform.toLowerCase()}`}>{platform}</span>}
+      {(link.class_name || platform || conflicts.length > 0) && (
+        <div style={{ display: 'flex', gap: 6 }}>
+          {link.class_name && link.class_name !== link.name && <span className="lk-badge lk-badge-class">{link.class_name}</span>}
+          {platform && <span className={`lk-badge lk-badge-${platform.toLowerCase()}`}>{platform}</span>}
+          {conflicts.length > 0 && (
+            <span
+              className="lk-badge lk-badge-conflict"
+              title={`Conflicts with: ${conflicts.map(c => c.name).join(', ')}`}
+            >
+              ⚠ Conflict
+            </span>
+          )}
+        </div>
+      )}
       <div className="days-dots">{formatDays(days)}</div>
       <div onClick={e => e.stopPropagation()}>
         <input
@@ -118,7 +138,7 @@ export default function LinkCard({ link, isPending, onEdit, onShare, onDelete, o
           checked={active}
           onChange={handleToggle}
         />
-        <label className="switch" htmlFor={`switch-${link.id}`} />
+        <label className="switch" htmlFor={`switch-${link.id}`} title={active ? 'Disable' : 'Enable'} />
       </div>
       {isPending && (
         <div className="pending-link-actions" onClick={e => e.stopPropagation()}>
@@ -150,12 +170,16 @@ export default function LinkCard({ link, isPending, onEdit, onShare, onDelete, o
           style={{ display: 'flex', position: 'fixed', ...menuPos, zIndex: 1000 }}
           onClick={e => e.stopPropagation()}
         >
+          <div onClick={() => { setMenuOpen(false); navigate(`/history?link_id=${link.id}&link_name=${encodeURIComponent(link.name)}`) }}>History</div>
+          <hr className="menu_line" />
           <div onClick={() => { setMenuOpen(false); onEdit(link) }}>Edit</div>
           <hr className="menu_line" />
           <div onClick={() => { setMenuOpen(false); onDelete(link) }}>Delete</div>
           <hr className="menu_line" />
-          <div onClick={() => { setMenuOpen(false); onShare(link) }}>Share</div>
-          <hr className="menu_line" />
+          {canShare && <>
+            <div onClick={() => { setMenuOpen(false); onShare(link) }}>Share</div>
+            <hr className="menu_line" />
+          </>}
           <div onClick={() => { setMenuOpen(false); onNotes(link) }}>Notes</div>
           {link.password && <>
             <hr className="menu_line" />
