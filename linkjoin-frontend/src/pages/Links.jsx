@@ -6,7 +6,7 @@ import { useAutoOpen } from '../hooks/useAutoOpen.js'
 import { usersApi } from '../api/users.js'
 import { authApi } from '../api/auth.js'
 import { linksApi } from '../api/links.js'
-import Header from '../components/HeaderModern.jsx'
+import SideNav from '../components/SideNav.jsx'
 import LinkCard from '../components/LinkCard.jsx'
 import LinkModal from '../components/LinkModal.jsx'
 import ShareModal from '../components/ShareModal.jsx'
@@ -415,6 +415,14 @@ const [showDeleted, setShowDeleted] = useState(false)
   return (
     <div id="links-page" className={calendarEnabled ? 'lp-cal-mode' : ''}>
       <div id="blur" style={{ width: '100%', zIndex: showLinkModal || shareLink || deleteLink || notesLink || calImportProvider ? 101 : -3, background: 'rgba(0,0,0,0.4)', opacity: showLinkModal || shareLink || deleteLink || notesLink || calImportProvider ? 0.4 : 0, height: 'calc(100% + 100px)', position: 'fixed', top: 0, left: 0, transition: '0.25s', pointerEvents: showLinkModal || shareLink || deleteLink || notesLink || calImportProvider ? 'auto' : 'none' }} />
+      <SideNav
+        onAdd={() => tryAdd(() => { setEditLink(null); setShowLinkModal(true) })}
+        page="links"
+        search={search}
+        onSearch={setSearch}
+      />
+      <div className="sn-content">
+
       {tzMismatch && (
         <div className="verify-banner tz-banner">
           <span>
@@ -448,10 +456,6 @@ const [showDeleted, setShowDeleted] = useState(false)
           <button className="verify-banner-close" onClick={dismissPopupBanner}>✕</button>
         </div>
       )}
-      <Header
-        onAdd={() => tryAdd(() => { setEditLink(null); setShowLinkModal(true) })}
-        page="links"
-      />
 
       {!onboardingDone && (
         <OnboardingChecklist links={links} classes={obClasses} />
@@ -477,15 +481,6 @@ const [showDeleted, setShowDeleted] = useState(false)
               >✕</button>
             </div>
           )}
-
-          <div id="links-search-container">
-            <input
-              id="links-search"
-              placeholder="Search for links"
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-            />
-          </div>
 
           {pendingLinks.length > 0 && (
             <div id="pending-links">
@@ -539,10 +534,15 @@ const [showDeleted, setShowDeleted] = useState(false)
               />
             )}
             {filtered.length === 0 && search && !loading && (
-              <div className="no-links" id="no-links-search">
-                <img src="/images/no-links-made.svg" alt="No results" />
-                <div>No links match your search</div>
-                <button className="modal-action-btn" style={{ marginTop: 8 }} onClick={() => setSearch('')}>Clear search</button>
+              <div className="bm-empty">
+                <div className="bm-empty-icon">
+                  <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                  </svg>
+                </div>
+                <div className="bm-empty-title">No results for "{search}"</div>
+                <div className="bm-empty-sub">Try a different search term</div>
+                <button className="bm-empty-clear" onClick={() => setSearch('')}>Clear search</button>
               </div>
             )}
             {(() => {
@@ -631,7 +631,7 @@ const [showDeleted, setShowDeleted] = useState(false)
       )}
 
       {showDeleted && (
-        <div className="modal-overlay" onClick={() => setShowDeleted(false)}>
+        <div className="modal-overlay sn-page-overlay" onClick={() => setShowDeleted(false)}>
           <div className="modal-card" onClick={e => e.stopPropagation()}>
             <img src="/images/arrow-left.svg" className="modal-back" alt="back" onClick={() => setShowDeleted(false)} />
             <div className="modal-title">Deleted Links</div>
@@ -655,6 +655,7 @@ const [showDeleted, setShowDeleted] = useState(false)
           </div>
         </div>
       )}
+      </div>{/* sn-content */}
     </div>
   )
 }

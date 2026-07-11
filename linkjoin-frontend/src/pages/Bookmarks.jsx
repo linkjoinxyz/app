@@ -7,10 +7,11 @@ import { useWebSocket } from '../hooks/useWebSocket.js'
 import { usersApi } from '../api/users.js'
 import { bookmarksApi } from '../api/bookmarks.js'
 import { linksApi } from '../api/links.js'
-import Header from '../components/HeaderModern.jsx'
+import SideNav from '../components/SideNav.jsx'
 import ShareModal from '../components/ShareModal.jsx'
 import DeleteModal from '../components/DeleteModal.jsx'
 import SettingsModal from '../components/SettingsModal.jsx'
+import '../styles/links.css'
 import '../styles/bookmarks.css'
 import '../styles/modal.css'
 
@@ -193,20 +194,13 @@ export default function Bookmarks() {
 
   return (
     <div id="page">
-      <Header
-        onSettings={() => setShowSettings(true)}
-        onAdd={() => { setEditBookmark(null); setShowModal(true) }}
+      <SideNav
         page="bookmarks"
+        onAdd={() => { setEditBookmark(null); setShowModal(true) }}
+        search={search}
+        onSearch={setSearch}
       />
-
-      <div id="links-search-container">
-        <input
-          id="links-search"
-          placeholder="Search for bookmarks"
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-        />
-      </div>
+      <div className="sn-content">
 
       {pendingBookmarks.length > 0 && (
         <div id="pending-links">
@@ -234,10 +228,27 @@ export default function Bookmarks() {
       )}
 
       <div id="insert">
-        {filtered.length === 0 && !loading && (
-          <div className="no-links">
-            <img src="/images/no-links-made.svg" alt="No bookmarks" />
-            <div>Click the + button to add your first bookmark!</div>
+        {filtered.length === 0 && !loading && !search && (
+          <div className="bm-empty">
+            <div className="bm-empty-icon">
+              <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z"/>
+              </svg>
+            </div>
+            <div className="bm-empty-title">No bookmarks yet</div>
+            <div className="bm-empty-sub">Click + to save your first link</div>
+          </div>
+        )}
+        {filtered.length === 0 && !loading && search && (
+          <div className="bm-empty">
+            <div className="bm-empty-icon">
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+              </svg>
+            </div>
+            <div className="bm-empty-title">No results for "{search}"</div>
+            <div className="bm-empty-sub">Try a different search term</div>
+            <button className="bm-empty-clear" onClick={() => setSearch('')}>Clear search</button>
           </div>
         )}
         {filtered.map(b => (
@@ -319,6 +330,7 @@ export default function Bookmarks() {
           </div>
         </div>
       )}
+      </div>
     </div>
   )
 }

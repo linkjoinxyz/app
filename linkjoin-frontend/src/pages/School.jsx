@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import '../styles/school.css'
+import '../styles/new-homepage.css'
 
 const LMS_BRANDS = [
   { name: 'Google Classroom', logo: '/images/lms/google-classroom.svg' },
@@ -76,6 +77,56 @@ export default function School() {
         <Link to="/" className="sc-nav-logo">
           <img src="/images/logo-text.svg" height="32" alt="LinkJoin" />
         </Link>
+        <div className="nh-nav-links">
+          <div className="nh-nav-dropdown">
+            <button className="nh-nav-dd-trigger sc-nav-login">
+              Product
+              <img src="/images/angle-down.svg" className="nh-nav-dd-chevron" width="14" height="14" alt="" aria-hidden="true" />
+            </button>
+            <div className="nh-nav-menu">
+              <Link to="/meetings" className="nh-nav-menu-item">
+                <span className="nh-nav-menu-icon"><img src="/images/link.svg" width="16" height="16" alt="" aria-hidden="true" /></span>
+                <span>
+                  <span className="nh-nav-menu-label">Meetings</span>
+                  <span className="nh-nav-menu-sub">Auto-open meetings on time</span>
+                </span>
+              </Link>
+              <Link to="/bookmarks" className="nh-nav-menu-item">
+                <span className="nh-nav-menu-icon">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <path d="M5 3h14v19l-7-4.5L5 22V3z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round"/>
+                  </svg>
+                </span>
+                <span>
+                  <span className="nh-nav-menu-label">Bookmarks</span>
+                  <span className="nh-nav-menu-sub">Save links for quick access</span>
+                </span>
+              </Link>
+            </div>
+          </div>
+          <div className="nh-nav-dropdown">
+            <button className="nh-nav-dd-trigger sc-nav-login">
+              Resources
+              <img src="/images/angle-down.svg" className="nh-nav-dd-chevron" width="14" height="14" alt="" aria-hidden="true" />
+            </button>
+            <div className="nh-nav-menu">
+              <Link to="/pricing" className="nh-nav-menu-item">
+                <span className="nh-nav-menu-icon nh-nav-menu-icon-text">$</span>
+                <span>
+                  <span className="nh-nav-menu-label">Pricing</span>
+                  <span className="nh-nav-menu-sub">Plans for every team size</span>
+                </span>
+              </Link>
+              <Link to="/schools" className="nh-nav-menu-item">
+                <span className="nh-nav-menu-icon"><img src="/images/school.svg" width="14" height="14" alt="" aria-hidden="true" /></span>
+                <span>
+                  <span className="nh-nav-menu-label">Schools</span>
+                  <span className="nh-nav-menu-sub">K-12 attendance &amp; dashboards</span>
+                </span>
+              </Link>
+            </div>
+          </div>
+        </div>
         <div className="sc-nav-right">
           <Link to="/login" className="sc-nav-login">Log in</Link>
           <Link to="/signup" className="sc-btn-primary">Get started</Link>

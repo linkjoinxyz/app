@@ -1,10 +1,11 @@
 import asyncio
 import logging
+from datetime import datetime, timezone, timedelta
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.jobstores.memory import MemoryJobStore
 from pytz import utc, timezone as pytz_timezone
 from app.config import get_settings
-from app.database import sync_db
+from app.database import sync_db, motor_db
 from app.utils import get_text_time, get_blackout_set
 
 _settings = get_settings()
@@ -343,6 +344,13 @@ async def record_status_check() -> None:
     await motor_db.status_checks.delete_many({"ts": {"$lt": cutoff}})
 
 
+async def purge_old_audit_logs() -> None:
+    """Monthly job: delete audit_logs older than 24 months per DPA §6 retention policy."""
+    cutoff = datetime.now(timezone.utc) - timedelta(days=730)
+    result = await motor_db.audit_logs.delete_many({"ts": {"$lt": cutoff}})
+    log.info("[scheduler] audit-log-purge: deleted %d entries older than %s", result.deleted_count, cutoff.date())
+
+
 async def run_backup_health_check() -> None:
     """Weekly job: verify MongoDB is reachable and core collections are non-empty."""
     import time as _time
@@ -434,3 +442,15 @@ def load_all_text_jobs() -> None:
         misfire_grace_time=300,
     )
     log.info("[scheduler] added status-check interval job (every 5 min)")
+
+    scheduler.add_job(
+        purge_old_audit_logs,
+        "cron",
+        day=1,
+        hour=3,
+        minute=0,
+        id="audit-log-purge",
+        replace_existing=True,
+        misfire_grace_time=86400,
+    )
+    log.info("[scheduler] added audit-log-purge monthly job (1st of month 03:00 UTC)")

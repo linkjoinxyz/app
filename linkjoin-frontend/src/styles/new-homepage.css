@@ -4,7 +4,7 @@
    ═══════════════════════════════════════════════════════════ */
 
 /* ── Tokens ── */
-.nh-root {
+:root {
   --nh-bg:       #060F1A;
   --nh-surface:  rgba(14, 32, 50, 0.65);
   --nh-border:   rgba(43, 143, 216, 0.18);
@@ -17,9 +17,10 @@
   --nh-card:     rgba(15, 35, 55, 0.72);
   --nh-radius:   14px;
   --nh-nav-h:    68px;
+  --nh-max-w:    1200px;
+}
 
-  --nh-max-w: 1200px;
-
+.nh-root {
   background: var(--nh-bg);
   color: var(--nh-text);
   font-family: Montserrat, sans-serif;
@@ -1948,8 +1949,14 @@ html:has(.nh-root) { scrollbar-color: rgba(255,255,255,0.15) transparent; }
   }
 }
 
+@media (max-width: 1140px) {
+  .nh-schools-img { display: none; }
+  .nh-schools-card { justify-content: flex-start; }
+  .nh-schools-stripe { flex: 1 1 auto; }
+  .nh-schools-body { max-width: none; }
+}
+
 @media (max-width: 680px) {
   .nh-schools-card { flex-direction: column; gap: 40px; }
-  .nh-schools-img { display: none; }
   .nh-schools-stripe { padding-left: 24px; }
 }

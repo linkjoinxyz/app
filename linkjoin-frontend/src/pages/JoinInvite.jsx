@@ -76,17 +76,20 @@ export default function JoinInvite() {
       try {
         data = await authApi.register({ email: formEmail.trim().toLowerCase(), password })
       } catch (regErr) {
-        if (regErr?.detail === 'email_in_use') {
+        if (regErr?.body?.detail === 'email_in_use' || regErr?.message === 'email_in_use') {
           data = await authApi.login({ email: formEmail.trim().toLowerCase(), password })
         } else {
           throw regErr
         }
       }
-      // Store auth
-      login(data.access_token, data.email, data.confirmed ?? false, data)
-      // Now accept
+      // Write token to localStorage only (don't update React state yet) so the
+      // accept request is authenticated without flipping the component to the
+      // logged-in "Accept invitation" view mid-flight.
+      localStorage.setItem('lj_token', data.access_token)
+      // Accept the invite
       const acceptData = await apiPost(`/invites/${token}/accept`, {})
-      refreshAuth(acceptData)
+      // Now log in with the final accept response (has role, org_id, new token)
+      login(acceptData.access_token, acceptData.email, acceptData.confirmed ?? true, acceptData)
       const dest = acceptData.role === 'student' ? '/meetings' : '/admin'
       setWelcomed({ orgName: invite.org_name, role: acceptData.role, dest })
     } catch (err) {

@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext.jsx'
 import { apiFetch, apiGet, apiPost, apiDelete, apiPatch } from '../api/client.js'
 import { usersApi } from '../api/users.js'
 import { authApi } from '../api/auth.js'
-import HeaderModern from '../components/HeaderModern.jsx'
+import SideNav from '../components/SideNav.jsx'
 import countryCodes from '../../public/country_codes.json'
 import '../styles/settings.css'
 import '../styles/admin.css'
@@ -48,18 +48,21 @@ async function resizeToDataURL(file, size = 220) {
 function MfaSection({ user, showToast }) {
   const [expanded, setExpanded] = useState(false)
   const [mfaPhone, setMfaPhone] = useState('')
+  const [mfaCountry, setMfaCountry] = useState('1')
   const [mfaCode, setMfaCode] = useState('')
   const [mfaStep, setMfaStep] = useState('idle') // idle | sent | disabling
   const [mfaError, setMfaError] = useState('')
   const [mfaLoading, setMfaLoading] = useState(false)
   const isEnabled = !!user?.mfa_enabled
 
+  function fullPhone() { return mfaCountry + mfaPhone.replace(/\D/g, '') }
+
   async function sendSetupCode() {
     if (!mfaPhone.trim()) { setMfaError('Enter a phone number first.'); return }
     setMfaLoading(true)
     setMfaError('')
     try {
-      await usersApi.setupMfa(true, mfaPhone.replace(/\D/g, ''))
+      await usersApi.setupMfa(true, fullPhone())
       setMfaStep('sent')
     } catch (e) {
       setMfaError(e.body?.detail || 'Failed to send code. Check the phone number.')
@@ -73,7 +76,7 @@ function MfaSection({ user, showToast }) {
     setMfaLoading(true)
     setMfaError('')
     try {
-      await usersApi.verifyMfaSetup(mfaCode.trim(), mfaPhone.replace(/\D/g, ''))
+      await usersApi.verifyMfaSetup(mfaCode.trim(), fullPhone())
       showToast(true)
       setMfaStep('idle')
       setExpanded(false)
@@ -127,13 +130,20 @@ function MfaSection({ user, showToast }) {
           {mfaStep === 'idle' && (
             <>
               <div className="settings-row-desc" style={{ marginBottom: 10 }}>Enter your phone number to receive verification codes.</div>
-              <input
-                className="settings-input"
-                type="tel"
-                placeholder="+1 555 000 0000"
-                value={mfaPhone}
-                onChange={e => setMfaPhone(e.target.value)}
-              />
+              <div className="modal-phone-row">
+                <select className="modal-country-select" value={mfaCountry} onChange={e => setMfaCountry(e.target.value)}>
+                  {Object.entries(countryCodes).map(([c, v]) => (
+                    <option key={c} value={v}>{c} +{v}</option>
+                  ))}
+                </select>
+                <input
+                  className="modal-phone-input"
+                  type="tel"
+                  placeholder="555 000 0000"
+                  value={mfaPhone}
+                  onChange={e => setMfaPhone(e.target.value)}
+                />
+              </div>
               <button className="settings-save-btn" onClick={sendSetupCode} disabled={mfaLoading}>
                 {mfaLoading ? 'Sending...' : 'Send verification code'}
               </button>
@@ -348,9 +358,9 @@ export default function Settings() {
     : null
 
   return (
-    <>
     <div className="settings-root">
-      <HeaderModern page="settings" />
+      <SideNav page="settings" />
+      <div className="sn-content">
 
       {toast && (
         <div className={`settings-toast ${toast}`}>
@@ -687,7 +697,7 @@ export default function Settings() {
 
         </div>
       </div>
-    </div>
+      </div>
 
     {showDeleted && (
       <div className="modal-overlay" onClick={() => setShowDeleted(false)}>
@@ -724,6 +734,6 @@ export default function Settings() {
         </div>
       </div>
     )}
-    </>
+    </div>
   )
 }

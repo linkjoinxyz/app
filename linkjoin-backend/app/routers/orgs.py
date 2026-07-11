@@ -57,7 +57,7 @@ async def _check_token(
 def _admin_welcome_email(org_name: str, email: str, temp_password: str, login_url: str) -> str:
     return f"""
 <div style="font-family:sans-serif;max-width:520px;margin:0 auto;background:#0c1e32;padding:40px 32px;border-radius:12px">
-  <img src="https://linkjoin.xyz/images/logo-full.png" alt="LinkJoin" style="height:32px;margin-bottom:28px" />
+  <img src="https://linkjoin.xyz/images/logo-text.png" alt="LinkJoin" style="height:32px;margin-bottom:28px" />
   <h2 style="color:#fff;font-size:20px;margin:0 0 12px">You've been added as an admin for {org_name}</h2>
   <p style="color:rgba(255,255,255,0.6);font-size:14px;margin:0 0 24px">
     Your LinkJoin administrator account has been created. Use the credentials below to log in and complete your setup.
@@ -71,7 +71,7 @@ def _admin_welcome_email(org_name: str, email: str, temp_password: str, login_ur
   <p style="color:rgba(255,255,255,0.5);font-size:13px;margin:0 0 24px">
     You will be asked to set a permanent password when you first log in.
   </p>
-  <a href="{login_url}" style="display:inline-block;background:#2563EB;color:#fff;text-decoration:none;font-size:14px;font-weight:600;padding:12px 24px;border-radius:8px">
+  <a href="{login_url}" style="display:inline-block;background:#2B8FD8;color:#fff;text-decoration:none;font-size:14px;font-weight:600;padding:12px 24px;border-radius:8px">
     Log in to LinkJoin
   </a>
 </div>"""
@@ -115,7 +115,7 @@ async def create_org(body: CreateOrgRequest, background_tasks: BackgroundTasks, 
                     "password": _hasher.hash(temp_pw),
                     "role": "school_admin",
                     "org_id": org_id,
-                    "account_type": "personal",
+                    "account_type": "institutional",
                     "premium": "false",
                     "confirmed": "true",
                     "onboarding_done": False,
@@ -136,6 +136,35 @@ async def create_org(body: CreateOrgRequest, background_tasks: BackgroundTasks, 
     result = {k: v for k, v in doc.items() if k != "_id"}
     result["admin_created"] = admin_created
     return result
+
+
+@router.post("/mine", status_code=201)
+async def create_my_org(body: dict, user: dict = Depends(get_confirmed_user)):
+    """School admin with no org creates their org during onboarding."""
+    require_school_admin(user)
+    if user.get("org_id"):
+        raise HTTPException(status_code=409, detail="Already belongs to an org")
+    name = (body.get("name") or "").strip()
+    if not name:
+        raise HTTPException(status_code=422, detail="name is required")
+    org_id = secrets.token_urlsafe(16)
+    doc = {
+        "org_id": org_id,
+        "name": name,
+        "type": body.get("type") or "school",
+        "address": body.get("address") or None,
+        "city": body.get("city") or None,
+        "state": body.get("state") or None,
+        "website": body.get("website") or None,
+        "timezone": body.get("timezone") or None,
+        "created_at": datetime.now(timezone.utc),
+    }
+    await motor_db.orgs.insert_one(doc)
+    await motor_db.login.update_one(
+        {"username": user["username"]},
+        {"$set": {"org_id": org_id, "org_name": name}}
+    )
+    return {"org_id": org_id}
 
 
 @router.get("/{org_id}/members")
@@ -169,6 +198,8 @@ async def update_org(org_id: str, body: UpdateOrgRequest, user: dict = Depends(g
     if not updates:
         return {"message": "Nothing to update"}
     await motor_db.orgs.update_one({"org_id": org_id}, {"$set": updates})
+    if "name" in updates:
+        await motor_db.login.update_many({"org_id": org_id}, {"$set": {"org_name": updates["name"]}})
     return {"message": "Updated"}
 
 
@@ -416,3 +447,66 @@ async def update_attendance_settings(org_id: str, body: dict, user: dict = Depen
         {"$set": {f"attendance_settings.{k}": v for k, v in updates.items()}}
     )
     return {"message": "Updated"}
+
+
+@router.get("/{org_id}/attendance")
+async def get_org_attendance(org_id: str, user: dict = Depends(get_confirmed_user)):
+    require_school_admin(user)
+    if user.get("org_id") != org_id:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    classes = []
+    async for cls in motor_db.classes.find({"org_id": org_id}, {"_id": 0, "class_id": 1, "name": 1, "teacher_name": 1}):
+        classes.append(cls)
+
+    if not classes:
+        return {"classes": []}
+
+    class_ids = [c["class_id"] for c in classes]
+    class_map = {c["class_id"]: c for c in classes}
+
+    pipeline = [
+        {"$match": {"class_id": {"$in": class_ids}}},
+        {"$group": {
+            "_id": "$class_id",
+            "total": {"$sum": 1},
+            "on_time": {"$sum": {"$cond": [{"$lte": ["$minutes_late", 5]}, 1, 0]}},
+            "late": {"$sum": {"$cond": [{"$gt": ["$minutes_late", 5]}, 1, 0]}},
+            "last_record": {"$max": "$opened_at"},
+        }},
+    ]
+
+    result = []
+    async for row in motor_db.attendance.aggregate(pipeline):
+        cid = row["_id"]
+        cls = class_map.get(cid, {})
+        total = row["total"]
+        result.append({
+            "class_id": cid,
+            "class_name": cls.get("name", ""),
+            "teacher_name": cls.get("teacher_name", ""),
+            "total_records": total,
+            "on_time": row["on_time"],
+            "late": row["late"],
+            "attendance_rate": round(row["on_time"] / total * 100) if total else 0,
+            "last_record": row["last_record"].isoformat() if isinstance(row.get("last_record"), datetime) else row.get("last_record"),
+        })
+
+    # Include classes with zero records
+    seen = {r["class_id"] for r in result}
+    for cls in classes:
+        if cls["class_id"] not in seen:
+            result.append({
+                "class_id": cls["class_id"],
+                "class_name": cls.get("name", ""),
+                "teacher_name": cls.get("teacher_name", ""),
+                "total_records": 0,
+                "on_time": 0,
+                "late": 0,
+                "absent": 0,
+                "attendance_rate": 0,
+                "last_record": None,
+            })
+
+    result.sort(key=lambda r: r["class_name"].lower())
+    return {"classes": result}

@@ -1,5 +1,6 @@
 import csv
 import io
+import json
 import secrets
 import string
 from datetime import datetime, timezone
@@ -298,6 +299,126 @@ async def delete_org(org_id: str, user: dict = Depends(get_confirmed_user)):
     await log_audit(user["username"], "admin.delete_org", detail={"org_id": org_id, "org_name": org.get("name")})
 
 
+@router.post("/create-admin-account", status_code=201)
+async def create_admin_account(body: dict, background_tasks: BackgroundTasks, user: dict = Depends(get_confirmed_user)):
+    if user.get("admin") != "true":
+        raise HTTPException(status_code=403, detail="Platform admin access required")
+    email = (body.get("email") or "").strip().lower()
+    if not email or "@" not in email:
+        raise HTTPException(status_code=422, detail="Valid email required")
+    existing = await motor_db.login.find_one({"username": email})
+    if existing:
+        raise HTTPException(status_code=409, detail="An account with that email already exists")
+    temp_pw = _gen_temp_password()
+    await motor_db.login.insert_one({
+        "username": email,
+        "password": _hasher.hash(temp_pw),
+        "user_id": gen_id(),
+        "account_type": "institutional",
+        "role": "school_admin",
+        "org_id": None,
+        "premium": "false",
+        "confirmed": "true",
+        "must_change_password": True,
+        "onboarding_done": False,
+        "created_at": datetime.now(timezone.utc),
+    })
+    login_url = f"{_settings.frontend_url}/login"
+    html = f"""
+<div style="font-family:sans-serif;max-width:520px;margin:0 auto;background:#0c1e32;padding:40px 32px;border-radius:12px">
+  <img src="https://linkjoin.xyz/images/logo-text.png" alt="LinkJoin" style="height:32px;margin-bottom:28px" />
+  <h2 style="color:#fff;font-size:20px;margin:0 0 12px">Welcome to LinkJoin</h2>
+  <p style="color:rgba(255,255,255,0.6);font-size:14px;margin:0 0 24px">
+    A LinkJoin administrator account has been created for you. Log in to set up your school.
+  </p>
+  <div style="background:rgba(255,255,255,0.06);border-radius:8px;padding:16px 20px;margin-bottom:24px">
+    <p style="color:rgba(255,255,255,0.5);font-size:12px;margin:0 0 4px;text-transform:uppercase;letter-spacing:.06em">Email</p>
+    <p style="color:#fff;font-size:15px;font-weight:600;margin:0 0 14px">{email}</p>
+    <p style="color:rgba(255,255,255,0.5);font-size:12px;margin:0 0 4px;text-transform:uppercase;letter-spacing:.06em">Temporary password</p>
+    <p style="color:#fff;font-size:15px;font-weight:600;margin:0;font-family:monospace;letter-spacing:.08em">{temp_pw}</p>
+  </div>
+  <p style="color:rgba(255,255,255,0.5);font-size:13px;margin:0 0 24px">You will be asked to set a permanent password and configure your school when you first log in.</p>
+  <a href="{login_url}" style="display:inline-block;background:#2B8FD8;color:#fff;text-decoration:none;font-size:14px;font-weight:600;padding:12px 24px;border-radius:8px">Log in to LinkJoin</a>
+</div>"""
+    background_tasks.add_task(send_email, html, "Welcome to LinkJoin", email)
+    await log_audit(user["username"], "admin.create_admin_account", detail={"email": email})
+    return {"ok": True, "email": email}
+
+
+VALID_STAFF_ROLES = {"teacher", "school_admin", "district_admin"}
+
+@router.post("/orgs/{org_id}/import-staff")
+async def import_staff(
+    org_id: str,
+    body: dict,
+    background_tasks: BackgroundTasks,
+    user: dict = Depends(get_confirmed_user),
+):
+    is_platform_admin = user.get("admin") == "true"
+    is_own_org_admin = user.get("role") in {"school_admin", "district_admin"} and user.get("org_id") == org_id
+    if not is_platform_admin and not is_own_org_admin:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    org = await motor_db.orgs.find_one({"org_id": org_id})
+    if not org:
+        raise HTTPException(status_code=404, detail="Org not found")
+    org_name = org.get("name", "your school")
+    app_url = _settings.frontend_url
+
+    rows = body.get("rows", [])
+    if not rows or not isinstance(rows, list):
+        raise HTTPException(status_code=422, detail="rows must be a non-empty list")
+
+    results = []
+    for row in rows:
+        email = (row.get("email") or "").strip().lower()
+        role = (row.get("role") or "teacher").strip()
+        first_name = (row.get("first_name") or "").strip()
+        last_name = (row.get("last_name") or "").strip()
+
+        if not email or "@" not in email:
+            results.append({"email": email or "(blank)", "status": "error", "error": "Invalid email"})
+            continue
+        if role not in VALID_STAFF_ROLES:
+            results.append({"email": email, "status": "error", "error": f"Invalid role '{role}'"})
+            continue
+
+        existing = await motor_db.login.find_one({"username": email})
+        if existing:
+            await motor_db.login.update_one(
+                {"username": email},
+                {"$set": {"role": role, "org_id": org_id, "account_type": "institutional"}}
+            )
+            results.append({"email": email, "status": "updated"})
+            await log_audit(user["username"], "admin.import_staff_updated", detail={"email": email, "role": role, "org_id": org_id})
+            continue
+
+        temp_pw = _gen_temp_password()
+        new_user: dict = {
+            "username": email,
+            "password": _hasher.hash(temp_pw),
+            "user_id": gen_id(),
+            "account_type": "institutional",
+            "role": role,
+            "org_id": org_id,
+            "org_name": org_name,
+            "first_name": first_name,
+            "last_name": last_name,
+            "premium": "false",
+            "confirmed": "true",
+            "must_change_password": True,
+            "onboarding_done": False,
+            "created_at": datetime.now(timezone.utc),
+        }
+        await motor_db.login.insert_one(new_user)
+        html = _welcome_email_html(email, org_name, role, temp_pw, app_url)
+        background_tasks.add_task(send_email, html, f"Welcome to {org_name} on LinkJoin", email)
+        results.append({"email": email, "status": "created"})
+        await log_audit(user["username"], "admin.import_staff_created", detail={"email": email, "role": role, "org_id": org_id})
+
+    return {"results": results}
+
+
 @router.post("/orgs/{org_id}/import")
 async def import_org_members(
     org_id: str,
@@ -372,7 +493,7 @@ async def import_org_members(
             "last_name": last_name,
             "premium": "false",
             "confirmed": "true",
-            "must_reset_password": True,
+            "must_change_password": True,
             "created_at": datetime.now(timezone.utc),
             "tutorial": "true",
             "popup_check_done": "false",
@@ -414,8 +535,10 @@ async def import_org_parents(
     background_tasks: BackgroundTasks,
     user: dict = Depends(get_confirmed_user),
 ):
-    if user.get("admin") != "true":
-        raise HTTPException(status_code=403, detail="Platform admin access required")
+    is_platform_admin = user.get("admin") == "true"
+    is_own_org_admin = user.get("role") in {"school_admin", "district_admin"} and user.get("org_id") == org_id
+    if not is_platform_admin and not is_own_org_admin:
+        raise HTTPException(status_code=403, detail="Access denied")
     org = await motor_db.orgs.find_one({"org_id": org_id})
     if not org:
         raise HTTPException(status_code=404, detail="Org not found")
@@ -453,7 +576,7 @@ async def import_org_parents(
                 "role": "parent",
                 "org_id": org_id,
                 "confirmed": "true",
-                "must_reset_password": True,
+                "must_change_password": True,
                 "created_at": datetime.now(timezone.utc),
                 "premium": "false",
                 "onboarding_done": True,
@@ -694,6 +817,38 @@ async def export_audit_logs_csv(
         iter([output.getvalue()]),
         media_type="text/csv",
         headers={"Content-Disposition": "attachment; filename=audit-log.csv"},
+    )
+
+
+@router.get("/audit-logs/export.json")
+async def export_audit_logs_json(
+    from_date: str | None = Query(None),
+    to_date: str | None = Query(None),
+    action: str | None = Query(None),
+    user: dict = Depends(get_confirmed_user),
+):
+    role = user.get("role")
+    if role not in ("school_admin", "district_admin") and user.get("admin") != "true":
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
+
+    query = await _build_audit_query(user, from_date, to_date, action)
+    entries = []
+    async for log in motor_db.audit_logs.find(query, {"_id": 0}).sort("ts", -1).limit(10000):
+        ts = log.get("ts")
+        entries.append({
+            "ts": ts.isoformat() if hasattr(ts, "isoformat") else str(ts),
+            "user": _mask_email(log.get("user", "")),
+            "action": log.get("action", ""),
+            "resource_type": log.get("resource_type"),
+            "resource_id": log.get("resource_id"),
+            "ip": _mask_ip(log.get("ip")),
+            "detail": log.get("detail") or {},
+            "hash": log.get("hash"),
+        })
+    return StreamingResponse(
+        iter([json.dumps(entries, indent=2)]),
+        media_type="application/json",
+        headers={"Content-Disposition": "attachment; filename=audit-log.json"},
     )
 
 

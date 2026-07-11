@@ -1,5 +1,9 @@
 .pa-header {
   margin-bottom: 28px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
 }
 
 .pa-header-title {
@@ -779,3 +783,30 @@
 [data-theme="light"] .od-compliance-card-title { color: #0f172a; }
 [data-theme="light"] .od-compliance-card-desc { color: rgba(15,23,42,0.5); }
 [data-theme="light"] .od-compliance-badge { background: rgba(0,0,0,0.03); border-color: rgba(0,0,0,0.09); color: rgba(15,23,42,0.6); }
+
+.iv-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.65);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+.iv-modal {
+  background: #0C1E30;
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 12px;
+  padding: 28px;
+  width: 100%;
+  max-width: 420px;
+}
+
+.iv-modal-title {
+  font-size: 17px;
+  font-weight: 700;
+  color: #e8edf2;
+  margin: 0 0 16px;
+}

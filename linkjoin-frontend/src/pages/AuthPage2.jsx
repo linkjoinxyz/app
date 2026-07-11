@@ -72,7 +72,7 @@ function MfaStep({ mfaSession, onVerified, onBack }) {
   return (
     <div className="ap-form-wrap">
       <div className="ap-heading-wrap">
-        <h1 className="ap-heading">Verify your identity.</h1>
+        <h1 className="ap-heading">Confirm it's you.</h1>
       </div>
       <p className="ap-mfa-desc">We sent a 6-digit code to your phone number on file. Enter it below to continue.</p>
       {error && <div className="ap-error">{ERROR_MESSAGES[error] || error}</div>}
@@ -207,8 +207,12 @@ export default function AuthPage2({ defaultTab = 'login' }) {
           setError('')
           try {
             const data = await authApi.googleTokenLogin(response.access_token)
+            if (data.mfa_required) {
+              setMfaSession(data.mfa_session)
+              return
+            }
             login(data.access_token, data.email, data.confirmed ?? true, data)
-            navigate(redirect, { replace: true })
+            navigate(data.mfa_setup_required ? '/settings' : redirect, { replace: true })
           } catch (e) {
             if (!alive) return
             const detail = e.body?.detail || (tabRef.current === 'login' ? 'google_login_failed' : 'google_signup_failed')
@@ -258,7 +262,7 @@ export default function AuthPage2({ defaultTab = 'login' }) {
           return
         }
         login(data.access_token, data.email, data.confirmed ?? false, data)
-        navigate(redirect, { replace: true })
+        navigate(data.mfa_setup_required ? '/settings' : redirect, { replace: true })
       } else {
         const data = await authApi.register({ email, password, offset, timezone })
         if (data.access_token) {

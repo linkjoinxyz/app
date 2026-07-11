@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router-dom'
-import PublicHeader from '../components/PublicHeader.jsx'
+import NhNav from '../components/NhNav.jsx'
 import PublicFooter from '../components/PublicFooter.jsx'
+import '../styles/new-homepage.css'
 import '../styles/pricing.css'
 
 function Check() {
@@ -12,7 +13,7 @@ function Check() {
   )
 }
 
-function PlanCard({ badge, name, price, sub, description, features, cta, onClick, highlight }) {
+function PlanCard({ badge, name, price, sub, description, features, cta, onClick, highlight, ghost }) {
   return (
     <div className={`plan-card${highlight ? ' plan-card-highlight' : ''}`}>
       {badge && <div className="plan-badge">{badge}</div>}
@@ -30,7 +31,7 @@ function PlanCard({ badge, name, price, sub, description, features, cta, onClick
           </li>
         ))}
       </ul>
-      <button className="plan-cta" onClick={onClick}>
+      <button className={`plan-cta${ghost ? ' plan-cta-ghost' : ''}`} onClick={onClick}>
         {cta}
       </button>
     </div>
@@ -41,7 +42,7 @@ export default function Pricing() {
   const navigate = useNavigate()
   return (
     <div className="pricing-root">
-      <PublicHeader />
+      <NhNav />
 
       <main className="pricing-main">
         <div className="pricing-hero">
@@ -80,6 +81,7 @@ export default function Pricing() {
             ]}
             cta="Get in touch"
             onClick={() => navigate('/contact')}
+            ghost
           />
         </div>
       </main>

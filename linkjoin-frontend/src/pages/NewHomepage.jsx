@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
-import { useAuth } from '../context/AuthContext.jsx'
 import AuthModal from '../components/AuthModal.jsx'
+import NhNav from '../components/NhNav.jsx'
 import '../styles/new-homepage.css'
 
 const FAQ_ITEMS = [
@@ -58,11 +58,8 @@ function WaveDivider({ top, bottom, flip = false }) {
 }
 
 export default function NewHomepage() {
-  const { token } = useAuth()
   const [authModal, setAuthModal] = useState(null)
   const [openFaq, setOpenFaq] = useState(null)
-  const [menuOpen, setMenuOpen] = useState(false)
-  const [scrolled, setScrolled] = useState(false)
   const [visSet, setVisSet] = useState(() => new Set())
   const howRef = useRef(null)
   const curveRef = useRef(null)
@@ -74,13 +71,6 @@ export default function NewHomepage() {
     const card = el.querySelector('.nh-testimonial')
     el.scrollBy({ left: dir * ((card?.offsetWidth ?? 300) + 20), behavior: 'smooth' })
   }
-
-  // Compact nav on scroll
-  useEffect(() => {
-    const handler = () => setScrolled(window.scrollY > 60)
-    window.addEventListener('scroll', handler, { passive: true })
-    return () => window.removeEventListener('scroll', handler)
-  }, [])
 
   // Scroll-reveal — stores visibility in React state so it survives re-renders
   useEffect(() => {
@@ -131,108 +121,7 @@ export default function NewHomepage() {
       </div>
 
       {/* Navigation */}
-      <nav className={`nh-nav${scrolled ? ' nh-nav-compact' : ''}`}>
-        <Link to="/" className="nh-nav-logo">
-          <img src="/images/logo-text.svg" height="32" alt="LinkJoin" />
-        </Link>
-
-        <div className="nh-nav-links">
-          <div className="nh-nav-dropdown">
-            <button className="nh-nav-dd-trigger">
-              Product
-              <img src="/images/angle-down.svg" className="nh-nav-dd-chevron" width="14" height="14" alt="" aria-hidden="true" />
-            </button>
-            <div className="nh-nav-menu">
-              <Link to="/meetings" className="nh-nav-menu-item">
-                <span className="nh-nav-menu-icon">
-                  <img src="/images/link.svg" width="16" height="16" alt="" aria-hidden="true" />
-                </span>
-                <span>
-                  <span className="nh-nav-menu-label">Meetings</span>
-                  <span className="nh-nav-menu-sub">Auto-open meetings on time</span>
-                </span>
-              </Link>
-              <Link to="/bookmarks" className="nh-nav-menu-item">
-                <span className="nh-nav-menu-icon">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                    <path d="M5 3h14v19l-7-4.5L5 22V3z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round"/>
-                  </svg>
-                </span>
-                <span>
-                  <span className="nh-nav-menu-label">Bookmarks</span>
-                  <span className="nh-nav-menu-sub">Save links for quick access</span>
-                </span>
-              </Link>
-            </div>
-          </div>
-
-          <div className="nh-nav-dropdown">
-            <button className="nh-nav-dd-trigger">
-              Resources
-              <img src="/images/angle-down.svg" className="nh-nav-dd-chevron" width="14" height="14" alt="" aria-hidden="true" />
-            </button>
-            <div className="nh-nav-menu">
-              <Link to="/pricing" className="nh-nav-menu-item">
-                <span className="nh-nav-menu-icon nh-nav-menu-icon-text">$</span>
-                <span>
-                  <span className="nh-nav-menu-label">Pricing</span>
-                  <span className="nh-nav-menu-sub">Plans for every team size</span>
-                </span>
-              </Link>
-              <Link to="/schools" className="nh-nav-menu-item">
-                <span className="nh-nav-menu-icon">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                    <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round"/>
-                    <path d="M9 22V12h6v10" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round"/>
-                  </svg>
-                </span>
-                <span>
-                  <span className="nh-nav-menu-label">Schools</span>
-                  <span className="nh-nav-menu-sub">K-12 attendance &amp; dashboards</span>
-                </span>
-              </Link>
-            </div>
-          </div>
-        </div>
-
-        <div className="nh-nav-right">
-          <div className="nh-nav-actions">
-            {token ? (
-              <Link to="/meetings" className="nh-btn-primary">
-                Dashboard <img src="/images/arrow-right.svg" height="14" width="14" alt="" />
-              </Link>
-            ) : (
-              <>
-                <button className="nh-btn-ghost nh-nav-login" onClick={() => setAuthModal('login')}>Log In</button>
-                <button className="nh-btn-primary nh-nav-cta" onClick={() => setAuthModal('signup')}>
-                  Get started <img src="/images/arrow-right.svg" height="14" width="14" alt="" />
-                </button>
-              </>
-            )}
-          </div>
-
-          <button
-            className={`nh-hamburger${menuOpen ? ' open' : ''}`}
-            onClick={() => setMenuOpen(m => !m)}
-            aria-label="Menu"
-          >
-            <span /><span /><span />
-          </button>
-        </div>
-
-        {menuOpen && (
-          <div className="nh-mobile-menu">
-            <button className="nh-menu-login" onClick={() => { setMenuOpen(false); setAuthModal('login') }}>Log In</button>
-            <button className="nh-menu-cta" onClick={() => { setMenuOpen(false); setAuthModal('signup') }}>Sign Up</button>
-            <p className="nh-mobile-menu-section">Product</p>
-            <Link to="/meetings" onClick={() => setMenuOpen(false)}>Meetings</Link>
-            <Link to="/bookmarks" onClick={() => setMenuOpen(false)}>Bookmarks</Link>
-            <p className="nh-mobile-menu-section">Resources</p>
-            <Link to="/pricing" onClick={() => setMenuOpen(false)}>Pricing</Link>
-            <Link to="/schools" onClick={() => setMenuOpen(false)}>Schools</Link>
-          </div>
-        )}
-      </nav>
+      <NhNav onLogin={() => setAuthModal('login')} onSignup={() => setAuthModal('signup')} />
 
       {/* Hero */}
       <section className="nh-hero">
@@ -746,6 +635,7 @@ export default function NewHomepage() {
           </div>
           <div className="nh-footer-col">
             <p className="nh-footer-col-title">Company</p>
+            <Link to="/demo">Demo</Link>
             <Link to="/privacy">Privacy Policy</Link>
             <Link to="/tos">Terms of Service</Link>
             <Link to="/contact">Contact</Link>

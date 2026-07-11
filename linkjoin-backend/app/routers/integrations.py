@@ -1,5 +1,8 @@
 import base64
+import hashlib
+import hmac
 import secrets
+import time
 import urllib.parse
 from datetime import datetime, timezone, timedelta
 from collections import defaultdict
@@ -1330,3 +1333,291 @@ async def canvas_sync(class_id: str, user: dict = Depends(get_confirmed_user)):
     if not cls.get("canvas_course_id"):
         raise HTTPException(status_code=400, detail="Class not connected to Canvas")
     return await _run_canvas_sync(class_id, cls, caller_user_id=user["user_id"])
+
+
+# ── Schoology Integration ─────────────────────────────────────────────────────
+
+_SG_BASE = "https://api.schoology.com/v1"
+_SG_SYNC_COOLDOWN_SECONDS = 300
+
+
+def _sg_auth_header(method: str, url: str, consumer_key: str, consumer_secret: str) -> str:
+    """Build OAuth 1.0a HMAC-SHA1 Authorization header (2-legged, stdlib only)."""
+    params = {
+        "oauth_consumer_key": consumer_key,
+        "oauth_nonce": secrets.token_hex(16),
+        "oauth_signature_method": "HMAC-SHA1",
+        "oauth_timestamp": str(int(time.time())),
+        "oauth_version": "1.0",
+    }
+    sorted_params = urllib.parse.urlencode(sorted(params.items()))
+    base_str = "&".join([
+        method.upper(),
+        urllib.parse.quote(url, safe=""),
+        urllib.parse.quote(sorted_params, safe=""),
+    ])
+    signing_key = f"{urllib.parse.quote(consumer_secret, safe='')}&"
+    sig = base64.b64encode(
+        hmac.new(signing_key.encode(), base_str.encode(), hashlib.sha1).digest()
+    ).decode()
+    params["oauth_signature"] = sig
+    return "OAuth " + ", ".join(
+        f'{k}="{urllib.parse.quote(str(v), safe="")}"' for k, v in sorted(params.items())
+    )
+
+
+async def _sg_get(path: str, key: str, secret: str, params: dict | None = None) -> dict:
+    url = f"{_SG_BASE}{path}"
+    async with httpx.AsyncClient(timeout=20) as c:
+        r = await c.get(
+            url, params=params,
+            headers={"Authorization": _sg_auth_header("GET", url, key, secret)},
+        )
+    r.raise_for_status()
+    return r.json()
+
+
+async def _sg_get_all(path: str, key: str, secret: str, result_key: str) -> list:
+    """Paginate a Schoology collection using start/limit offsets."""
+    results: list = []
+    start, limit = 0, 200
+    while True:
+        data = await _sg_get(path, key, secret, params={"start": start, "limit": limit})
+        page = data.get(result_key) or []
+        if isinstance(page, dict):
+            page = [page]
+        results.extend(page)
+        if len(page) < limit:
+            break
+        start += limit
+    return results
+
+
+async def _run_schoology_sync(org_id: str) -> dict:
+    doc = await motor_db.integrations.find_one({"org_id": org_id, "provider": "schoology"})
+    if not doc or not doc.get("consumer_key"):
+        raise HTTPException(status_code=400, detail="Schoology not connected")
+
+    last_sync = doc.get("last_sync_at")
+    if last_sync:
+        if last_sync.tzinfo is None:
+            last_sync = last_sync.replace(tzinfo=timezone.utc)
+        elapsed = (datetime.now(timezone.utc) - last_sync).total_seconds()
+        if elapsed < _SG_SYNC_COOLDOWN_SECONDS:
+            wait = int(_SG_SYNC_COOLDOWN_SECONDS - elapsed)
+            raise HTTPException(status_code=429, detail=f"Sync cooldown. Try again in {wait}s")
+
+    key = doc["consumer_key"]
+    secret = doc["consumer_secret"]
+
+    try:
+        sections = await _sg_get_all("/sections", key, secret, "section")
+    except httpx.HTTPStatusError as e:
+        raise HTTPException(status_code=502, detail=f"Schoology API error {e.response.status_code}: {e.response.text[:200]}")
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Schoology API error: {type(e).__name__}: {str(e)}")
+
+    # Cache user lookups to avoid duplicate API calls within same sync
+    _user_cache: dict[str, dict] = {}
+
+    async def _get_user(uid: str) -> dict:
+        if uid not in _user_cache:
+            try:
+                data = await _sg_get(f"/users/{uid}", key, secret)
+                _user_cache[uid] = data.get("user") or data
+            except Exception:
+                _user_cache[uid] = {}
+        return _user_cache[uid]
+
+    new_classes = 0
+    new_accounts = 0
+    total_students = 0
+
+    for section in sections:
+        sg_section_id = str(section.get("id", ""))
+        if not sg_section_id:
+            continue
+
+        section_name = section.get("section_title") or section.get("course_title") or f"Section {sg_section_id[:8]}"
+
+        try:
+            enrollments = await _sg_get_all(f"/sections/{sg_section_id}/enrollments", key, secret, "enrollment")
+        except Exception:
+            continue
+
+        # Separate teacher (admin==1) from students (admin==0), filter active (status==1)
+        teacher_enrollments = [e for e in enrollments if e.get("admin") == 1 and e.get("status") == 1]
+        student_enrollments = [e for e in enrollments if e.get("admin") == 0 and e.get("status") == 1]
+
+        # Resolve teacher email
+        teacher_user_id = ""
+        if teacher_enrollments:
+            teacher_data = await _get_user(str(teacher_enrollments[0]["uid"]))
+            teacher_email = (teacher_data.get("primary_email") or teacher_data.get("username") or "").lower()
+            if teacher_email:
+                tu = await motor_db.login.find_one({"username": teacher_email})
+                if tu:
+                    teacher_user_id = tu["user_id"]
+
+        # Match or create class
+        cls = await motor_db.classes.find_one({"schoology_section_id": sg_section_id, "org_id": org_id})
+        if not cls and teacher_user_id:
+            cls = await motor_db.classes.find_one({
+                "teacher_id": teacher_user_id,
+                "name": section_name,
+                "org_id": org_id,
+            })
+
+        if cls:
+            if not cls.get("schoology_section_id"):
+                await motor_db.classes.update_one(
+                    {"class_id": cls["class_id"]},
+                    {"$set": {"schoology_section_id": sg_section_id}},
+                )
+            class_id = cls["class_id"]
+            existing_ids: set = set(cls.get("student_ids") or [])
+        else:
+            class_id = secrets.token_urlsafe(16)
+            await motor_db.classes.insert_one({
+                "class_id": class_id,
+                "org_id": org_id,
+                "name": section_name,
+                "time": "08:00",
+                "days": ["Mon", "Tue", "Wed", "Thu", "Fri"],
+                "teacher_id": teacher_user_id,
+                "student_ids": [],
+                "link_ids": [],
+                "schoology_section_id": sg_section_id,
+            })
+            existing_ids = set()
+            new_classes += 1
+
+        students_to_add: list[str] = []
+        for enrollment in student_enrollments:
+            uid = str(enrollment.get("uid", ""))
+            if not uid:
+                continue
+            user_data = await _get_user(uid)
+            student_email = (user_data.get("primary_email") or user_data.get("username") or "").lower()
+            if not student_email:
+                continue
+
+            total_students += 1
+            existing = await motor_db.login.find_one({"username": student_email})
+            if existing:
+                student_uid = existing["user_id"]
+                if not existing.get("schoology_uid"):
+                    await motor_db.login.update_one({"user_id": student_uid}, {"$set": {"schoology_uid": uid}})
+            else:
+                student_uid = secrets.token_urlsafe(16)
+                await motor_db.login.insert_one({
+                    "username": student_email,
+                    "user_id": student_uid,
+                    "schoology_uid": uid,
+                    "account_type": "institutional",
+                    "role": "student",
+                    "org_id": org_id,
+                    "confirmed": "false",
+                    "premium": "false",
+                })
+                new_accounts += 1
+
+            if student_uid not in existing_ids:
+                students_to_add.append(student_uid)
+                existing_ids.add(student_uid)
+
+        if students_to_add:
+            await motor_db.classes.update_one(
+                {"class_id": class_id},
+                {"$push": {"student_ids": {"$each": students_to_add}}},
+            )
+
+    stats = {
+        "sections": len(sections),
+        "students": total_students,
+        "new_classes": new_classes,
+        "new_accounts": new_accounts,
+    }
+    await motor_db.integrations.update_one(
+        {"org_id": org_id, "provider": "schoology"},
+        {"$set": {"last_sync_at": datetime.now(timezone.utc), "last_sync_stats": stats}},
+    )
+    return {"ok": True, **stats}
+
+
+# ── Schoology endpoints ───────────────────────────────────────────────────────
+
+@router.post("/schoology/connect")
+async def schoology_connect(body: dict, user: dict = Depends(get_confirmed_user)):
+    """Validate Schoology credentials and store the connection."""
+    require_school_admin(user)
+    org_id = user.get("org_id") or ""
+
+    consumer_key = (body.get("consumer_key") or "").strip()
+    consumer_secret = (body.get("consumer_secret") or "").strip()
+    if not consumer_key or not consumer_secret:
+        raise HTTPException(status_code=422, detail="consumer_key and consumer_secret are required")
+
+    # Validate by fetching school info
+    try:
+        data = await _sg_get("/schools", consumer_key, consumer_secret, params={"limit": 1})
+        schools = data.get("school") or []
+        if isinstance(schools, dict):
+            schools = [schools]
+        building_name = schools[0].get("title") or schools[0].get("name") or "" if schools else ""
+    except httpx.HTTPStatusError as e:
+        if e.response.status_code in (401, 403):
+            raise HTTPException(status_code=400, detail="Invalid credentials")
+        raise HTTPException(status_code=400, detail=f"Schoology API error: {e.response.status_code}")
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Could not connect to Schoology: {str(e)}")
+
+    await motor_db.integrations.update_one(
+        {"org_id": org_id, "provider": "schoology"},
+        {"$set": {
+            "org_id": org_id,
+            "provider": "schoology",
+            "consumer_key": consumer_key,
+            "consumer_secret": consumer_secret,
+            "building_name": building_name,
+            "connected_at": datetime.now(timezone.utc),
+            "last_sync_at": None,
+            "last_sync_stats": None,
+        }},
+        upsert=True,
+    )
+    return {"connected": True, "building_name": building_name}
+
+
+@router.get("/schoology/status")
+async def schoology_status(user: dict = Depends(get_confirmed_user), org_id: str = Query(...)):
+    require_school_admin(user)
+    if user.get("org_id") != org_id and user.get("admin") != "true":
+        raise HTTPException(status_code=403, detail="Access denied")
+    doc = await motor_db.integrations.find_one({"org_id": org_id, "provider": "schoology"})
+    if not doc or not doc.get("consumer_key"):
+        return {"connected": False}
+    return {
+        "connected": True,
+        "building_name": doc.get("building_name") or "",
+        "last_sync_at": doc.get("last_sync_at"),
+        "last_sync_stats": doc.get("last_sync_stats"),
+    }
+
+
+@router.post("/schoology/sync/{org_id}")
+async def schoology_sync(org_id: str, user: dict = Depends(get_confirmed_user)):
+    require_school_admin(user)
+    if user.get("org_id") != org_id and user.get("admin") != "true":
+        raise HTTPException(status_code=403, detail="Access denied")
+    return await _run_schoology_sync(org_id)
+
+
+@router.delete("/schoology/disconnect/{org_id}")
+async def schoology_disconnect(org_id: str, user: dict = Depends(get_confirmed_user)):
+    require_school_admin(user)
+    if user.get("org_id") != org_id and user.get("admin") != "true":
+        raise HTTPException(status_code=403, detail="Access denied")
+    await motor_db.integrations.delete_one({"org_id": org_id, "provider": "schoology"})
+    await motor_db.classes.update_many({"org_id": org_id}, {"$unset": {"schoology_section_id": ""}})
+    return {"ok": True}

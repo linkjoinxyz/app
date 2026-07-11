@@ -1,10 +1,62 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { apiGet, apiPatch } from '../api/client.js'
+import { apiGet, apiPatch, apiPost } from '../api/client.js'
 import { incidentsApi } from '../api/incidents.js'
 import HeaderModern from '../components/HeaderModern.jsx'
 import '../styles/platform-admin.css'
 import '../styles/incident.css'
+
+// ─── Create Admin Modal ───────────────────────────────────────────────────────
+
+function CreateAdminModal({ onClose }) {
+  const [email, setEmail] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [result, setResult] = useState(null)
+
+  async function submit() {
+    if (!email.trim()) return
+    setSaving(true); setResult(null)
+    try {
+      await apiPost('/admin/create-admin-account', { email: email.trim().toLowerCase() })
+      setResult({ ok: true, msg: `Account created and email sent to ${email.trim()}` })
+      setEmail('')
+    } catch (e) {
+      setResult({ ok: false, msg: e?.message || 'Failed to create account' })
+    }
+    setSaving(false)
+  }
+
+  return (
+    <div className="iv-modal-backdrop" onClick={onClose}>
+      <div className="iv-modal" onClick={e => e.stopPropagation()}>
+        <div className="iv-modal-title">Create school admin account</div>
+        <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)', margin: '0 0 16px' }}>
+          The person will receive an email with a temporary password and a link to log in and set up their school.
+        </p>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <input
+            className="pa-input"
+            style={{ flex: 1 }}
+            type="email"
+            value={email}
+            onChange={e => { setEmail(e.target.value); setResult(null) }}
+            onKeyDown={e => e.key === 'Enter' && submit()}
+            placeholder="admin@school.edu"
+            autoFocus
+          />
+          <button className="pa-btn" onClick={submit} disabled={saving || !email.trim()}>
+            {saving ? '...' : 'Create'}
+          </button>
+        </div>
+        {result && (
+          <div style={{ marginTop: 10, fontSize: 13, color: result.ok ? '#4ade80' : '#f87171' }}>
+            {result.msg}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
 
 // ─── Orgs Tab ─────────────────────────────────────────────────────────────────
 
@@ -631,15 +683,20 @@ function IncidentsTab() {
 
 export default function PlatformAdmin() {
   const [activeTab, setActiveTab] = useState('orgs')
+  const [showCreateAdmin, setShowCreateAdmin] = useState(false)
 
   return (
     <div className="admin-root">
       <HeaderModern page="admin" />
       <div className="admin-page">
         <div className="pa-header">
-          <div className="pa-header-title">Platform Admin</div>
-          <div className="pa-header-sub">Internal LinkJoin administration</div>
+          <div>
+            <div className="pa-header-title">Platform Admin</div>
+            <div className="pa-header-sub">Internal LinkJoin administration</div>
+          </div>
+          <button className="pa-btn" onClick={() => setShowCreateAdmin(true)}>Create admin account</button>
         </div>
+        {showCreateAdmin && <CreateAdminModal onClose={() => setShowCreateAdmin(false)} />}
         <div className="admin-tabs">
           <button className={`admin-tab${activeTab === 'orgs' ? ' admin-tab--active' : ''}`} onClick={() => setActiveTab('orgs')}>Organizations</button>
           <button className={`admin-tab${activeTab === 'users' ? ' admin-tab--active' : ''}`} onClick={() => setActiveTab('users')}>Users</button>

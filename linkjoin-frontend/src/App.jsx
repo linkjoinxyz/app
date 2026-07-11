@@ -48,6 +48,8 @@ import ParentPortal from './pages/ParentPortal.jsx'
 import AdminOnboarding from './pages/AdminOnboarding.jsx'
 import IncidentBanner from './components/IncidentBanner.jsx'
 import Status from './pages/Status.jsx'
+import ApiDocs from './pages/ApiDocs.jsx'
+import SLA from './pages/SLA.jsx'
 
 const TEACHER_ROLES = new Set(['teacher', 'school_admin', 'district_admin'])
 
@@ -138,6 +140,8 @@ export default function App() {
       <Route path="/premeet" element={<PreMeet />} />
       <Route path="/contact" element={<Contact />} />
       <Route path="/status" element={<Status />} />
+      <Route path="/api-docs" element={<ApiDocs />} />
+      <Route path="/sla" element={<SLA />} />
       <Route path="/dpa" element={<DPA />} />
       <Route path="/privacy-schools" element={<PrivacySchools />} />
       <Route path="/subprocessors" element={<Subprocessors />} />

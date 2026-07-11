@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useCallback } from 'react'
+import { createContext, useContext, useState, useCallback, useEffect } from 'react'
 import { apiFetch } from '../api/client.js'
 
 const AuthContext = createContext(null)
@@ -23,6 +23,30 @@ export function AuthProvider({ children }) {
 
   const isTeacher = TEACHER_ROLES.has(role)
   const isOrgAdmin = ADMIN_ROLES.has(role)
+
+  useEffect(() => {
+    const storedToken = localStorage.getItem('lj_token')
+    const storedEmail = localStorage.getItem('lj_email')
+    if (!storedToken || !storedEmail) return
+    apiFetch('/users/me').then(data => {
+      if (!data?.username || data.username !== storedEmail) return
+      const r = data.role || null
+      const o = data.org_id || null
+      const at = data.account_type || 'personal'
+      const ob = data.onboarding_done !== false
+      const adm = data.admin === 'true'
+      if (r) localStorage.setItem('lj_role', r); else localStorage.removeItem('lj_role')
+      if (o) localStorage.setItem('lj_org_id', o); else localStorage.removeItem('lj_org_id')
+      localStorage.setItem('lj_account_type', at)
+      localStorage.setItem('lj_onboarding_done', ob ? 'true' : 'false')
+      if (adm) localStorage.setItem('lj_admin', 'true'); else localStorage.removeItem('lj_admin')
+      setRole(r)
+      setOrgId(o)
+      setAccountType(at)
+      setOnboardingDone(ob)
+      setIsAdmin(adm)
+    }).catch(() => {})
+  }, [])
 
   const login = useCallback((accessToken, userEmail, isConfirmed = false, meta = {}) => {
     localStorage.setItem('lj_token', accessToken)
@@ -53,16 +77,16 @@ export function AuthProvider({ children }) {
   }, [])
 
   const refreshAuth = useCallback((data) => {
-    if (data.access_token) localStorage.setItem('lj_token', data.access_token)
-    if (data.account_type) localStorage.setItem('lj_account_type', data.account_type)
-    if (data.role) localStorage.setItem('lj_role', data.role)
-    else localStorage.removeItem('lj_role')
-    if (data.org_id) localStorage.setItem('lj_org_id', data.org_id)
-    else localStorage.removeItem('lj_org_id')
-    if (data.access_token) setToken(data.access_token)
-    if (data.account_type) setAccountType(data.account_type)
-    setRole(data.role || null)
-    setOrgId(data.org_id || null)
+    if (data.access_token !== undefined) { localStorage.setItem('lj_token', data.access_token); setToken(data.access_token) }
+    if (data.account_type !== undefined) { localStorage.setItem('lj_account_type', data.account_type); setAccountType(data.account_type) }
+    if (data.role !== undefined) {
+      if (data.role) localStorage.setItem('lj_role', data.role); else localStorage.removeItem('lj_role')
+      setRole(data.role || null)
+    }
+    if (data.org_id !== undefined) {
+      if (data.org_id) localStorage.setItem('lj_org_id', data.org_id); else localStorage.removeItem('lj_org_id')
+      setOrgId(data.org_id || null)
+    }
   }, [])
 
   const markOnboardingDone = useCallback(() => {

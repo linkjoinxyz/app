@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext.jsx'
 import { useNavigate } from 'react-router-dom'
-import { apiGet } from '../api/client.js'
+import { apiGet, apiPost } from '../api/client.js'
 import { usersApi } from '../api/users.js'
 import HeaderModern from '../components/HeaderModern.jsx'
 import '../styles/parent-portal.css'
@@ -12,15 +12,23 @@ const FLAG_LABELS = {
   repeat_tardy: 'Repeat tardy',
 }
 
+function formatTime12(t) {
+  if (!t) return ''
+  const [h, m] = t.split(':').map(Number)
+  return `${h % 12 || 12}:${String(m).padStart(2, '0')} ${h >= 12 ? 'PM' : 'AM'}`
+}
+
+function formatDate(dateStr) {
+  if (!dateStr) return ''
+  const [y, mo, d] = dateStr.split('-').map(Number)
+  return new Date(y, mo - 1, d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+}
+
 function AttendanceBadge({ rate, flag }) {
-  if (flag) {
-    return <span className={`pp-badge pp-badge--warn`}>{FLAG_LABELS[flag] || flag}</span>
-  }
   if (rate === null || rate === undefined) return <span className="pp-badge pp-badge--neutral">No data</span>
   const pct = Math.round(rate * 100)
-  if (pct >= 90) return <span className="pp-badge pp-badge--good">{pct}% present</span>
-  if (pct >= 70) return <span className="pp-badge pp-badge--ok">{pct}% present</span>
-  return <span className="pp-badge pp-badge--warn">{pct}% present</span>
+  const cls = flag ? 'pp-badge--warn' : pct >= 90 ? 'pp-badge--good' : pct >= 70 ? 'pp-badge--ok' : 'pp-badge--warn'
+  return <span className={`pp-badge ${cls}`}>{pct}% present</span>
 }
 
 function ChildCard({ student, selected, onSelect }) {
@@ -62,6 +70,11 @@ function ClassesTab({ student }) {
       {classes.map(cls => {
         const isExpanded = expanded === cls.class_id
         const attendancePct = cls.attendance_rate !== null ? Math.round(cls.attendance_rate * 100) : null
+        const scheduleLabel = [
+          formatTime12(cls.time),
+          cls.days?.length > 0 ? cls.days.join(', ') : '',
+        ].filter(Boolean).join(' · ')
+
         return (
           <div key={cls.class_id} className="pp-class-card">
             <button
@@ -70,9 +83,8 @@ function ClassesTab({ student }) {
             >
               <div className="pp-class-header-left">
                 <span className="pp-class-name">{cls.class_name}</span>
-                {cls.days && cls.days.length > 0 && (
-                  <span className="pp-class-days">{cls.days.join(', ')}</span>
-                )}
+                {scheduleLabel && <span className="pp-class-days">{scheduleLabel}</span>}
+                {cls.teacher_name && <span className="pp-class-teacher">{cls.teacher_name}</span>}
               </div>
               <div className="pp-class-header-right">
                 <AttendanceBadge rate={cls.attendance_rate} flag={cls.active_flag} />
@@ -121,52 +133,145 @@ function ClassesTab({ student }) {
   )
 }
 
+function NoteModal({ event, studentId, onClose, onSaved }) {
+  const [noteText, setNoteText] = useState(event.parent_note?.note ?? '')
+  const [isExcuse, setIsExcuse] = useState(event.parent_note?.is_excuse ?? false)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+
+  async function handleSave() {
+    if (!noteText.trim()) return
+    setSaving(true)
+    setError('')
+    try {
+      await apiPost('/parent/notes', {
+        student_user_id: studentId,
+        class_id: event.class_id,
+        class_name: event.class_name,
+        date: event.date,
+        note: noteText.trim(),
+        is_excuse: isExcuse,
+      })
+      onSaved({ note: noteText.trim(), is_excuse: isExcuse, submitted_at: new Date().toISOString() })
+      onClose()
+    } catch {
+      setError('Failed to save. Please try again.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="pp-modal-overlay" onMouseDown={e => e.target === e.currentTarget && onClose()}>
+      <div className="pp-modal">
+        <div className="pp-modal-title">
+          {event.parent_note ? 'Edit note' : 'Add note'}
+        </div>
+        <div className="pp-modal-subtitle">
+          {event.class_name} · {formatDate(event.date)}
+          {event.type === 'absent' && ' · Absent'}
+          {event.type === 'tardy' && ` · ${event.minutes_late}m late`}
+        </div>
+        <textarea
+          className="pp-modal-textarea"
+          placeholder="E.g. Emma was home sick with a fever."
+          value={noteText}
+          onChange={e => setNoteText(e.target.value)}
+          autoFocus
+        />
+        <label className="pp-modal-excuse-row">
+          <input type="checkbox" checked={isExcuse} onChange={e => setIsExcuse(e.target.checked)} />
+          <span className="pp-modal-excuse-label">Mark as excused</span>
+        </label>
+        {error && <div style={{ fontSize: 12, color: '#f87171' }}>{error}</div>}
+        <div className="pp-modal-actions">
+          <button className="pp-modal-cancel" onClick={onClose}>Cancel</button>
+          <button className="pp-modal-save" onClick={handleSave} disabled={saving || !noteText.trim()}>
+            {saving ? 'Saving...' : 'Save note'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function AttendanceTab({ student }) {
-  const [records, setRecords] = useState([])
+  const [events, setEvents] = useState([])
   const [loading, setLoading] = useState(true)
+  const [noteTarget, setNoteTarget] = useState(null)
 
   useEffect(() => {
     setLoading(true)
     apiGet(`/parent/children/${student.user_id}/attendance`)
-      .then(data => setRecords(Array.isArray(data) ? data : []))
-      .catch(() => setRecords([]))
+      .then(data => setEvents(data.events ?? []))
+      .catch(() => setEvents([]))
       .finally(() => setLoading(false))
   }, [student.user_id])
 
-  if (loading) return <div className="pp-loading">Loading attendance history...</div>
-  if (!records.length) return <div className="pp-empty">No attendance records found.</div>
+  function openNote(ev) {
+    setNoteTarget(ev)
+  }
+
+  function handleNoteSaved(note) {
+    setEvents(evs => evs.map(e =>
+      e.class_id === noteTarget.class_id && e.date === noteTarget.date
+        ? { ...e, parent_note: note }
+        : e
+    ))
+  }
+
+  if (loading) return <div className="pp-loading">Loading attendance...</div>
+  if (!events.length) return <div className="pp-empty">No scheduled sessions in the past 28 days.</div>
 
   return (
-    <div className="pp-attendance">
-      <table className="pp-table">
-        <thead>
-          <tr>
-            <th>Date</th>
-            <th>Class</th>
-            <th>Status</th>
-          </tr>
-        </thead>
-        <tbody>
-          {records.map((r, i) => {
-            const dt = new Date(r.opened_at)
-            const dateStr = dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-            const late = (r.minutes_late || 0) > 5
-            return (
-              <tr key={i}>
-                <td className="pp-dim">{dateStr}</td>
-                <td>{r.class_name || r.class_id}</td>
+    <>
+      {noteTarget && (
+        <NoteModal
+          event={noteTarget}
+          studentId={student.user_id}
+          onClose={() => setNoteTarget(null)}
+          onSaved={handleNoteSaved}
+        />
+      )}
+      <div className="pp-attendance">
+        <table className="pp-table">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Class</th>
+              <th>Status</th>
+              <th>Parent note</th>
+            </tr>
+          </thead>
+          <tbody>
+            {events.map((ev, i) => (
+              <tr key={i} className={`pp-row-${ev.type}`}>
+                <td className="pp-dim">{formatDate(ev.date)}</td>
+                <td>{ev.class_name}</td>
                 <td>
-                  {late
-                    ? <span className="pp-badge pp-badge--ok">{r.minutes_late}m late</span>
-                    : <span className="pp-badge pp-badge--good">On time</span>
-                  }
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                    {ev.type === 'on_time' && <span className="pp-badge pp-badge--good">On time</span>}
+                    {ev.type === 'tardy' && <span className="pp-badge pp-badge--ok">{ev.minutes_late}m late</span>}
+                    {ev.type === 'absent' && <span className="pp-badge pp-badge--warn">Absent</span>}
+                    {ev.parent_note?.is_excuse && <span className="pp-note-excuse-tag">Excused</span>}
+                  </div>
+                </td>
+                <td>
+                  {ev.parent_note ? (
+                    <div className="pp-note-cell">
+                      <span className="pp-note-preview">{ev.parent_note.note}</span>
+                      <button className="pp-note-btn pp-note-btn--has-note" onClick={() => openNote(ev)}>Edit</button>
+                    </div>
+                  ) : (
+                    <button className="pp-note-btn" onClick={() => openNote(ev)}>Add note</button>
+                  )}
                 </td>
               </tr>
-            )
-          })}
-        </tbody>
-      </table>
-    </div>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </>
   )
 }
 
@@ -178,6 +283,12 @@ export default function ParentPortal() {
   const [selectedChild, setSelectedChild] = useState(null)
   const [tab, setTab] = useState('classes')
   const [welcomeDismissed, setWelcomeDismissed] = useState(onboardingDone)
+
+  useEffect(() => {
+    const prev = document.body.style.background
+    document.body.style.background = 'var(--blue, #142539)'
+    return () => { document.body.style.background = prev }
+  }, [])
 
   async function dismissWelcome() {
     setWelcomeDismissed(true)
@@ -208,7 +319,7 @@ export default function ParentPortal() {
       <div className="pp-page">
         <div className="pp-header">
           <div className="pp-header-title">Parent Portal</div>
-          <div className="pp-header-sub">View your children's classes and attendance</div>
+          <div className="pp-header-sub">View your children's classes and attendance, and leave notes on absences or tardies</div>
         </div>
 
         {!welcomeDismissed && (
@@ -221,7 +332,7 @@ export default function ParentPortal() {
             <div className="pp-welcome-text">
               <div className="pp-welcome-title">Welcome to the Parent Portal</div>
               <div className="pp-welcome-desc">
-                Here you can view your children's classes and attendance history. Your school administrator linked your account. If you don't see your children listed, contact your school.
+                View your children's class schedules and attendance. You can also leave notes on absences or tardies that will be visible to the school. If you don't see your children listed, contact your school administrator.
               </div>
             </div>
             <button className="pp-welcome-close" onClick={dismissWelcome} aria-label="Dismiss welcome message">
@@ -273,7 +384,7 @@ export default function ParentPortal() {
                 </div>
                 <div className="admin-tabs" style={{ marginBottom: 20 }}>
                   <button className={`admin-tab${tab === 'classes' ? ' admin-tab--active' : ''}`} onClick={() => setTab('classes')}>Classes</button>
-                  <button className={`admin-tab${tab === 'attendance' ? ' admin-tab--active' : ''}`} onClick={() => setTab('attendance')}>Attendance history</button>
+                  <button className={`admin-tab${tab === 'attendance' ? ' admin-tab--active' : ''}`} onClick={() => setTab('attendance')}>Attendance</button>
                 </div>
                 {tab === 'classes' && <ClassesTab student={selectedChild} />}
                 {tab === 'attendance' && <AttendanceTab student={selectedChild} />}

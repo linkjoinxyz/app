@@ -35,8 +35,7 @@ export default function Demo() {
     <div className="sc-root">
       <nav className={`sc-nav${scrolled ? ' sc-nav--scrolled' : ''}`}>
         <Link to="/" className="sc-nav-logo">
-          <img src="/images/logo.svg" alt="LinkJoin" />
-          LinkJoin
+          <img src="/images/logo-text.svg" height="32" alt="LinkJoin" />
         </Link>
         <div className="sc-nav-right">
           <Link to="/login" className="sc-nav-login">Log in</Link>
@@ -118,6 +117,32 @@ export default function Demo() {
           </div>
         </div>
       </main>
+
+      <footer className="sc-footer">
+        <div className="sc-footer-brand">
+          <img src="/images/logo-text.svg" height="28" alt="LinkJoin" />
+          <p>Students online on time, every time.</p>
+        </div>
+        <div className="sc-footer-cols">
+          <div className="sc-footer-col">
+            <p className="sc-footer-col-title">Schools</p>
+            <Link to="/privacy-schools">Privacy for Schools</Link>
+            <Link to="/dpa">DPA</Link>
+            <Link to="/subprocessors">Subprocessors</Link>
+            <Link to="/breach-policy">Breach Policy</Link>
+          </div>
+          <div className="sc-footer-col">
+            <p className="sc-footer-col-title">Company</p>
+            <Link to="/demo">Demo</Link>
+            <Link to="/privacy">Privacy Policy</Link>
+            <Link to="/tos">Terms</Link>
+            <Link to="/contact">Contact</Link>
+          </div>
+        </div>
+        <div className="sc-footer-bottom">
+          <span>© {new Date().getFullYear()} LinkJoin. All rights reserved.</span>
+        </div>
+      </footer>
     </div>
   )
 }

@@ -242,7 +242,9 @@ async def login(request: Request, body: LoginRequest):
     ip = request.client.host if request.client else None
     await log_audit(email, "auth.login", ip=ip)
 
-    if user.get("mfa_enabled"):
+    is_admin_role = user.get("role") in {"school_admin", "district_admin"} or user.get("admin") == "true"
+    force_mfa = user.get("mfa_enabled") or (is_admin_role and user.get("number"))
+    if force_mfa:
         from app.routers.mfa import _send_mfa_code
         await _send_mfa_code(user)
         mfa_session = create_token(email, minutes=10, extra={"scope": "mfa_only"})
@@ -259,6 +261,7 @@ async def login(request: Request, body: LoginRequest):
         "onboarding_done": bool(user.get("onboarding_done", True)),
         "mfa_enabled": bool(user.get("mfa_enabled", False)),
         "must_change_password": bool(user.get("must_change_password", False)),
+        "mfa_setup_required": is_admin_role and not user.get("mfa_enabled") and not user.get("number"),
     }
 
 
@@ -339,6 +342,14 @@ async def google_code_exchange(request: Request, body: GoogleCodeRequest):
         await track_event("signup")
         user = account
 
+    is_admin_role = user.get("role") in {"school_admin", "district_admin"} or user.get("admin") == "true"
+    force_mfa = user.get("mfa_enabled") or (is_admin_role and user.get("number"))
+    if force_mfa:
+        from app.routers.mfa import _send_mfa_code
+        await _send_mfa_code(user)
+        mfa_session = create_token(email, minutes=10, extra={"scope": "mfa_only"})
+        return {"mfa_required": True, "mfa_session": mfa_session}
+
     access_token = create_token(email)
     confirmed = user.get("confirmed") == "true"
     return {
@@ -348,6 +359,8 @@ async def google_code_exchange(request: Request, body: GoogleCodeRequest):
         "org_id": user.get("org_id"),
         "admin": user.get("admin"),
         "onboarding_done": bool(user.get("onboarding_done", True)),
+        "must_change_password": bool(user.get("must_change_password", False)),
+        "mfa_setup_required": is_admin_role and not user.get("mfa_enabled") and not user.get("number"),
     }
 
 
@@ -392,6 +405,14 @@ async def google_token_auth(request: Request, body: dict):
         await track_event("signup")
         user = account
 
+    is_admin_role = user.get("role") in {"school_admin", "district_admin"} or user.get("admin") == "true"
+    force_mfa = user.get("mfa_enabled") or (is_admin_role and user.get("number"))
+    if force_mfa:
+        from app.routers.mfa import _send_mfa_code
+        await _send_mfa_code(user)
+        mfa_session = create_token(email, minutes=10, extra={"scope": "mfa_only"})
+        return {"mfa_required": True, "mfa_session": mfa_session}
+
     access_token_jwt = create_token(email)
     confirmed = user.get("confirmed") == "true"
     return {
@@ -401,6 +422,8 @@ async def google_token_auth(request: Request, body: dict):
         "org_id": user.get("org_id"),
         "admin": user.get("admin"),
         "onboarding_done": bool(user.get("onboarding_done", True)),
+        "must_change_password": bool(user.get("must_change_password", False)),
+        "mfa_setup_required": is_admin_role and not user.get("mfa_enabled") and not user.get("number"),
     }
 
 

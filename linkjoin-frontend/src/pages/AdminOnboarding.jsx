@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext.jsx'
 import { usersApi } from '../api/users.js'
 import { apiGet, apiPatch, apiPost } from '../api/client.js'
+import countryCodes from '../../public/country_codes.json'
 import '../styles/admin-onboarding.css'
 
 function ProgressDots({ step, total }) {
@@ -15,31 +16,106 @@ function ProgressDots({ step, total }) {
   )
 }
 
-function StepSetPassword({ onNext }) {
+function StepSetPassword({ onNext, onBack }) {
   const { clearMustChangePassword } = useAuth()
+  const [phase, setPhase] = useState('form') // 'form' | 'verify'
   const [newPw, setNewPw] = useState('')
   const [confirmPw, setConfirmPw] = useState('')
+  const [phone, setPhone] = useState('')
+  const [phoneCountry, setPhoneCountry] = useState('1')
+  const [code, setCode] = useState('')
   const [saving, setSaving] = useState(false)
+  const [resending, setResending] = useState(false)
   const [err, setErr] = useState('')
 
-  async function handleNext() {
+  function fullPhone() { return phoneCountry + phone.replace(/\D/g, '') }
+
+  async function handleSubmitForm() {
     if (newPw.length < 8) { setErr('Password must be at least 8 characters.'); return }
     if (newPw !== confirmPw) { setErr('Passwords do not match.'); return }
+    if (phone.replace(/\D/g, '').length < 7) { setErr('Enter a valid phone number.'); return }
     setSaving(true); setErr('')
     try {
       await apiPost('/auth/set-password', { new_password: newPw, confirm_password: confirmPw })
+      await apiPatch('/users/mfa', { enable: true, phone: fullPhone() })
+      setPhase('verify')
+    } catch (e) {
+      setErr(e?.message || 'Something went wrong. Please try again.')
+    }
+    setSaving(false)
+  }
+
+  async function handleVerify() {
+    if (code.length !== 6) { setErr('Enter the 6-digit code.'); return }
+    setSaving(true); setErr('')
+    try {
+      await apiPost('/auth/mfa/setup-verify', { code })
       clearMustChangePassword()
       onNext()
     } catch (e) {
-      setErr(e?.message || 'Could not set password. Please try again.')
+      setErr(e?.message || 'Invalid code. Please try again.')
+      setSaving(false)
     }
-    setSaving(false)
+  }
+
+  async function handleResend() {
+    setResending(true); setErr('')
+    try {
+      await apiPatch('/users/mfa', { enable: true, phone: fullPhone() })
+    } catch (e) {
+      setErr(e?.message || 'Could not resend code.')
+    }
+    setResending(false)
+  }
+
+  if (phase === 'verify') {
+    return (
+      <div className="aob-step-body">
+        <div className="aob-step-title">Verify your phone</div>
+        <div className="aob-step-desc">
+          A 6-digit code was sent to +{fullPhone()}. Enter it to enable two-factor authentication on your account.
+        </div>
+
+        <div className="aob-field">
+          <label className="aob-label" htmlFor="ob-mfa-code">Verification code</label>
+          <input
+            id="ob-mfa-code"
+            className="aob-input"
+            type="text"
+            inputMode="numeric"
+            maxLength={6}
+            value={code}
+            onChange={e => { setCode(e.target.value.replace(/\D/g, '')); setErr('') }}
+            placeholder="000000"
+            autoFocus
+            autoComplete="one-time-code"
+            onKeyDown={e => e.key === 'Enter' && handleVerify()}
+          />
+        </div>
+
+        {err && <div className="aob-error">{err}</div>}
+
+        <div style={{ marginTop: 8, fontSize: 13, color: 'rgba(255,255,255,0.35)' }}>
+          Didn't receive it?{' '}
+          <button className="aob-link-btn" onClick={handleResend} disabled={resending}>
+            {resending ? 'Sending...' : 'Resend code'}
+          </button>
+        </div>
+
+        <div className="aob-actions">
+          <button className="aob-btn aob-btn--ghost" onClick={() => { setPhase('form'); setCode(''); setErr('') }}>Back</button>
+          <button className="aob-btn aob-btn--primary" onClick={handleVerify} disabled={saving || code.length !== 6}>
+            {saving ? 'Verifying...' : 'Verify'}
+          </button>
+        </div>
+      </div>
+    )
   }
 
   return (
     <div className="aob-step-body">
       <div className="aob-step-title">Create your password</div>
-      <div className="aob-step-desc">You were assigned a temporary password. Set a permanent one now.</div>
+      <div className="aob-step-desc">Set a permanent password and add your phone number for two-factor authentication.</div>
 
       <div className="aob-field">
         <label className="aob-label" htmlFor="ob-new-pw">New password</label>
@@ -63,15 +139,35 @@ function StepSetPassword({ onNext }) {
           value={confirmPw}
           onChange={e => { setConfirmPw(e.target.value); setErr('') }}
           placeholder="Re-enter your password"
-          onKeyDown={e => e.key === 'Enter' && handleNext()}
           autoComplete="new-password"
         />
+      </div>
+      <div className="aob-field">
+        <label className="aob-label" htmlFor="ob-phone">Phone number</label>
+        <div className="aob-phone-row">
+          <select className="aob-country-select" value={phoneCountry} onChange={e => setPhoneCountry(e.target.value)}>
+            {Object.entries(countryCodes).map(([c, v]) => (
+              <option key={c} value={v}>{c} +{v}</option>
+            ))}
+          </select>
+          <input
+            id="ob-phone"
+            className="aob-phone-input"
+            type="tel"
+            value={phone}
+            onChange={e => { setPhone(e.target.value); setErr('') }}
+            placeholder="555 555 1234"
+            onKeyDown={e => e.key === 'Enter' && handleSubmitForm()}
+            autoComplete="tel-national"
+          />
+        </div>
       </div>
 
       {err && <div className="aob-error">{err}</div>}
 
       <div className="aob-actions">
-        <button className="aob-btn aob-btn--primary" onClick={handleNext} disabled={saving || !newPw || !confirmPw}>
+        {onBack && <button className="aob-btn aob-btn--ghost" onClick={onBack}>Back</button>}
+        <button className="aob-btn aob-btn--primary" onClick={handleSubmitForm} disabled={saving || !newPw || !confirmPw || !phone}>
           {saving ? 'Saving...' : 'Continue'}
         </button>
       </div>
@@ -79,15 +175,14 @@ function StepSetPassword({ onNext }) {
   )
 }
 
-function Step1OrgProfile({ onNext }) {
-  const { orgId } = useAuth()
-  const [form, setForm] = useState({ name: '', type: 'school', address: '', city: '', state: '', website: '', timezone: '' })
-  const [loading, setLoading] = useState(true)
+function Step1OrgProfile({ onNext, onBack, form, setForm }) {
+  const { orgId, refreshAuth } = useAuth()
+  const [loading, setLoading] = useState(!form.name && !!orgId)
   const [saving, setSaving] = useState(false)
   const [err, setErr] = useState('')
 
   useEffect(() => {
-    if (!orgId) { setLoading(false); return }
+    if (form.name || !orgId) return
     apiGet(`/orgs/${orgId}`).then(data => {
       if (data) setForm(f => ({
         ...f,
@@ -107,7 +202,12 @@ function Step1OrgProfile({ onNext }) {
     setSaving(true)
     setErr('')
     try {
-      if (orgId) await apiPatch(`/orgs/${orgId}`, { name: form.name, type: form.type, address: form.address, city: form.city, state: form.state, website: form.website, timezone: form.timezone })
+      if (orgId) {
+        await apiPatch(`/orgs/${orgId}`, { name: form.name, type: form.type, address: form.address, city: form.city, state: form.state, website: form.website, timezone: form.timezone })
+      } else {
+        const res = await apiPost('/orgs/mine', { name: form.name, type: form.type, address: form.address, city: form.city, state: form.state, website: form.website, timezone: form.timezone })
+        refreshAuth({ org_id: res.org_id })
+      }
       onNext()
     } catch (e) {
       setErr(e?.message || 'Could not save. Please try again.')
@@ -162,6 +262,7 @@ function Step1OrgProfile({ onNext }) {
       </div>
 
       <div className="aob-actions">
+        {onBack && <button className="aob-btn aob-btn--ghost" onClick={onBack}>Back</button>}
         <button className="aob-btn aob-btn--primary" onClick={handleNext} disabled={saving || !form.name.trim()}>
           {saving ? 'Saving...' : 'Continue'}
         </button>
@@ -170,83 +271,110 @@ function Step1OrgProfile({ onNext }) {
   )
 }
 
-function Step2InviteStaff({ onNext, onSkip }) {
-  const { orgId } = useAuth()
-  const [email, setEmail] = useState('')
-  const [role, setRole] = useState('teacher')
-  const [sending, setSending] = useState(false)
-  const [sent, setSent] = useState([])
-  const [err, setErr] = useState('')
+const BLANK_ROW = () => ({ email: '', role: 'teacher', status: null })
 
-  async function sendInvite(e) {
-    e.preventDefault()
-    if (!email.trim()) return
+function Step2InviteStaff({ onNext, onSkip, onBack, rows, setRows }) {
+  const { orgId } = useAuth()
+  const [sending, setSending] = useState(false)
+
+  function setRow(i, key, val) {
+    setRows(prev => prev.map((r, idx) => idx === i ? { ...r, [key]: val, status: null } : r))
+  }
+
+  function addRow() {
+    setRows(prev => [...prev, BLANK_ROW()])
+  }
+
+  function removeRow(i) {
+    setRows(prev => prev.filter((_, idx) => idx !== i))
+  }
+
+  const filledRows = rows.filter(r => r.email.trim())
+  const sentCount = rows.filter(r => r.status === 'sent').length
+
+  async function sendAll() {
     setSending(true)
-    setErr('')
-    try {
-      await apiPost('/invites', { email: email.trim(), role, org_id: orgId })
-      setSent(prev => [...prev, { email: email.trim(), role }])
-      setEmail('')
-    } catch (ex) {
-      setErr(ex?.message || 'Invite failed. Check the email address and try again.')
-    }
+    await Promise.all(
+      rows.map(async (r, i) => {
+        if (!r.email.trim() || r.status === 'sent') return
+        try {
+          await apiPost('/invites', { email: r.email.trim().toLowerCase(), role: r.role, org_id: orgId })
+          setRows(prev => prev.map((x, idx) => idx === i ? { ...x, status: 'sent' } : x))
+        } catch {
+          setRows(prev => prev.map((x, idx) => idx === i ? { ...x, status: 'error' } : x))
+        }
+      })
+    )
     setSending(false)
   }
 
   return (
     <div className="aob-step-body">
       <div className="aob-step-title">Invite your staff</div>
-      <div className="aob-step-desc">Send email invites to teachers and other administrators. You can also do this later from the Admin dashboard.</div>
+      <div className="aob-step-desc">Add email addresses for teachers and administrators. You can invite more later from the Admin dashboard.</div>
 
-      <form className="aob-invite-form" onSubmit={sendInvite}>
-        <select className="aob-input aob-role-select" value={role} onChange={e => setRole(e.target.value)} aria-label="Role">
-          <option value="teacher">Teacher</option>
-          <option value="school_admin">School Admin</option>
-          <option value="district_admin">District Admin</option>
-        </select>
-        <input
-          className="aob-input aob-email-input"
-          type="email"
-          value={email}
-          onChange={e => setEmail(e.target.value)}
-          placeholder="teacher@school.edu"
-          aria-label="Email address"
-        />
-        <button className="aob-btn aob-btn--primary" type="submit" disabled={sending || !email.trim()}>
-          {sending ? 'Sending...' : 'Invite'}
-        </button>
-      </form>
+      <div className={`aob-invite-list${rows.length > 4 ? ' aob-invite-list--scroll' : ''}`}>
+        {rows.map((row, i) => (
+          <div key={i} className="aob-invite-row">
+            <select
+              className="aob-input aob-role-select"
+              value={row.role}
+              onChange={e => setRow(i, 'role', e.target.value)}
+              aria-label="Role"
+              disabled={row.status === 'sent'}
+            >
+              <option value="teacher">Teacher</option>
+              <option value="school_admin">School Admin</option>
+              <option value="district_admin">District Admin</option>
+            </select>
+            <input
+              className={`aob-input aob-email-input${row.status === 'error' ? ' aob-input--error' : ''}`}
+              type="email"
+              value={row.email}
+              onChange={e => setRow(i, 'email', e.target.value)}
+              placeholder="name@school.edu"
+              aria-label="Email address"
+              disabled={row.status === 'sent'}
+            />
+            <span className="aob-row-status">
+              {row.status === 'sent' && (
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#22C55E" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+              )}
+              {row.status === 'error' && (
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#EF4444" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              )}
+              {row.status !== 'sent' && rows.length > 1 && (
+                <button className="aob-remove-row" type="button" onClick={() => removeRow(i)} aria-label="Remove row">
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                </button>
+              )}
+            </span>
+          </div>
+        ))}
+      </div>
 
-      {err && <div className="aob-error">{err}</div>}
-
-      {sent.length > 0 && (
-        <div className="aob-sent-list">
-          {sent.map((s, i) => (
-            <div key={i} className="aob-sent-row">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
-              <span>{s.email}</span>
-              <span className="aob-sent-role">{s.role.replace('_', ' ')}</span>
-            </div>
-          ))}
-        </div>
-      )}
+      <button className="aob-add-row" type="button" onClick={addRow}>+ Add another</button>
 
       <div className="aob-actions">
-        <button className="aob-btn aob-btn--ghost" onClick={onSkip}>Skip for now</button>
-        {sent.length > 0 && (
-          <button className="aob-btn aob-btn--primary" onClick={onNext}>Continue</button>
-        )}
+        <button className="aob-btn aob-btn--ghost" onClick={onBack}>Back</button>
+        <button className="aob-btn aob-btn--ghost" onClick={onSkip}>Skip</button>
+        {sentCount > 0
+          ? <button className="aob-btn aob-btn--primary" onClick={onNext}>Continue</button>
+          : <button className="aob-btn aob-btn--primary" onClick={sendAll} disabled={sending || filledRows.length === 0}>
+              {sending ? 'Sending...' : 'Send invites'}
+            </button>
+        }
       </div>
     </div>
   )
 }
 
-function Step3Done({ onFinish }) {
+function Step3Done({ onFinish, onBack }) {
   return (
     <div className="aob-step-body aob-step-body--center">
       <div className="aob-done-icon" aria-hidden="true">
-        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-          <circle cx="12" cy="12" r="10"/><polyline points="20 6 9 17 4 12"/>
+        <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
         </svg>
       </div>
       <div className="aob-step-title">You're set up!</div>
@@ -265,6 +393,7 @@ function Step3Done({ onFinish }) {
       </div>
 
       <div className="aob-actions aob-actions--center">
+        <button className="aob-btn aob-btn--ghost" onClick={onBack}>Back</button>
         <button className="aob-btn aob-btn--primary" onClick={onFinish}>Go to dashboard</button>
       </div>
     </div>
@@ -272,13 +401,12 @@ function Step3Done({ onFinish }) {
 }
 
 export default function AdminOnboarding() {
-  const { markOnboardingDone, mustChangePassword } = useAuth()
+  const { markOnboardingDone, mustChangePassword, logout } = useAuth()
   const navigate = useNavigate()
-  // If user must change password, we prepend a password step (step 0),
-  // shifting the existing 3 steps to 1, 2, 3 (total = 4).
-  // If not, we start at step 1 with 3 total steps.
   const totalSteps = mustChangePassword ? 4 : 3
-  const [step, setStep] = useState(mustChangePassword ? 0 : 1)
+  const [step, setStep] = useState(1)
+  const [orgForm, setOrgForm] = useState({ name: '', type: 'school', address: '', city: '', state: '', website: '', timezone: '' })
+  const [inviteRows, setInviteRows] = useState([BLANK_ROW()])
 
   async function finish() {
     markOnboardingDone()
@@ -286,22 +414,21 @@ export default function AdminOnboarding() {
     navigate('/admin')
   }
 
-  // Display step number for ProgressDots: password step shows as 1,
-  // then org=2, invite=3, done=4 (or 1, 2, 3 when no password step).
-  const displayStep = mustChangePassword ? step + 1 : step
-
   return (
     <div className="aob-root">
       <div className="aob-card">
         <div className="aob-header">
           <img src="/images/logo-text.svg" width="140" height="32" alt="LinkJoin" />
-          <ProgressDots step={displayStep} total={totalSteps} />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+            <ProgressDots step={step} total={totalSteps} />
+            <button className="aob-signout" onClick={() => logout().then(() => navigate('/login'))}>Sign out</button>
+          </div>
         </div>
 
-        {step === 0 && <StepSetPassword onNext={() => setStep(1)} />}
-        {step === 1 && <Step1OrgProfile onNext={() => setStep(2)} />}
-        {step === 2 && <Step2InviteStaff onNext={() => setStep(3)} onSkip={() => setStep(3)} />}
-        {step === 3 && <Step3Done onFinish={finish} />}
+        {step === 1 && <Step1OrgProfile onNext={() => setStep(2)} onBack={undefined} form={orgForm} setForm={setOrgForm} />}
+        {step === 2 && <Step2InviteStaff onNext={() => mustChangePassword ? setStep(3) : setStep(4)} onSkip={() => mustChangePassword ? setStep(3) : setStep(4)} onBack={() => setStep(1)} rows={inviteRows} setRows={setInviteRows} />}
+        {step === 3 && mustChangePassword && <StepSetPassword onNext={() => setStep(4)} onBack={() => setStep(2)} />}
+        {step === 4 && <Step3Done onFinish={finish} onBack={() => mustChangePassword ? setStep(3) : setStep(2)} />}
       </div>
     </div>
   )

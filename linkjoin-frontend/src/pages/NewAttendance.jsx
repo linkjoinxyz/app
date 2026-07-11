@@ -391,7 +391,7 @@ export default function NewAttendance() {
               <span className="sc-na-zero-unit">min</span>
             </div>
             <p className="sc-na-zero-caption">
-              of teacher time per class — attendance records itself the moment a student's link opens.
+              of teacher time per class. Attendance records itself the moment a student's link opens.
             </p>
           </div>
           <div className="sc-na-zero-right">
@@ -649,7 +649,7 @@ export default function NewAttendance() {
       {/* S7: Achievement path */}
       <section className="sc-section sc-wave-7">
         <div data-rid="s7" className={rc('s7', 'sc-na-awards-outer')}>
-          <span className="sc-eyebrow sc-na-centered-label">The student angle</span>
+          <span className="sc-eyebrow sc-na-centered-label">Student engagement</span>
           <h2 className="sc-h2 sc-na-centered-h2">Punctuality becomes its own reward.</h2>
           <p className="sc-body sc-na-centered-body">
             Students see their own attendance record and earn awards for consistent

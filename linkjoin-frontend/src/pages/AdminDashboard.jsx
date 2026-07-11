@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate, useMatch, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext.jsx'
 import { apiGet, apiPost, apiDelete, apiPatch, apiPut, apiDownload } from '../api/client.js'
-import HeaderModern from '../components/HeaderModern.jsx'
+import SideNav from '../components/SideNav.jsx'
 import LinkModal from '../components/LinkModal.jsx'
 import HistoryPanel from '../components/HistoryPanel.jsx'
 import countryCodes from '../../public/country_codes.json'
@@ -48,6 +48,7 @@ function StudentProfile({ userId, onBack, onOpenClass, onOpenIntervention }) {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [err, setErr] = useState(null)
+  const [parentNotes, setParentNotes] = useState([])
 
   useEffect(() => {
     setLoading(true)
@@ -55,6 +56,12 @@ function StudentProfile({ userId, onBack, onOpenClass, onOpenIntervention }) {
       .then(d => setData(d))
       .catch(() => setErr('Could not load student profile.'))
       .finally(() => setLoading(false))
+  }, [userId])
+
+  useEffect(() => {
+    apiGet(`/parent/children/${userId}/notes`)
+      .then(notes => setParentNotes(Array.isArray(notes) ? notes : []))
+      .catch(() => setParentNotes([]))
   }, [userId])
 
   if (loading) return <div className="admin-spinner-wrap"><div className="admin-spinner" /></div>
@@ -228,6 +235,38 @@ function StudentProfile({ userId, onBack, onOpenClass, onOpenIntervention }) {
 
         {data.recent_attendance.length === 0 && data.classes.length === 0 && (
           <div className="admin-empty" style={{ padding: '40px 0' }}>No attendance data yet.</div>
+        )}
+
+        {/* Parent notes */}
+        {parentNotes.length > 0 && (
+          <div className="sp-section">
+            <div className="sp-section-title">Parent notes</div>
+            <table className="sp-att-table">
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Class</th>
+                  <th>Note</th>
+                  <th>Type</th>
+                </tr>
+              </thead>
+              <tbody>
+                {parentNotes.map(n => (
+                  <tr key={n.id}>
+                    <td className="sp-att-date">{n.date}</td>
+                    <td className="sp-att-class">{n.class_name}</td>
+                    <td style={{ fontSize: 12, color: 'rgba(255,255,255,0.65)', maxWidth: 280 }}>{n.note}</td>
+                    <td>
+                      {n.is_excuse
+                        ? <span style={{ fontSize: 11, fontWeight: 700, color: '#60a5fa', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Excuse</span>
+                        : <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)' }}>Note</span>
+                      }
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
     </div>
@@ -1626,7 +1665,7 @@ function CleverRosterCard({ orgId }) {
   const [syncResult, setSyncResult] = useState(null)
 
   useEffect(() => {
-    if (!orgId) return
+    if (!orgId) { setStatus({ connected: false }); return }
     apiGet(`/integrations/clever/status?org_id=${orgId}`)
       .then(r => setStatus(r))
       .catch(() => setStatus({ connected: false }))
@@ -1743,6 +1782,7 @@ const ADMIN_SEARCH_INDEX = [
   { label: 'Summer Break', hint: 'Set summer start and end dates', tab: 'org', scroll: 'admin-section-summer', keywords: ['summer', 'break', 'vacation', 'end of year', 'start of year'] },
   { label: 'Clever', hint: 'Connect Clever to import student rosters', tab: 'integrations', scroll: 'admin-section-roster', keywords: ['clever', 'roster', 'sync', 'students', 'sis'] },
   { label: 'OneRoster', hint: 'Connect PowerSchool, Infinite Campus, or Skyward via OneRoster', tab: 'integrations', scroll: 'admin-section-oneroster', keywords: ['oneroster', 'one roster', 'powerschool', 'infinite campus', 'skyward', 'sis', 'roster'] },
+  { label: 'Schoology', hint: 'Connect Schoology to sync class rosters', tab: 'integrations', scroll: 'admin-section-schoology', keywords: ['schoology', 'lms', 'roster', 'sync', 'students'] },
   { label: 'Canvas', hint: 'Configure Canvas gradebook sync for teachers', tab: 'integrations', scroll: 'admin-section-canvas', keywords: ['canvas', 'lms', 'gradebook', 'instructure', 'grades', 'lms sync'] },
 ]
 
@@ -2036,10 +2076,147 @@ function CanvasConfigCard({ orgId }) {
   )
 }
 
-function OrgSettingsTab({ orgId, brandName, setBrandName, brandSaved, saveBrandName }) {
+function SchoologyCard({ orgId }) {
+  const [status, setStatus] = useState(null)
+  const [form, setForm] = useState({ consumer_key: '', consumer_secret: '' })
+  const [connecting, setConnecting] = useState(false)
+  const [connectErr, setConnectErr] = useState('')
+  const [syncing, setSyncing] = useState(false)
+  const [syncResult, setSyncResult] = useState(null)
+
+  useEffect(() => {
+    apiGet(`/integrations/schoology/status?org_id=${orgId}`)
+      .then(r => setStatus(r))
+      .catch(() => setStatus({ connected: false }))
+  }, [orgId])
+
+  async function handleConnect(e) {
+    e.preventDefault()
+    setConnecting(true); setConnectErr('')
+    try {
+      const r = await apiPost('/integrations/schoology/connect', { org_id: orgId, ...form })
+      setStatus({ connected: true, building_name: r.building_name, last_sync_at: null, last_sync_stats: null })
+      setForm({ consumer_key: '', consumer_secret: '' })
+    } catch (err) {
+      setConnectErr(err?.message || 'Connection failed')
+    }
+    setConnecting(false)
+  }
+
+  async function handleSync() {
+    setSyncing(true); setSyncResult(null)
+    try {
+      const res = await apiPost(`/integrations/schoology/sync/${orgId}`)
+      setSyncResult({ ok: true, ...res })
+      const r = await apiGet(`/integrations/schoology/status?org_id=${orgId}`)
+      setStatus(r)
+    } catch (err) {
+      setSyncResult({ ok: false, message: err?.message || 'Sync failed' })
+    }
+    setSyncing(false)
+  }
+
+  async function handleDisconnect() {
+    await apiDelete(`/integrations/schoology/disconnect/${orgId}`)
+    setStatus({ connected: false })
+    setSyncResult(null)
+  }
+
+  if (!status) return null
+
+  return (
+    <div className="alert-settings-card" style={{ marginTop: 16 }}>
+      <div className="org-settings-section-title">Schoology</div>
+      <div className="alert-settings-body">
+        {!status.connected ? (
+          <form className="or-connect-form" onSubmit={handleConnect}>
+            <p className="or-hint">
+              Connect Schoology to auto-populate your class rosters. Get your Consumer Key and
+              Secret from your Schoology school app settings under Platform &gt; App Center &gt; API.
+            </p>
+            <div className="or-field">
+              <label className="or-label">Consumer Key</label>
+              <input
+                className="admin-input"
+                value={form.consumer_key}
+                onChange={e => setForm(f => ({ ...f, consumer_key: e.target.value }))}
+                placeholder="e.g. ab1cd2ef3gh4"
+                required
+              />
+            </div>
+            <div className="or-field">
+              <label className="or-label">Consumer Secret</label>
+              <input
+                className="admin-input"
+                type="password"
+                value={form.consumer_secret}
+                onChange={e => setForm(f => ({ ...f, consumer_secret: e.target.value }))}
+                placeholder="Your app secret"
+                required
+              />
+            </div>
+            {connectErr && <div style={{ color: '#f87171', fontSize: 13 }}>{connectErr}</div>}
+            <button
+              className="admin-btn or-connect-btn"
+              type="submit"
+              disabled={connecting || !form.consumer_key || !form.consumer_secret}
+            >
+              {connecting ? 'Connecting...' : 'Test & Connect'}
+            </button>
+            <p className="or-hint" style={{ marginTop: 8 }}>
+              Credentials are provided by your Schoology district/school administrator.
+            </p>
+          </form>
+        ) : (
+          <>
+            <div className="clever-row">
+              <div className="clever-icon">
+                <img src="/images/lms/schoology.png" alt="Schoology" className="clever-logo-sm" />
+              </div>
+              <div className="clever-info">
+                <div className="clever-name">Schoology</div>
+                {status.building_name && <div className="clever-district">{status.building_name}</div>}
+              </div>
+              <span className="gc-connected-badge">Connected</span>
+            </div>
+            <div className="gc-sync-row">
+              <span className={`gc-sync-label${syncResult && !syncResult.ok ? ' gc-sync-label--err' : ''}`}>
+                {syncResult
+                  ? (syncResult.ok
+                    ? `${syncResult.students} students across ${syncResult.sections} sections`
+                    : syncResult.message)
+                  : status.last_sync_stats
+                    ? `Last sync: ${status.last_sync_stats.students} students, ${status.last_sync_stats.sections} sections`
+                    : 'Ready to sync'}
+              </span>
+              <button className="gc-sync-btn" onClick={handleSync} disabled={syncing}>
+                {syncing ? 'Syncing...' : 'Sync now'}
+              </button>
+            </div>
+            <p className="gc-hint">Students are added by email and claim their account on first login.</p>
+            <button className="gc-disconnect-btn" onClick={handleDisconnect}>Disconnect</button>
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function OrgSettingsTab({ orgId, orgName, setOrgName, orgNameSaved, saveOrgName, brandName, setBrandName, brandSaved, saveBrandName }) {
   return (
     <div style={{ maxWidth: 600, margin: '0 auto' }}>
-      <div id="admin-section-display-name" className="org-brand-section" style={{ marginTop: 0, marginBottom: 16 }}>
+      <div className="org-brand-section" style={{ marginTop: 0, marginBottom: 16 }}>
+        <div className="org-brand-label">Organization name</div>
+        <div className="org-brand-row">
+          <input className="admin-input" placeholder="e.g. Lincoln High School"
+            value={orgName} onChange={e => setOrgName(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && saveOrgName()} />
+          <button className="admin-btn" onClick={saveOrgName}>
+            {orgNameSaved ? '✓ Saved' : 'Save'}
+          </button>
+        </div>
+      </div>
+      <div id="admin-section-display-name" className="org-brand-section" style={{ marginBottom: 16 }}>
         <div className="org-brand-label">Notification display name</div>
         <div className="org-brand-row">
           <input className="admin-input" placeholder="e.g. Lincoln High School"
@@ -2065,6 +2242,7 @@ function OrgIntegrationsTab({ orgId }) {
       <div id="admin-section-roster">
         <CleverRosterCard orgId={orgId} />
         <div id="admin-section-oneroster"><OneRosterCard orgId={orgId} /></div>
+        <div id="admin-section-schoology"><SchoologyCard orgId={orgId} /></div>
         <div id="admin-section-canvas"><CanvasConfigCard orgId={orgId} /></div>
       </div>
     </div>
@@ -2407,6 +2585,198 @@ function IvDetailPanel({ iv, updateCase, addNote, deleteNote, noteInputs, setNot
   )
 }
 
+// ─── Org Attendance Tab ───────────────────────────────────────────────────────
+
+function OrgAttendanceTab({ orgId }) {
+  const navigate = useNavigate()
+  const [rows, setRows] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
+  const [sort, setSort] = useState({ key: 'class_name', dir: 1 })
+  const [expanded, setExpanded] = useState(null)
+  const [classDetails, setClassDetails] = useState({})
+
+  useEffect(() => {
+    if (!orgId) return
+    setLoading(true)
+    apiGet(`/orgs/${orgId}/attendance`)
+      .then(d => { setRows(d.classes); setLoading(false) })
+      .catch(() => { setError('Failed to load attendance data.'); setLoading(false) })
+  }, [orgId])
+
+  function toggleSort(key) {
+    setSort(s => s.key === key ? { key, dir: s.dir * -1 } : { key, dir: 1 })
+  }
+
+  function toggleExpand(classId) {
+    const opening = expanded !== classId
+    setExpanded(opening ? classId : null)
+    if (opening && !classDetails[classId]) {
+      setClassDetails(d => ({ ...d, [classId]: { loading: true, students: [] } }))
+      Promise.all([
+        apiGet(`/attendance/class/${classId}`),
+        apiGet(`/classes/${classId}`),
+      ])
+        .then(([{ records }, cls]) => {
+          const emailToUserId = {}
+          for (const s of cls.students ?? []) {
+            emailToUserId[s.username] = s.user_id
+          }
+          const byStudent = {}
+          for (const r of records) {
+            const e = r.student_email
+            if (!byStudent[e]) byStudent[e] = { email: e, user_id: emailToUserId[e] ?? null, total: 0, on_time: 0, late: 0 }
+            byStudent[e].total++
+            if ((r.minutes_late ?? 0) <= 5) byStudent[e].on_time++
+            else byStudent[e].late++
+          }
+          const students = Object.values(byStudent).sort((a, b) => a.email.localeCompare(b.email))
+          setClassDetails(d => ({ ...d, [classId]: { loading: false, students } }))
+        })
+        .catch(() => setClassDetails(d => ({ ...d, [classId]: { loading: false, students: [], error: true } })))
+    }
+  }
+
+  const sorted = [...rows].sort((a, b) => {
+    const av = a[sort.key] ?? ''
+    const bv = b[sort.key] ?? ''
+    return typeof av === 'number'
+      ? (av - bv) * sort.dir
+      : String(av).localeCompare(String(bv)) * sort.dir
+  })
+
+  function SortIcon({ col }) {
+    if (sort.key !== col) return <span style={{ opacity: 0.3 }}>↕</span>
+    return <span>{sort.dir === 1 ? '↑' : '↓'}</span>
+  }
+
+  function rateColor(rate) {
+    if (rate >= 90) return '#4ade80'
+    if (rate >= 75) return '#facc15'
+    return '#f87171'
+  }
+
+  if (loading) return <div className="admin-empty" style={{ padding: '48px 0' }}>Loading attendance data...</div>
+  if (error) return <div className="admin-empty" style={{ padding: '48px 0', color: '#f87171' }}>{error}</div>
+
+  const totalRecords = rows.reduce((s, r) => s + r.total_records, 0)
+  const orgRate = totalRecords > 0 ? Math.round(rows.reduce((s, r) => s + r.on_time, 0) / totalRecords * 100) : 0
+
+  const COLS = [
+    { key: 'class_name', label: 'Class' },
+    { key: 'teacher_name', label: 'Teacher' },
+    { key: 'total_records', label: 'Sessions' },
+    { key: 'on_time', label: 'On time' },
+    { key: 'late', label: 'Late' },
+    { key: 'attendance_rate', label: 'On-time rate' },
+  ]
+
+  return (
+    <div className="detail-section-card detail-section-card--full" style={{ marginTop: 24 }}>
+      <div className="detail-section-header" style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
+        <span className="detail-section-title">Attendance by class</span>
+        <span style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)' }}>
+          {rows.length} classes &middot; org average{' '}
+          <span style={{ color: rateColor(orgRate), fontWeight: 600 }}>{orgRate}%</span>
+        </span>
+      </div>
+
+      {rows.length === 0 ? (
+        <div className="admin-empty" style={{ padding: '20px' }}>No classes found for this organization.</div>
+      ) : (
+        <div style={{ padding: '16px 20px 20px', overflowX: 'auto' }}>
+          <table className="attendance-table" style={{ width: '100%' }}>
+            <thead>
+              <tr>
+                {COLS.map(col => (
+                  <th key={col.key} style={{ cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap' }}
+                    onClick={() => toggleSort(col.key)}>
+                    {col.label} <SortIcon col={col.key} />
+                  </th>
+                ))}
+                <th style={{ width: 24 }} />
+              </tr>
+            </thead>
+            <tbody>
+              {sorted.map(row => {
+                const isOpen = expanded === row.class_id
+                const detail = classDetails[row.class_id]
+                return (
+                  <>
+                    <tr key={row.class_id} onClick={() => toggleExpand(row.class_id)}
+                      style={{ cursor: 'pointer' }} className={`att-class-row${isOpen ? ' is-open' : ''}`}>
+                      <td style={{ fontWeight: 500 }}>{row.class_name || '—'}</td>
+                      <td style={{ color: 'rgba(255,255,255,0.6)' }}>{row.teacher_name || '—'}</td>
+                      <td style={{ textAlign: 'center' }}>{row.total_records}</td>
+                      <td style={{ textAlign: 'center', color: '#4ade80' }}>{row.on_time}</td>
+                      <td style={{ textAlign: 'center', color: '#facc15' }}>{row.late}</td>
+                      <td style={{ textAlign: 'center' }}>
+                        {row.total_records > 0
+                          ? <span style={{ color: rateColor(row.attendance_rate), fontWeight: 600 }}>{row.attendance_rate}%</span>
+                          : <span style={{ color: 'rgba(255,255,255,0.3)' }}>—</span>
+                        }
+                      </td>
+                      <td style={{ textAlign: 'right', paddingLeft: 4 }}>
+                        <span className="teacher-chevron" style={{ display: 'inline-block' }}>›</span>
+                      </td>
+                    </tr>
+                    {isOpen && (
+                      <tr key={`${row.class_id}-detail`}>
+                        <td colSpan={7} style={{ padding: '0 0 8px 12px', background: 'rgba(255,255,255,0.02)' }}>
+                          {detail?.loading && (
+                            <div style={{ padding: '10px 0', color: 'rgba(255,255,255,0.4)', fontSize: 13 }}>Loading...</div>
+                          )}
+                          {detail?.error && (
+                            <div style={{ padding: '10px 0', color: '#f87171', fontSize: 13 }}>Failed to load student data.</div>
+                          )}
+                          {detail && !detail.loading && !detail.error && (
+                            detail.students.length === 0
+                              ? <div style={{ padding: '10px 0', color: 'rgba(255,255,255,0.35)', fontSize: 13 }}>No attendance records yet.</div>
+                              : <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                                  <thead>
+                                    <tr>
+                                      {['Student', 'Sessions', 'On time', 'Late', 'On-time rate'].map(h => (
+                                        <th key={h} style={{ textAlign: h === 'Student' ? 'left' : 'center', padding: '8px 12px', color: 'rgba(255,255,255,0.35)', fontWeight: 600, fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.06em', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>{h}</th>
+                                      ))}
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {detail.students.map(s => {
+                                      const sRate = s.total > 0 ? Math.round(s.on_time / s.total * 100) : 0
+                                      return (
+                                        <tr key={s.email}>
+                                          <td style={{ padding: '8px 12px' }}>
+                                            {s.user_id
+                                              ? <button className="sp-student-link" style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: 'rgba(255,255,255,0.75)', textAlign: 'left', fontSize: 'inherit' }} onClick={e => { e.stopPropagation(); navigate(`/admin/students/${s.user_id}`) }}>{s.email}</button>
+                                              : <span style={{ color: 'rgba(255,255,255,0.75)' }}>{s.email}</span>
+                                            }
+                                          </td>
+                                          <td style={{ textAlign: 'center', padding: '8px 12px' }}>{s.total}</td>
+                                          <td style={{ textAlign: 'center', padding: '8px 12px', color: '#4ade80' }}>{s.on_time}</td>
+                                          <td style={{ textAlign: 'center', padding: '8px 12px', color: '#facc15' }}>{s.late}</td>
+                                          <td style={{ textAlign: 'center', padding: '8px 12px' }}>
+                                            <span style={{ color: rateColor(sRate), fontWeight: 600 }}>{sRate}%</span>
+                                          </td>
+                                        </tr>
+                                      )
+                                    })}
+                                  </tbody>
+                                </table>
+                          )}
+                        </td>
+                      </tr>
+                    )}
+                  </>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ─── Org Intervention List ────────────────────────────────────────────────────
 
 function OrgInterventionList({ onBack, initialExpanded = null }) {
@@ -2669,19 +3039,31 @@ function SchoolAdminView() {
   const [activeTab, setActiveTab] = useState('teachers')
   const [brandName, setBrandName] = useState('')
   const [brandSaved, setBrandSaved] = useState(false)
+  const [orgName, setOrgName] = useState('')
+  const [orgNameSaved, setOrgNameSaved] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
   const [showInviteTeacher, setShowInviteTeacher] = useState(false)
   const [inviteEmail, setInviteEmail] = useState('')
   const [inviting, setInviting] = useState(false)
-  const [inviteResult, setInviteResult] = useState(null) // null | {ok, msg}
+  const [inviteResult, setInviteResult] = useState(null)
   const [pendingInvites, setPendingInvites] = useState([])
   const [orgTeachers, setOrgTeachers] = useState([])
+  const [showCsvImport, setShowCsvImport] = useState(false)
+  const [csvRows, setCsvRows] = useState([])
+  const [csvImporting, setCsvImporting] = useState(false)
+  const [csvResults, setCsvResults] = useState(null)
+  const csvFileRef = useRef(null)
+  const [showParentCsvImport, setShowParentCsvImport] = useState(false)
+  const [parentCsvRows, setParentCsvRows] = useState([])
+  const [parentCsvImporting, setParentCsvImporting] = useState(false)
+  const [parentCsvResults, setParentCsvResults] = useState(null)
+  const parentCsvFileRef = useRef(null)
 
   useEffect(() => {
     apiGet('/classes').then(cls => setClasses(cls)).finally(() => setLoading(false))
     apiGet('/interventions').then(ivs => setOpenCases(Array.isArray(ivs) ? ivs : [])).catch(() => {})
     if (orgId) {
-      apiGet(`/orgs/${orgId}`).then(org => setBrandName(org.brand_name || '')).catch(() => {})
+      apiGet(`/orgs/${orgId}`).then(org => { setBrandName(org.brand_name || ''); setOrgName(org.name || '') }).catch(() => {})
       apiGet(`/orgs/${orgId}/members`).then(members => {
         setOrgTeachers(Array.isArray(members) ? members.filter(m => m.role === 'teacher') : [])
       }).catch(() => {})
@@ -2727,6 +3109,15 @@ function SchoolAdminView() {
     },
   ])
 
+  async function saveOrgName() {
+    if (!orgName.trim()) return
+    try {
+      await apiPatch(`/orgs/${orgId}`, { name: orgName.trim() })
+      setOrgNameSaved(true)
+      setTimeout(() => setOrgNameSaved(false), 2000)
+    } catch { /* ignore */ }
+  }
+
   async function saveBrandName() {
     try {
       await apiPatch(`/orgs/${orgId}`, { brand_name: brandName })
@@ -2748,6 +3139,78 @@ function SchoolAdminView() {
       setInviteResult({ ok: false, msg: e?.message || 'Failed to send invite' })
     }
     setInviting(false)
+  }
+
+  function parseCsv(text) {
+    const lines = text.trim().split(/\r?\n/)
+    if (lines.length < 2) return []
+    const header = lines[0].split(',').map(h => h.trim().toLowerCase())
+    return lines.slice(1).map(line => {
+      const cols = line.split(',').map(c => c.trim())
+      const row = {}
+      header.forEach((h, i) => { row[h] = cols[i] || '' })
+      return row
+    }).filter(r => r.email)
+  }
+
+  function parseParentCsv(text) {
+    const lines = text.trim().split(/\r?\n/)
+    if (lines.length < 2) return []
+    const header = lines[0].split(',').map(h => h.trim().toLowerCase())
+    return lines.slice(1).map(line => {
+      const cols = line.split(',').map(c => c.trim())
+      const row = {}
+      header.forEach((h, i) => { row[h] = cols[i] || '' })
+      return row
+    }).filter(r => r.parent_email)
+  }
+
+  function handleCsvFile(e) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = ev => {
+      setCsvRows(parseCsv(ev.target.result))
+      setCsvResults(null)
+    }
+    reader.readAsText(file)
+  }
+
+  async function runCsvImport() {
+    if (!csvRows.length || !orgId) return
+    setCsvImporting(true); setCsvResults(null)
+    try {
+      const res = await apiPost(`/orgs/${orgId}/import-staff`, { rows: csvRows })
+      setCsvResults(res.results || [])
+      const newMembers = await apiGet(`/orgs/${orgId}/members`)
+      setOrgTeachers(Array.isArray(newMembers) ? newMembers.filter(m => m.role === 'teacher') : [])
+    } catch (e) {
+      setCsvResults([{ email: '', status: 'error', error: e?.message || 'Import failed' }])
+    }
+    setCsvImporting(false)
+  }
+
+  function handleParentCsvFile(e) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = ev => {
+      setParentCsvRows(parseParentCsv(ev.target.result))
+      setParentCsvResults(null)
+    }
+    reader.readAsText(file)
+  }
+
+  async function runParentCsvImport() {
+    if (!parentCsvRows.length || !orgId) return
+    setParentCsvImporting(true); setParentCsvResults(null)
+    try {
+      const res = await apiPost(`/orgs/${orgId}/import-parents`, { rows: parentCsvRows })
+      setParentCsvResults(res.results || [])
+    } catch (e) {
+      setParentCsvResults([{ parent_email: '', student_email: '', status: 'error', error: e?.message || 'Import failed' }])
+    }
+    setParentCsvImporting(false)
   }
 
   async function rescindInvite(token) {
@@ -2836,6 +3299,7 @@ function SchoolAdminView() {
           Interventions
           {openCases.length > 0 && <span className="admin-tab-badge">{openCases.length}</span>}
         </button>
+        <button className={`admin-tab${activeTab === 'attendance' ? ' admin-tab--active' : ''}`} onClick={() => setActiveTab('attendance')}>Attendance</button>
         <button className={`admin-tab${activeTab === 'log' ? ' admin-tab--active' : ''}`} onClick={() => setActiveTab('log')}>Meeting Open Log</button>
         <button className={`admin-tab${activeTab === 'org' ? ' admin-tab--active' : ''}`} onClick={() => setActiveTab('org')}>Organization</button>
         <button className={`admin-tab${activeTab === 'integrations' ? ' admin-tab--active' : ''}`} onClick={() => setActiveTab('integrations')}>Integrations</button>
@@ -2846,21 +3310,47 @@ function SchoolAdminView() {
         </button>
       </div>
 
+      {activeTab === 'attendance' && <OrgAttendanceTab orgId={orgId} />}
       {activeTab === 'interventions' && <OrgInterventionList onBack={() => setActiveTab('teachers')} />}
       {activeTab === 'log' && <HistoryPanel />}
-      {activeTab === 'org' && <OrgSettingsTab orgId={orgId} brandName={brandName} setBrandName={setBrandName} brandSaved={brandSaved} saveBrandName={saveBrandName} />}
+      {activeTab === 'org' && <OrgSettingsTab orgId={orgId} orgName={orgName} setOrgName={setOrgName} orgNameSaved={orgNameSaved} saveOrgName={saveOrgName} brandName={brandName} setBrandName={setBrandName} brandSaved={brandSaved} saveBrandName={saveBrandName} />}
       {activeTab === 'integrations' && <OrgIntegrationsTab orgId={orgId} />}
       {activeTab === 'teachers' && <>
-      <div className="admin-search-row">
-        <input
-          className="admin-input admin-search-input"
-          value={search}
-          onChange={e => { setSearch(e.target.value); setVisibleCount(PAGE_SIZE) }}
-          placeholder="Search teachers…"
-        />
-        <button className="admin-btn" style={{ marginLeft: 10, flexShrink: 0 }} onClick={() => { setShowInviteTeacher(true); setInviteResult(null) }}>
-          Invite teacher
-        </button>
+
+      <div className="ti-import-section">
+        <div className="ti-import-label">Add staff</div>
+        <div className="ti-import-cards">
+
+          <button className="ti-import-card" onClick={() => { setShowInviteTeacher(true); setInviteResult(null) }}>
+            <svg className="ti-import-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21.75 6.75v10.5a2.25 2.25 0 0 1-2.25 2.25h-15a2.25 2.25 0 0 1-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25m19.5 0v.243a2.25 2.25 0 0 1-1.07 1.916l-7.5 4.615a2.25 2.25 0 0 1-2.36 0L3.32 8.91a2.25 2.25 0 0 1-1.07-1.916V6.75"/></svg>
+            <div className="ti-import-card-title">Email invite</div>
+            <div className="ti-import-card-desc">Send a signup link to one or more teachers</div>
+          </button>
+
+          <button className="ti-import-card" onClick={() => { setShowCsvImport(true); setCsvRows([]); setCsvResults(null) }}>
+            <svg className="ti-import-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z"/></svg>
+            <div className="ti-import-card-title">Import CSV</div>
+            <div className="ti-import-card-desc">Upload a spreadsheet of staff emails and roles</div>
+          </button>
+
+          <button className="ti-import-card" onClick={() => setActiveTab('integrations')}>
+            <img src="/images/lms/clever.svg" alt="Clever" className="ti-import-icon ti-import-icon--img" />
+            <div className="ti-import-card-title">Clever</div>
+            <div className="ti-import-card-desc">Sync your roster automatically via Clever</div>
+          </button>
+
+        </div>
+      </div>
+
+      <div className="ti-import-section">
+        <div className="ti-import-label">Add parents</div>
+        <div className="ti-import-cards">
+          <button className="ti-import-card" onClick={() => { setShowParentCsvImport(true); setParentCsvRows([]); setParentCsvResults(null) }}>
+            <svg className="ti-import-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z"/></svg>
+            <div className="ti-import-card-title">Import CSV</div>
+            <div className="ti-import-card-desc">Upload a spreadsheet linking parent and student emails</div>
+          </button>
+        </div>
       </div>
 
       {showInviteTeacher && (
@@ -2893,6 +3383,142 @@ function SchoolAdminView() {
           </div>
         </div>
       )}
+
+      {showCsvImport && (
+        <div className="iv-modal-backdrop" onClick={() => setShowCsvImport(false)}>
+          <div className="iv-modal iv-modal--wide" onClick={e => e.stopPropagation()}>
+            <div className="iv-modal-title">Import staff from CSV</div>
+            <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)', margin: '0 0 4px' }}>
+              CSV must have an <code>email</code> column. Optional: <code>role</code> (teacher / school_admin), <code>first_name</code>, <code>last_name</code>.
+            </p>
+            <a
+              href="data:text/csv;charset=utf-8,email%2Crole%2Cfirst_name%2Clast_name%0Ateacher%40school.edu%2Cteacher%2CJane%2CDoe"
+              download="staff-import-template.csv"
+              style={{ fontSize: 12, color: 'var(--lightblue)', marginBottom: 14, display: 'inline-block' }}
+            >
+              Download template
+            </a>
+            <input ref={csvFileRef} type="file" accept=".csv,text/csv" style={{ display: 'none' }} onChange={handleCsvFile} />
+            {!csvRows.length ? (
+              <button className="ti-csv-drop" onClick={() => csvFileRef.current?.click()}>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" width="24" height="24"><path d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5"/></svg>
+                <span>Choose CSV file</span>
+              </button>
+            ) : (
+              <>
+                <div className="ti-csv-preview">
+                  <div className="ti-csv-count">{csvRows.length} row{csvRows.length !== 1 ? 's' : ''} found</div>
+                  <div className="ti-csv-table">
+                    <div className="ti-csv-header">
+                      <span>Email</span><span>Role</span><span>Name</span>
+                    </div>
+                    {csvRows.slice(0, 8).map((r, i) => (
+                      <div key={i} className={`ti-csv-row${csvResults ? (' ti-csv-row--' + (csvResults[i]?.status || '')) : ''}`}>
+                        <span>{r.email}</span>
+                        <span>{r.role || 'teacher'}</span>
+                        <span>{[r.first_name, r.last_name].filter(Boolean).join(' ') || <span style={{opacity:0.3}}>—</span>}</span>
+                        {csvResults?.[i] && (
+                          <span className={`ti-csv-status ti-csv-status--${csvResults[i].status}`}>
+                            {csvResults[i].status === 'created' ? 'Created' : csvResults[i].status === 'updated' ? 'Updated' : csvResults[i].error || 'Error'}
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                    {csvRows.length > 8 && <div className="ti-csv-more">+{csvRows.length - 8} more</div>}
+                  </div>
+                </div>
+                {!csvResults && (
+                  <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+                    <button className="admin-btn-ghost" onClick={() => { setCsvRows([]); csvFileRef.current.value = '' }}>Choose different file</button>
+                    <button className="admin-btn" onClick={runCsvImport} disabled={csvImporting}>{csvImporting ? 'Importing...' : `Import ${csvRows.length} staff`}</button>
+                  </div>
+                )}
+                {csvResults && (
+                  <div style={{ marginTop: 12, fontSize: 13, color: '#4ade80' }}>
+                    Done — {csvResults.filter(r => r.status === 'created').length} created, {csvResults.filter(r => r.status === 'updated').length} updated
+                    {csvResults.filter(r => r.status === 'error').length > 0 && <span style={{ color: '#f87171' }}>, {csvResults.filter(r => r.status === 'error').length} errors</span>}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {showParentCsvImport && (
+        <div className="iv-modal-backdrop" onClick={() => setShowParentCsvImport(false)}>
+          <div className="iv-modal iv-modal--wide" onClick={e => e.stopPropagation()}>
+            <div className="iv-modal-title">Import parents from CSV</div>
+            <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)', margin: '0 0 4px' }}>
+              CSV must have <code>parent_email</code> and <code>student_email</code> columns. New parent accounts are created automatically.
+            </p>
+            <a
+              href="data:text/csv;charset=utf-8,parent_email%2Cstudent_email%0Aparent%40example.com%2Cstudent%40school.edu"
+              download="parent-import-template.csv"
+              style={{ fontSize: 12, color: 'var(--lightblue)', marginBottom: 14, display: 'inline-block' }}
+            >
+              Download template
+            </a>
+            <input ref={parentCsvFileRef} type="file" accept=".csv,text/csv" style={{ display: 'none' }} onChange={handleParentCsvFile} />
+            {!parentCsvRows.length ? (
+              <button className="ti-csv-drop" onClick={() => parentCsvFileRef.current?.click()}>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" width="24" height="24"><path d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5"/></svg>
+                <span>Choose CSV file</span>
+              </button>
+            ) : (
+              <>
+                <div className="ti-csv-preview">
+                  <div className="ti-csv-count">{parentCsvRows.length} row{parentCsvRows.length !== 1 ? 's' : ''} found</div>
+                  <div className="ti-csv-table">
+                    <div className="ti-csv-header">
+                      <span>Parent email</span><span>Student email</span><span>Status</span>
+                    </div>
+                    {parentCsvRows.slice(0, 8).map((r, i) => (
+                      <div key={i} className={`ti-csv-row${parentCsvResults ? (' ti-csv-row--' + (parentCsvResults[i]?.status || '')) : ''}`}>
+                        <span>{r.parent_email}</span>
+                        <span>{r.student_email}</span>
+                        <span>
+                          {parentCsvResults?.[i] && (
+                            <span className={`ti-csv-status ti-csv-status--${parentCsvResults[i].status}`}>
+                              {parentCsvResults[i].status === 'created' ? 'Created' : parentCsvResults[i].status === 'updated' ? 'Updated' : parentCsvResults[i].error || 'Error'}
+                            </span>
+                          )}
+                        </span>
+                      </div>
+                    ))}
+                    {parentCsvRows.length > 8 && <div className="ti-csv-more">+{parentCsvRows.length - 8} more</div>}
+                  </div>
+                </div>
+                {!parentCsvResults && (
+                  <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+                    <button className="admin-btn-ghost" onClick={() => { setParentCsvRows([]); parentCsvFileRef.current.value = '' }}>Choose different file</button>
+                    <button className="admin-btn" onClick={runParentCsvImport} disabled={parentCsvImporting}>{parentCsvImporting ? 'Importing...' : `Import ${parentCsvRows.length} parents`}</button>
+                  </div>
+                )}
+                {parentCsvResults && (
+                  <div style={{ marginTop: 12, fontSize: 13, color: '#4ade80' }}>
+                    Done — {parentCsvResults.filter(r => r.status === 'created').length} created, {parentCsvResults.filter(r => r.status === 'updated').length} updated
+                    {parentCsvResults.filter(r => r.status === 'error').length > 0 && <span style={{ color: '#f87171' }}>, {parentCsvResults.filter(r => r.status === 'error').length} errors</span>}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      <div className="ti-search-row">
+        <div className="ti-search-wrap">
+          <svg className="ti-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+          <input
+            className="ti-search-input"
+            value={search}
+            onChange={e => { setSearch(e.target.value); setVisibleCount(PAGE_SIZE) }}
+            placeholder="Search teachers…"
+          />
+          {search && <button className="ti-search-clear" onClick={() => setSearch('')} aria-label="Clear">×</button>}
+        </div>
+      </div>
 
       {pendingInvites.length > 0 && (
         <div className="teacher-pending-invites">
@@ -3005,11 +3631,13 @@ export default function AdminDashboard() {
 
   return (
     <div className="admin-root">
-      <HeaderModern page="admin" />
-      <div className="admin-page">
-        {role === 'teacher' && <TeacherView />}
-        {role === 'school_admin' && <SchoolAdminView />}
-        {role === 'district_admin' && <DistrictAdminView />}
+      <SideNav page="admin" />
+      <div className="sn-content">
+        <div className="admin-page">
+          {role === 'teacher' && <TeacherView />}
+          {role === 'school_admin' && <SchoolAdminView />}
+          {role === 'district_admin' && <DistrictAdminView />}
+        </div>
       </div>
     </div>
   )

@@ -18,7 +18,7 @@ html::-webkit-scrollbar, body::-webkit-scrollbar { display: none; }
 .pp-main {
   display: flex;
   justify-content: center;
-  padding: 72px 24px 120px;
+  padding: 120px 24px 120px;
 }
 
 .pp-body {
@@ -92,6 +92,109 @@ html::-webkit-scrollbar, body::-webkit-scrollbar { display: none; }
   text-decoration: none;
 }
 .pp-link:hover { text-decoration: underline; }
+
+/* API Docs extras */
+.pp-body--wide { max-width: 800px; }
+
+.pp-code {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.09);
+  border-radius: 6px;
+  padding: 16px 20px;
+  font-family: 'SF Mono', 'Fira Code', 'Menlo', monospace;
+  font-size: 12.5px;
+  line-height: 1.65;
+  color: rgba(255,255,255,0.78);
+  overflow-x: auto;
+  margin: 12px 0 0;
+  white-space: pre;
+}
+
+.pp-inline-code {
+  background: rgba(255,255,255,0.08);
+  border-radius: 3px;
+  padding: 1px 6px;
+  font-family: 'SF Mono', 'Fira Code', 'Menlo', monospace;
+  font-size: 13px;
+  color: #60c8f5;
+}
+
+.pp-method {
+  display: inline-block;
+  font-family: 'SF Mono', 'Fira Code', 'Menlo', monospace;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 2px 7px;
+  border-radius: 3px;
+  margin-right: 8px;
+  vertical-align: middle;
+}
+.pp-method--get    { background: rgba(52,168,83,0.18);  color: #4ade80; }
+.pp-method--post   { background: rgba(43,143,216,0.18); color: #60a5fa; }
+.pp-method--put    { background: rgba(251,191,36,0.18); color: #fbbf24; }
+.pp-method--patch  { background: rgba(251,191,36,0.18); color: #fbbf24; }
+.pp-method--delete { background: rgba(239,68,68,0.18);  color: #f87171; }
+
+.pp-endpoint {
+  display: flex;
+  align-items: baseline;
+  gap: 0;
+  margin: 14px 0 4px;
+  flex-wrap: wrap;
+}
+
+.pp-endpoint-path {
+  font-family: 'SF Mono', 'Fira Code', 'Menlo', monospace;
+  font-size: 13.5px;
+  color: rgba(255,255,255,0.88);
+  margin-right: 10px;
+}
+
+.pp-endpoint-desc {
+  font-size: 12px;
+  color: rgba(255,255,255,0.38);
+}
+
+.pp-toc {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 6px;
+  padding: 20px 24px;
+  margin-bottom: 48px;
+}
+
+.pp-toc-title {
+  font: 600 11px/1 Montserrat, sans-serif;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.35);
+  margin: 0 0 12px;
+}
+
+.pp-toc ol {
+  margin: 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.pp-toc li { font-size: 14px; }
+
+.pp-badge {
+  display: inline-block;
+  font: 600 10px/1 Montserrat, sans-serif;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  border-radius: 10px;
+  margin-left: 8px;
+  vertical-align: middle;
+  background: rgba(43,143,216,0.15);
+  color: #2B8FD8;
+  border: 1px solid rgba(43,143,216,0.3);
+}
 
 @media (max-width: 600px) {
   .pp-title { font-size: 30px; }

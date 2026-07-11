@@ -1,11 +1,12 @@
-import PublicHeader from '../components/PublicHeader.jsx'
+import NhNav from '../components/NhNav.jsx'
 import PublicFooter from '../components/PublicFooter.jsx'
+import '../styles/new-homepage.css'
 import '../styles/privacy.css'
 
 export default function BreachPolicy() {
   return (
     <div className="pp-page">
-      <PublicHeader />
+      <NhNav />
 
       <main className="pp-main">
         <div className="pp-body">
