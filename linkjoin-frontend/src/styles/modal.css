@@ -677,14 +677,14 @@
 /* Notes modal */
 
 .modal-card.modal-notes {
-    width: min(580px, 100%);
+    width: min(420px, 100%);
 }
 
 .modal-notes-field {
     border-radius: 6px;
     background: rgba(255, 255, 255, 0.06);
     border: 1px solid rgba(255, 255, 255, 0.12);
-    min-height: 200px;
+    min-height: 320px;
     cursor: text;
     transition: border-color 0.2s;
 }
