@@ -47,6 +47,7 @@ import History from './pages/History.jsx'
 import ParentPortal from './pages/ParentPortal.jsx'
 import Notes from './pages/Notes.jsx'
 import AdminOnboarding from './pages/AdminOnboarding.jsx'
+import { Analytics } from '@vercel/analytics/react'
 import IncidentBanner from './components/IncidentBanner.jsx'
 import Status from './pages/Status.jsx'
 import ApiDocs from './pages/ApiDocs.jsx'
@@ -166,6 +167,7 @@ export default function App() {
       <Route path="/onboarding" element={<OnboardingRoute><AdminOnboarding /></OnboardingRoute>} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
+      <Analytics />
     </ToastProvider>
   )
 }

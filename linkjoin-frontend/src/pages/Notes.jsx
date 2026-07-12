@@ -151,7 +151,7 @@ export default function Notes() {
 
   const q = search.toLowerCase()
   const filtered = q
-    ? notes.filter(n => n.name.toLowerCase().includes(q) || (n.markdown || '').toLowerCase().includes(q))
+    ? notes.filter(n => n.name.toLowerCase().includes(q) || (n.markdown || '').toLowerCase().includes(q) || (n.date || '').toLowerCase().includes(q))
     : notes
 
   return (
