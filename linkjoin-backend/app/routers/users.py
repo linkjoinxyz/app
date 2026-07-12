@@ -224,7 +224,15 @@ async def get_parent_contact(student_user_id: str, user: dict = Depends(get_conf
         raise HTTPException(status_code=404, detail="Student not found")
     if student.get("org_id") != user.get("org_id"):
         raise HTTPException(status_code=403, detail="Student not in your organization")
-    return student
+    result = {k: v for k, v in student.items() if k != "org_id"}
+    linked_parents = []
+    async for link in motor_db.parent_links.find({"student_user_id": student_user_id}, {"parent_user_id": 1, "_id": 0}):
+        parent = await motor_db.login.find_one({"user_id": link["parent_user_id"]}, {"name": 1, "username": 1, "_id": 0})
+        if parent:
+            linked_parents.append({"user_id": link["parent_user_id"], "name": parent.get("name", ""), "email": parent.get("username", "")})
+    result["linked_parents"] = linked_parents
+    result["parent_user_id"] = linked_parents[0]["user_id"] if linked_parents else None
+    return result
 
 
 @router.get("/student/{user_id}")
@@ -325,6 +333,20 @@ async def get_student_profile(user_id: str, user: dict = Depends(get_confirmed_u
     if isinstance(created_at, datetime):
         created_at = created_at.isoformat()
 
+    # Linked parent accounts via parent_links
+    linked_parents = []
+    async for link in motor_db.parent_links.find({"student_user_id": user_id}, {"parent_user_id": 1}):
+        parent_doc = await motor_db.login.find_one(
+            {"user_id": link["parent_user_id"]},
+            {"_id": 0, "user_id": 1, "username": 1, "name": 1},
+        )
+        if parent_doc:
+            linked_parents.append({
+                "user_id": parent_doc["user_id"],
+                "email": parent_doc["username"],
+                "name": parent_doc.get("name") or "",
+            })
+
     return {
         "user_id": student["user_id"],
         "email": email,
@@ -337,10 +359,63 @@ async def get_student_profile(user_id: str, user: dict = Depends(get_confirmed_u
             "email": student.get("parent_email") or "",
             "phone": student.get("parent_phone") or "",
             "phone_country": student.get("parent_phone_country") or "1",
+            "linked_accounts": linked_parents,
         },
         "classes": class_summaries,
         "recent_attendance": records[:30],
         "interventions": interventions,
+    }
+
+
+@router.get("/parent/{user_id}")
+async def get_parent_profile(user_id: str, user: dict = Depends(get_confirmed_user)):
+    role = user.get("role", "")
+    if role not in ("teacher", "school_admin", "district_admin"):
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    parent = await motor_db.login.find_one(
+        {"user_id": user_id, "role": "parent"},
+        {"_id": 0, "user_id": 1, "username": 1, "name": 1, "avatar": 1, "created_at": 1},
+    )
+    if not parent:
+        raise HTTPException(status_code=404, detail="Parent account not found")
+
+    # Linked students
+    linked_students = []
+    async for link in motor_db.parent_links.find({"parent_user_id": user_id}, {"student_user_id": 1}):
+        student = await motor_db.login.find_one(
+            {"user_id": link["student_user_id"]},
+            {"_id": 0, "user_id": 1, "username": 1, "name": 1, "avatar": 1, "org_id": 1},
+        )
+        if student:
+            # Only expose students within the requester's org (teachers see their own classes)
+            if role == "teacher":
+                teacher_classes = await motor_db.classes.find(
+                    {"teacher_id": user["user_id"]}, {"student_ids": 1}
+                ).to_list(None)
+                allowed = {uid for c in teacher_classes for uid in (c.get("student_ids") or [])}
+                if student["user_id"] not in allowed:
+                    continue
+            elif student.get("org_id") != user.get("org_id"):
+                continue
+            linked_students.append({
+                "user_id": student["user_id"],
+                "email": student["username"],
+                "name": student.get("name") or "",
+                "avatar": student.get("avatar") or "",
+            })
+
+    created_at = parent.get("created_at")
+    if isinstance(created_at, datetime):
+        created_at = created_at.isoformat()
+
+    return {
+        "user_id": parent["user_id"],
+        "email": parent["username"],
+        "name": parent.get("name") or "",
+        "avatar": parent.get("avatar") or "",
+        "joined_at": created_at,
+        "linked_students": linked_students,
     }
 
 
