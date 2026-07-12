@@ -170,8 +170,6 @@ export default function LinkCard({ link, isPending, onEdit, onShare, onDelete, o
           style={{ display: 'flex', position: 'fixed', ...menuPos, zIndex: 1000 }}
           onClick={e => e.stopPropagation()}
         >
-          <div onClick={() => { setMenuOpen(false); navigate(`/history?link_id=${link.id}&link_name=${encodeURIComponent(link.name)}`) }}>History</div>
-          <hr className="menu_line" />
           <div onClick={() => { setMenuOpen(false); onEdit(link) }}>Edit</div>
           <hr className="menu_line" />
           <div onClick={() => { setMenuOpen(false); onDelete(link) }}>Delete</div>
@@ -180,7 +178,7 @@ export default function LinkCard({ link, isPending, onEdit, onShare, onDelete, o
             <div onClick={() => { setMenuOpen(false); onShare(link) }}>Share</div>
             <hr className="menu_line" />
           </>}
-          <div onClick={() => { setMenuOpen(false); onNotes(link) }}>Notes</div>
+          <div onClick={() => { setMenuOpen(false); navigate(`/notes?link_id=${link.id}&name=${encodeURIComponent(link.name)}`) }}>Notes</div>
           {link.password && <>
             <hr className="menu_line" />
             <div onClick={() => {

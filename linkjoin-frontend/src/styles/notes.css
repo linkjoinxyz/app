@@ -1,0 +1,205 @@
+.notes-root {
+  padding: 12px 32px 40px;
+  width: 100%;
+}
+
+.notes-empty {
+  text-align: center;
+  color: rgba(255, 255, 255, 0.35);
+  font: 400 14px Montserrat, sans-serif;
+  padding: 60px 0;
+}
+
+.notes-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+  gap: 10px;
+  align-items: start;
+}
+
+.note-card {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 12px;
+  overflow: hidden;
+  transition: border-color 0.15s;
+}
+
+.note-card:hover {
+  border-color: rgba(255, 255, 255, 0.16);
+}
+
+.note-card--expanded {
+  border-color: rgba(77, 184, 255, 0.3);
+}
+
+.note-card-summary {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.note-card-icon {
+  flex-shrink: 0;
+  margin-top: 2px;
+  color: rgba(77, 184, 255, 0.7);
+}
+
+.note-card-meta {
+  flex: 1;
+  min-width: 0;
+}
+
+.note-card-name {
+  font: 600 14px Montserrat, sans-serif;
+  color: rgba(255, 255, 255, 0.88);
+  margin-bottom: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.note-card-date {
+  font: 400 11px Montserrat, sans-serif;
+  color: rgba(255, 255, 255, 0.35);
+  margin-bottom: 6px;
+}
+
+.note-card-preview {
+  font: 400 13px Montserrat, sans-serif;
+  color: rgba(255, 255, 255, 0.5);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.note-card-chevron {
+  flex-shrink: 0;
+  color: rgba(255, 255, 255, 0.3);
+  transition: transform 0.18s;
+  margin-top: 2px;
+}
+
+.note-card--expanded .note-card-chevron {
+  transform: rotate(90deg);
+}
+
+.note-card-body {
+  padding: 0 16px 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.note-editor-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 0 10px;
+}
+
+.note-editor-tab {
+  font: 500 12px Montserrat, sans-serif;
+  color: rgba(255, 255, 255, 0.45);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 6px;
+  transition: color 0.12s, background 0.12s;
+}
+
+.note-editor-tab:hover {
+  color: rgba(255, 255, 255, 0.7);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.note-editor-tab--active {
+  color: rgba(255, 255, 255, 0.88);
+  background: rgba(255, 255, 255, 0.09);
+}
+
+.note-editor-save {
+  margin-left: auto;
+  font: 600 12px Montserrat, sans-serif;
+  color: #fff;
+  background: #2b8fd8;
+  border: none;
+  border-radius: 6px;
+  padding: 5px 14px;
+  cursor: pointer;
+  transition: opacity 0.12s;
+}
+
+.note-editor-save:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.note-editor-save--saved {
+  background: #22c55e;
+}
+
+.note-editor-textarea {
+  width: 100%;
+  min-height: 220px;
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 12px;
+  font: 400 13px 'Courier New', monospace;
+  color: rgba(255, 255, 255, 0.85);
+  resize: vertical;
+  box-sizing: border-box;
+  outline: none;
+  line-height: 1.6;
+}
+
+.note-editor-textarea::placeholder {
+  color: rgba(255, 255, 255, 0.25);
+}
+
+.note-editor-preview {
+  min-height: 220px;
+  padding: 12px;
+  background: rgba(0, 0, 0, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  font: 400 13px Montserrat, sans-serif;
+  color: rgba(255, 255, 255, 0.8);
+  line-height: 1.7;
+}
+
+.note-editor-preview p { margin: 0 0 8px; }
+.note-editor-preview h1, .note-editor-preview h2, .note-editor-preview h3 {
+  margin: 12px 0 6px;
+  color: rgba(255, 255, 255, 0.92);
+}
+.note-editor-preview code {
+  background: rgba(255, 255, 255, 0.1);
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-size: 12px;
+}
+.note-editor-preview pre {
+  background: rgba(0, 0, 0, 0.3);
+  padding: 10px;
+  border-radius: 6px;
+  overflow-x: auto;
+}
+.note-editor-preview ul, .note-editor-preview ol {
+  margin: 0 0 8px;
+  padding-left: 20px;
+}
+.note-editor-preview a { color: #4db8ff; }
+
+.note-editor-placeholder {
+  color: rgba(255, 255, 255, 0.25);
+  font-style: italic;
+  font-size: 13px;
+  min-height: 220px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}

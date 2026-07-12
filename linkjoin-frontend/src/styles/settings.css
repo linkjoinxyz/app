@@ -34,7 +34,7 @@
 .settings-toast {
   position: fixed;
   top: 122px;
-  left: 50%;
+  left: calc(var(--sn-w, 0px) + (100vw - var(--sn-w, 0px)) / 2);
   transform: translateX(-50%);
   z-index: 300;
   display: flex;
