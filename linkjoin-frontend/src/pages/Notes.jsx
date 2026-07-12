@@ -76,7 +76,6 @@ function NoteCard({ note, defaultExpanded, onSave }) {
         <div className="note-card-meta">
           <div className="note-card-name">{note.name}</div>
           {note.date && <div className="note-card-date">{note.date}</div>}
-          {previewText && <div className="note-card-preview">{previewText}</div>}
         </div>
         <svg className="note-card-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
           <polyline points="9 18 15 12 9 6"/>
