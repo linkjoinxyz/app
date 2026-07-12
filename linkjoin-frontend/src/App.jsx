@@ -45,6 +45,7 @@ import Demo from './pages/Demo.jsx'
 import StudentProfile from './pages/StudentProfile.jsx'
 import History from './pages/History.jsx'
 import ParentPortal from './pages/ParentPortal.jsx'
+import Notes from './pages/Notes.jsx'
 import AdminOnboarding from './pages/AdminOnboarding.jsx'
 import IncidentBanner from './components/IncidentBanner.jsx'
 import Status from './pages/Status.jsx'
@@ -135,6 +136,7 @@ export default function App() {
       <Route path="/meetings" element={<PrivateRoute><Links /></PrivateRoute>} />
       <Route path="/links" element={<Navigate to="/meetings" replace />} />
       <Route path="/bookmarks" element={<PrivateRoute><Bookmarks /></PrivateRoute>} />
+      <Route path="/notes" element={<PrivateRoute><Notes /></PrivateRoute>} />
       <Route path="/addlink" element={<PrivateRoute><AddLink /></PrivateRoute>} />
       <Route path="/confirm" element={<ConfirmEmail />} />
       <Route path="/premeet" element={<PreMeet />} />
