@@ -21,7 +21,7 @@ const ICONS = {
   logout: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>,
 }
 
-function NavItem({ to, icon, label, active, collapsed }) {
+function NavItem({ to, icon, label, active, collapsed, onClick }) {
   const cls = `sn-item${active ? ' sn-item--active' : ''}`
   const content = (
     <>
@@ -29,8 +29,8 @@ function NavItem({ to, icon, label, active, collapsed }) {
       <span className="sn-item-label">{label}</span>
     </>
   )
-  if (active) return <span className={cls}>{content}</span>
-  return <Link to={to} className={cls}>{content}</Link>
+  if (active) return <span className={cls} onClick={onClick}>{content}</span>
+  return <Link to={to} className={cls} onClick={onClick}>{content}</Link>
 }
 
 export default function SideNav({ onAdd, page, search, onSearch, searchPlaceholder }) {
@@ -41,6 +41,7 @@ export default function SideNav({ onAdd, page, search, onSearch, searchPlacehold
   const [collapsed, setCollapsed] = useState(
     () => localStorage.getItem('lj_side_collapsed') === '1'
   )
+  const [mobileOpen, setMobileOpen] = useState(false)
   const [extDismissed, setExtDismissed] = useState(
     () => sessionStorage.getItem('lj_ext_dismissed') === '1'
   )
@@ -68,8 +69,18 @@ export default function SideNav({ onAdd, page, search, onSearch, searchPlacehold
   const chevronExpand = <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="9 18 15 12 9 6"/></svg>
   const chevronCollapse = <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="15 18 9 12 15 6"/></svg>
 
+  function closeMobile() { setMobileOpen(false) }
+
   return (
     <>
+      {/* Mobile hamburger button */}
+      <button className="sn-hamburger" onClick={() => setMobileOpen(true)} aria-label="Open menu">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+      </button>
+
+      {/* Mobile backdrop */}
+      {mobileOpen && <div className="sn-backdrop" onClick={closeMobile} />}
+
       {showExtBanner && (
         <div className="sn-ext-banner">
           {browser === 'firefox' ? (
@@ -84,7 +95,7 @@ export default function SideNav({ onAdd, page, search, onSearch, searchPlacehold
         </div>
       )}
 
-      <aside className={`sn-sidebar${collapsed ? ' sn-collapsed' : ''}`}>
+      <aside className={`sn-sidebar${collapsed ? ' sn-collapsed' : ''}${mobileOpen ? ' sn-mobile-open' : ''}`}>
         <div className="sn-inner">
 
         <div className="sn-top">
@@ -115,18 +126,18 @@ export default function SideNav({ onAdd, page, search, onSearch, searchPlacehold
               {search && <button className="sn-search-clear" onClick={() => onSearch('')} aria-label="Clear search">✕</button>}
             </div>
           )}
-          <NavItem to="/meetings"  icon={ICONS.meetings}  label="Meetings"     active={page === 'links'}     collapsed={collapsed} />
-          <NavItem to="/bookmarks" icon={ICONS.bookmarks} label="Bookmarks"    active={page === 'bookmarks'} collapsed={collapsed} />
-          <NavItem to="/notes"     icon={ICONS.notes}     label="Notes"        active={page === 'notes'}     collapsed={collapsed} />
-          {isTeacher && <NavItem to="/admin"   icon={ICONS.admin}    label="Admin"        active={page === 'admin'}     collapsed={collapsed} />}
-          {role === 'parent'  && <NavItem to="/parent"  icon={ICONS.parent}   label="Parent Portal" active={page === 'parent'}   collapsed={collapsed} />}
-          {role === 'student' && <NavItem to="/profile" icon={ICONS.profile}  label="Profile"      active={page === 'profile'}   collapsed={collapsed} />}
-          <NavItem to="/settings"  icon={ICONS.settings}  label="Settings"     active={page === 'settings'}  collapsed={collapsed} />
-          {isAdmin && <NavItem to="/platform" icon={ICONS.platform} label="Platform"     active={page === 'platform'}  collapsed={collapsed} />}
+          <NavItem to="/meetings"  icon={ICONS.meetings}  label="Meetings"     active={page === 'links'}     collapsed={collapsed} onClick={closeMobile} />
+          <NavItem to="/bookmarks" icon={ICONS.bookmarks} label="Bookmarks"    active={page === 'bookmarks'} collapsed={collapsed} onClick={closeMobile} />
+          <NavItem to="/notes"     icon={ICONS.notes}     label="Notes"        active={page === 'notes'}     collapsed={collapsed} onClick={closeMobile} />
+          {isTeacher && <NavItem to="/admin"   icon={ICONS.admin}    label="Admin"        active={page === 'admin'}     collapsed={collapsed} onClick={closeMobile} />}
+          {role === 'parent'  && <NavItem to="/parent"  icon={ICONS.parent}   label="Parent Portal" active={page === 'parent'}   collapsed={collapsed} onClick={closeMobile} />}
+          {role === 'student' && <NavItem to="/profile" icon={ICONS.profile}  label="Profile"      active={page === 'profile'}   collapsed={collapsed} onClick={closeMobile} />}
+          <NavItem to="/settings"  icon={ICONS.settings}  label="Settings"     active={page === 'settings'}  collapsed={collapsed} onClick={closeMobile} />
+          {isAdmin && <NavItem to="/platform" icon={ICONS.platform} label="Platform"     active={page === 'platform'}  collapsed={collapsed} onClick={closeMobile} />}
         </nav>
 
         <div className="sn-bottom">
-          <button className="sn-item" onClick={handleLogout}>
+          <button className="sn-item" onClick={() => { closeMobile(); handleLogout() }}>
             <span className="sn-item-icon">{ICONS.logout}</span>
             <span className="sn-item-label">Log Out</span>
           </button>
