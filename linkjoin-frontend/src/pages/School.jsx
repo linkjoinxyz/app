@@ -94,7 +94,7 @@ export default function School() {
               <Link to="/bookmarks" className="nh-nav-menu-item">
                 <span className="nh-nav-menu-icon">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                    <path d="M5 3h14v19l-7-4.5L5 22V3z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round"/>
+                    <path d="M5 3h14v19l-7-4.5L5 22V3z" stroke="currentColor" strokeWidth="2.5" strokeLinejoin="round"/>
                   </svg>
                 </span>
                 <span>
@@ -122,6 +122,17 @@ export default function School() {
                 <span>
                   <span className="nh-nav-menu-label">Schools</span>
                   <span className="nh-nav-menu-sub">K-12 attendance &amp; dashboards</span>
+                </span>
+              </Link>
+              <Link to="/demo" className="nh-nav-menu-item">
+                <span className="nh-nav-menu-icon">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.347a1.125 1.125 0 0 1 0 1.972l-11.54 6.347a1.125 1.125 0 0 1-1.667-.986V5.653Z"/>
+                  </svg>
+                </span>
+                <span>
+                  <span className="nh-nav-menu-label">Demo</span>
+                  <span className="nh-nav-menu-sub">See LinkJoin in action</span>
                 </span>
               </Link>
             </div>

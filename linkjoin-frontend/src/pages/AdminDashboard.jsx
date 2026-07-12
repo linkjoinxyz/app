@@ -44,7 +44,71 @@ function DayBadge({ day }) {
 
 // ─── Student Profile ─────────────────────────────────────────────────────────
 
-function StudentProfile({ userId, onBack, onOpenClass, onOpenIntervention }) {
+function ParentProfile({ userId, onBack, onOpenStudent }) {
+  const [data, setData] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [err, setErr] = useState(null)
+  const palette = avatarPalette(userId)
+
+  useEffect(() => {
+    setLoading(true)
+    apiGet(`/users/parent/${userId}`)
+      .then(d => setData(d))
+      .catch(() => setErr('Could not load parent profile.'))
+      .finally(() => setLoading(false))
+  }, [userId])
+
+  if (loading) return <div className="admin-spinner-wrap"><div className="admin-spinner" /></div>
+  if (err || !data) return <div className="admin-error" style={{ padding: 40 }}>{err || 'Not found'}</div>
+
+  const initials = data.name
+    ? data.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()
+    : data.email[0].toUpperCase()
+
+  return (
+    <div className="detail-root">
+      <div className="sp-hero">
+        <button className="detail-back-btn" onClick={onBack}>
+          <img src="/images/arrow-left.svg" alt="back" style={{ width: 18, height: 18, display: 'block' }} />
+        </button>
+        <div className="sp-avatar" style={data.avatar ? {} : { background: palette.bg, border: `2px solid ${palette.border}` }}>
+          {data.avatar
+            ? <img src={data.avatar} alt="" style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
+            : initials}
+        </div>
+        <div className="sp-hero-info">
+          <div className="sp-name">{data.name || data.email}</div>
+          {data.name && <div className="sp-email">{data.email}</div>}
+          <span className="sp-badge" style={{ background: 'rgba(43,143,216,0.15)', color: '#4db8ff', border: '1px solid rgba(43,143,216,0.3)', marginTop: 10 }}>Parent account</span>
+        </div>
+      </div>
+
+      <div className="sp-body">
+        {data.linked_students.length > 0 && (
+          <div className="sp-section">
+            <div className="sp-section-title">Linked students</div>
+            <div className="sp-class-list">
+              {data.linked_students.map(s => (
+                <div
+                  key={s.user_id}
+                  className="sp-class-row sp-class-row--link"
+                  onClick={() => onOpenStudent?.(s.user_id)}
+                >
+                  <div className="sp-class-info">
+                    <div className="sp-class-name">{s.name || s.email}</div>
+                    {s.name && <div className="sp-class-meta"><span>{s.email}</span></div>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function StudentProfile({ userId, onBack, onOpenClass, onOpenIntervention, onOpenParent }) {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [err, setErr] = useState(null)
@@ -120,19 +184,30 @@ function StudentProfile({ userId, onBack, onOpenClass, onOpenIntervention }) {
             <div className="sp-stat-val" style={{ color: activeInterventions > 0 ? '#f0c040' : 'inherit' }}>{activeInterventions}</div>
             <div className="sp-stat-label">Open interventions</div>
           </div>
+          {(() => {
+            const parents = data.parent.linked_accounts || []
+            return (
+              <div className="sp-stat">
+                <div className="sp-stat-val sp-stat-val--parent">
+                  {parents.length === 0
+                    ? '—'
+                    : parents.map(p => (
+                        <div
+                          key={p.user_id}
+                          className={onOpenParent ? 'sp-parent-stat-name' : undefined}
+                          onClick={() => onOpenParent?.(p.user_id)}
+                        >
+                          {p.name || p.email}
+                        </div>
+                      ))
+                  }
+                </div>
+                <div className="sp-stat-label">{parents.length > 1 ? 'Parents' : 'Parent'}</div>
+              </div>
+            )
+          })()}
         </div>
 
-        {/* Parent contact */}
-        {(data.parent.name || data.parent.email || data.parent.phone) && (
-          <div className="sp-section">
-            <div className="sp-section-title">Family contact</div>
-            <div className="sp-contact-card">
-              {data.parent.name && <div className="sp-contact-row"><span className="sp-contact-key">Name</span><span>{data.parent.name}</span></div>}
-              {data.parent.email && <div className="sp-contact-row"><span className="sp-contact-key">Email</span><a href={`mailto:${data.parent.email}`} className="sp-link">{data.parent.email}</a></div>}
-              {data.parent.phone && <div className="sp-contact-row"><span className="sp-contact-key">Phone</span><span>+{data.parent.phone_country} {data.parent.phone}</span></div>}
-            </div>
-          </div>
-        )}
 
         {/* Classes */}
         {data.classes.length > 0 && (
@@ -276,6 +351,7 @@ function StudentProfile({ userId, onBack, onOpenClass, onOpenIntervention }) {
 // ─── Class Detail (teacher view) ─────────────────────────────────────────────
 
 function ClassDetail({ cls, onBack, onUpdate, onViewStudent }) {
+  const navigate = useNavigate()
   const { state: navState } = useLocation()
   const [students, setStudents] = useState([])
   const [allLinks, setAllLinks] = useState([])
@@ -331,6 +407,7 @@ function ClassDetail({ cls, onBack, onUpdate, onViewStudent }) {
   const [familyAlerts, setFamilyAlerts] = useState(cls.family_alerts || false)
   const [parentContacts, setParentContacts] = useState({})
   const [contactModalUser, setContactModalUser] = useState(null)
+  const [parentPopup, setParentPopup] = useState(null)
   const [contactSaved, setContactSaved] = useState({})
 
   async function toggleFamilyAlerts() {
@@ -341,6 +418,13 @@ function ClassDetail({ cls, onBack, onUpdate, onViewStudent }) {
     } catch { setFamilyAlerts(!next) }
   }
 
+  useEffect(() => {
+    if (!parentPopup) return
+    function close(e) { if (!e.target.closest('.parent-popup') && !e.target.closest('.roster-contact-btn')) setParentPopup(null) }
+    document.addEventListener('mousedown', close)
+    return () => document.removeEventListener('mousedown', close)
+  }, [parentPopup])
+
   async function loadParentContact(userId) {
     if (parentContacts[userId] !== undefined) return
     try {
@@ -350,6 +434,10 @@ function ClassDetail({ cls, onBack, onUpdate, onViewStudent }) {
       setParentContacts(p => ({ ...p, [userId]: {} }))
     }
   }
+
+  useEffect(() => {
+    students.forEach(s => loadParentContact(s.user_id))
+  }, [students.length])
 
   function updateContactField(userId, field, value) {
     setParentContacts(p => ({ ...p, [userId]: { ...(p[userId] || {}), [field]: value } }))
@@ -859,13 +947,37 @@ function ClassDetail({ cls, onBack, onUpdate, onViewStudent }) {
                       <td>
                         <button className="sp-student-link" onClick={() => onViewStudent?.(s.user_id)}>{s.username}</button>
                       </td>
-                      <td>
-                        <button className="roster-contact-btn" onClick={() => {
-                          loadParentContact(s.user_id)
-                          setContactModalUser(s.user_id)
-                        }}>
-                          Parent contact
-                        </button>
+                      <td style={{ position: 'relative' }}>
+                        {(() => {
+                          const c = parentContacts[s.user_id]
+                          const parents = c?.linked_parents || []
+                          const hasParents = parents.length > 0
+                          return (
+                            <>
+                              <button
+                                className="roster-contact-btn"
+                                style={hasParents ? {} : { opacity: 0.4, cursor: 'default' }}
+                                onClick={() => {
+                                  if (!hasParents) return
+                                  if (parents.length === 1) { navigate(`/admin/parents/${parents[0].user_id}`); return }
+                                  setParentPopup(parentPopup === s.user_id ? null : s.user_id)
+                                }}
+                              >
+                                Parent contact
+                              </button>
+                              {parentPopup === s.user_id && (
+                                <div className="parent-popup">
+                                  {parents.map(p => (
+                                    <button key={p.user_id} className="parent-popup-row" onClick={() => { setParentPopup(null); navigate(`/admin/parents/${p.user_id}`) }}>
+                                      <span className="parent-popup-name">{p.name || p.email}</span>
+                                      {p.name && <span className="parent-popup-email">{p.email}</span>}
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
+                            </>
+                          )
+                        })()}
                       </td>
                       <td>
                         <button className="roster-remove-btn" onClick={() => handleRemoveStudent(s.user_id)}>
@@ -2255,8 +2367,10 @@ function TeacherView() {
   const navigate = useNavigate()
   const classMatch = useMatch('/admin/class/:classId')
   const studentMatch = useMatch('/admin/students/:userId')
+  const parentMatch = useMatch('/admin/parents/:parentId')
   const urlClassId = classMatch?.params?.classId ?? null
   const urlUserId = studentMatch?.params?.userId ?? null
+  const urlParentId = parentMatch?.params?.parentId ?? null
 
   const [classes, setClasses] = useState([])
   const [loading, setLoading] = useState(true)
@@ -2270,6 +2384,16 @@ function TeacherView() {
     setClasses(prev => prev.map(c => c.class_id === fresh.class_id ? fresh : c))
   }
 
+  if (urlParentId) {
+    return (
+      <ParentProfile
+        userId={urlParentId}
+        onBack={() => navigate(-1)}
+        onOpenStudent={id => navigate(`/admin/students/${id}`)}
+      />
+    )
+  }
+
   if (urlUserId) {
     return (
       <StudentProfile
@@ -2277,6 +2401,7 @@ function TeacherView() {
         onBack={() => navigate(-1)}
         onOpenClass={classId => navigate(`/admin/class/${classId}`)}
         onOpenIntervention={(classId, ivId) => navigate(`/admin/class/${classId}`, { state: { tab: 'interventions', expandedCase: ivId } })}
+        onOpenParent={parentId => navigate(`/admin/parents/${parentId}`)}
       />
     )
   }
@@ -3027,8 +3152,10 @@ function SchoolAdminView() {
   const { orgId } = useAuth()
   const classMatch = useMatch('/admin/class/:classId')
   const studentMatch = useMatch('/admin/students/:userId')
+  const parentMatch = useMatch('/admin/parents/:parentId')
   const urlClassId = classMatch?.params?.classId ?? null
   const urlUserId = studentMatch?.params?.userId ?? null
+  const urlParentId = parentMatch?.params?.parentId ?? null
 
   const [classes, setClasses] = useState([])
   const [loading, setLoading] = useState(true)
@@ -3244,6 +3371,16 @@ function SchoolAdminView() {
     }
   })
 
+  if (urlParentId) {
+    return (
+      <ParentProfile
+        userId={urlParentId}
+        onBack={() => navigate(-1)}
+        onOpenStudent={id => navigate(`/admin/students/${id}`)}
+      />
+    )
+  }
+
   if (urlUserId) {
     return (
       <StudentProfile
@@ -3251,6 +3388,7 @@ function SchoolAdminView() {
         onBack={() => navigate(-1)}
         onOpenClass={classId => navigate(`/admin/class/${classId}`)}
         onOpenIntervention={(classId, ivId) => navigate(`/admin/class/${classId}`, { state: { tab: 'interventions', expandedCase: ivId } })}
+        onOpenParent={parentId => navigate(`/admin/parents/${parentId}`)}
       />
     )
   }

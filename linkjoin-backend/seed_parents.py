@@ -111,6 +111,16 @@ async def run():
         else:
             print(f"    Link already exists -> {p['student_email']}")
 
+        # Also write parent contact fields onto the student record
+        await db.login.update_one(
+            {"username": p["student_email"]},
+            {"$set": {
+                "parent_name": f"{p['first_name']} {p['last_name']}",
+                "parent_email": p["email"],
+            }},
+        )
+        print(f"    Set parent_name/parent_email on student record")
+
     print(f"\nDone. Created {created} parent accounts, {linked} new links.")
     client.close()
 
