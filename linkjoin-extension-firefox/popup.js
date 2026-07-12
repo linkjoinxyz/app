@@ -1,5 +1,5 @@
-const BASE_URL = 'http://localhost:8000'
-const APP_URL = 'http://localhost:5173'
+const BASE_URL = 'https://linkjoin.azurewebsites.net'
+const APP_URL = 'https://linkjoin.xyz'
 
 async function getAuth() {
     const { token, email } = await chrome.storage.local.get(['token', 'email'])
@@ -67,17 +67,51 @@ function formatNext(date) {
 
 // --- Render functions ---
 
-function renderLogin() {
-    chrome.tabs.create({ url: `${APP_URL}/login` })
+function renderLogin(errorMsg = '') {
     document.getElementById('app').innerHTML = `
         <div class="header">
             <img src="/icons/logo-rounded.png" class="logo-icon" alt="">
             <span class="logo-text">LinkJoin</span>
         </div>
         <div class="login-form">
-            <p class="subtitle">Opening sign-in page&hellip;</p>
+            <p class="login-title">Sign in to LinkJoin</p>
+            ${errorMsg ? `<p class="login-error">${escHtml(errorMsg)}</p>` : ''}
+            <input id="login-email" type="email" placeholder="Email" class="login-input" autocomplete="email">
+            <input id="login-password" type="password" placeholder="Password" class="login-input" autocomplete="current-password">
+            <button id="login-submit" class="login-btn">Sign in</button>
         </div>
     `
+    const emailEl = document.getElementById('login-email')
+    const passEl = document.getElementById('login-password')
+    const btn = document.getElementById('login-submit')
+
+    async function attemptLogin() {
+        const email = emailEl.value.trim()
+        const password = passEl.value
+        if (!email || !password) return
+        btn.disabled = true
+        btn.textContent = 'Signing in…'
+        try {
+            const res = await fetch(`${BASE_URL}/auth/login`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email, password }),
+            })
+            if (!res.ok) {
+                renderLogin('Incorrect email or password.')
+                return
+            }
+            const data = await res.json()
+            await chrome.storage.local.set({ token: data.access_token, email: data.email })
+            chrome.runtime.sendMessage({ type: 'login' }).catch(() => {})
+            renderDashboard()
+        } catch {
+            renderLogin('Could not connect. Is the app running?')
+        }
+    }
+
+    btn.addEventListener('click', attemptLogin)
+    passEl.addEventListener('keydown', e => { if (e.key === 'Enter') attemptLogin() })
 }
 
 // --- Settings ---

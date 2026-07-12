@@ -39,7 +39,7 @@ export default function WhatsNewModal({ onClose }) {
   }
 
   return (
-    <div className={`modal-overlay${closing ? ' closing' : ''}`} onClick={dismiss}>
+    <div className={`modal-overlay sn-page-overlay${closing ? ' closing' : ''}`} onClick={dismiss}>
       <div className="modal-card whats-new-card" onClick={e => e.stopPropagation()}>
         <div className="whats-new-header">
           <div className="whats-new-eyebrow">New in LinkJoin</div>

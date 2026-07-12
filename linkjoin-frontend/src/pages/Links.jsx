@@ -1,21 +1,23 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext.jsx'
 import { useWebSocket } from '../hooks/useWebSocket.js'
 import { useAutoOpen } from '../hooks/useAutoOpen.js'
 import { usersApi } from '../api/users.js'
 import { authApi } from '../api/auth.js'
 import { linksApi } from '../api/links.js'
-import Header from '../components/HeaderModern.jsx'
+import SideNav from '../components/SideNav.jsx'
 import LinkCard from '../components/LinkCard.jsx'
 import LinkModal from '../components/LinkModal.jsx'
 import ShareModal from '../components/ShareModal.jsx'
 import DeleteModal from '../components/DeleteModal.jsx'
-import SettingsModal from '../components/SettingsModal.jsx'
 import NotesModal from '../components/NotesModal.jsx'
 import CalendarPanel from '../components/CalendarPanel.jsx'
 import CalendarImportModal from '../components/CalendarImportModal.jsx'
 import OnboardingCard from '../components/OnboardingCard.jsx'
+import OnboardingChecklist from '../components/OnboardingChecklist.jsx'
 import WhatsNewModal from '../components/WhatsNewModal.jsx'
+import TeacherSetupModal from '../components/TeacherSetupModal.jsx'
 import '../styles/links.css'
 import '../styles/new_links.css'
 import '../styles/calendar-panel.css'
@@ -31,8 +33,13 @@ function parseMDY(str) {
   return new Date(yr, mo - 1, dy)
 }
 
+function parseTimeParts(t) {
+  const parts = (t || '0:0').split(':')
+  return [parseInt(parts[0]) || 0, parseInt(parts[1]) || 0]
+}
+
 function getLinkMins(link) {
-  const [h, m] = (link.time || '0:0').split(':').map(Number)
+  const [h, m] = parseTimeParts(link.time)
   return h * 60 + m
 }
 
@@ -57,7 +64,7 @@ function effectiveDomDate(year, month, dayNum) {
 function minutesUntilNext(link, now) {
   const todayIdx = now.getDay()
   const currentMins = now.getHours() * 60 + now.getMinutes()
-  const [h, m] = (link.time || '0:0').split(':').map(Number)
+  const [h, m] = parseTimeParts(link.time)
   const linkMins = h * 60 + m
 
   if (link.repeat === 'never') {
@@ -69,7 +76,7 @@ function minutesUntilNext(link, now) {
 
   const days = Array.isArray(link.days) ? link.days : []
 
-  if (!link.repeat || link.repeat === 'week') {
+  if (!link.repeat || link.repeat === 'week' || link.repeat === 'weekly') {
     for (let d = 0; d < 8; d++) {
       if (!days.includes(DAY_NAMES[(todayIdx + d) % 7])) continue
       const minsAway = d * 1440 + linkMins - currentMins
@@ -173,7 +180,8 @@ function findNextLinkId(links) {
 }
 
 export default function Links() {
-  const { token, email, confirmed } = useAuth()
+  const { token, email, confirmed, role, onboardingDone } = useAuth()
+  const location = useLocation()
   const [user, setUser] = useState(null)
   const [links, setLinks] = useState([])
   const [pendingLinks, setPendingLinks] = useState([])
@@ -188,8 +196,7 @@ export default function Links() {
   const [calPrefillDate, setCalPrefillDate] = useState(null)
   const [shareLink, setShareLink] = useState(null)
   const [deleteLink, setDeleteLink] = useState(null)
-  const [showSettings, setShowSettings] = useState(false)
-  const [showDeleted, setShowDeleted] = useState(false)
+const [showDeleted, setShowDeleted] = useState(false)
   const [notesLink, setNotesLink] = useState(null)
   const [calImportProvider, setCalImportProvider] = useState(null)
   const [verifyWarning, setVerifyWarning] = useState(false)
@@ -198,11 +205,32 @@ export default function Links() {
   const [showWhatsNew, setShowWhatsNew] = useState(false)
   const [modifiedNames, setModifiedNames] = useState([])
   const [popupBanner, setPopupBanner] = useState(null) // null | 'checking' | 'blocked'
+  const [obClasses, setObClasses] = useState([])
+  const [showTeacherSetup, setShowTeacherSetup] = useState(false)
+
+  useEffect(() => {
+    if (onboardingDone) return
+    const isTeacherOrStudent = role === 'teacher' || role === 'school_admin' || role === 'district_admin' || role === 'student'
+    if (!isTeacherOrStudent || !token) return
+    apiGet('/classes').then(cls => {
+      const list = Array.isArray(cls) ? cls : []
+      setObClasses(list)
+      if (role === 'teacher' && list.length === 0 && localStorage.getItem('lj_teacher_setup_done') !== 'true') {
+        setShowTeacherSetup(true)
+      }
+    }).catch(() => {})
+  }, [onboardingDone, role, token])
 
   useEffect(() => {
     document.documentElement.id = 'links_html'
     return () => { document.documentElement.id = '' }
   }, [])
+
+  useEffect(() => {
+    if (!location.state) return
+    if (location.state.showDeleted) setShowDeleted(true)
+    if (location.state.triggerImport) setCalImportProvider(location.state.triggerImport)
+  }, [location.state])
 
   useEffect(() => {
     usersApi.me().then(u => {
@@ -247,9 +275,18 @@ export default function Links() {
         setTzMismatch({ from: saved.timezone, to: tz, newOffset: parseFloat(offset) })
         return
       }
-      // Same IANA timezone, DST offset shift — update silently
-      if (String(saved.offset) !== offset) {
-        await usersApi.daylightSavings(parseFloat(offset) - parseFloat(saved.offset || 0))
+      if (saved.offset == null) {
+        // No prior offset recorded — save both timezone and offset, don't touch link times
+        await usersApi.updateTimezone(tz, parseFloat(offset))
+        return
+      }
+      // Only apply DST correction when IANA timezone is confirmed to match
+      if (!saved.timezone || saved.timezone !== tz) return
+      const savedNum = parseFloat(saved.offset)
+      const currentNum = parseFloat(offset)
+      if (!isNaN(savedNum) && savedNum !== currentNum) {
+        await usersApi.daylightSavings(currentNum - savedNum)
+        await usersApi.setOffset(currentNum)
       }
     } catch {}
   }
@@ -311,6 +348,22 @@ export default function Links() {
     user?.sort
   )
 
+  const conflictMap = useMemo(() => {
+    const result = {}
+    const active = links.filter(l => l.active !== 'false')
+    for (let i = 0; i < active.length; i++) {
+      for (let j = i + 1; j < active.length; j++) {
+        const a = active[i], b = active[j]
+        if (a.time !== b.time) continue
+        const shared = (a.days || []).filter(d => (b.days || []).includes(d))
+        if (!shared.length) continue
+        ;(result[a.id] = result[a.id] || []).push({ id: b.id, name: b.name })
+        ;(result[b.id] = result[b.id] || []).push({ id: a.id, name: a.name })
+      }
+    }
+    return result
+  }, [links])
+
   async function handleResend() {
     if (resendState !== 'idle') return
     setResendState('sending')
@@ -361,7 +414,15 @@ export default function Links() {
 
   return (
     <div id="links-page" className={calendarEnabled ? 'lp-cal-mode' : ''}>
-      <div id="blur" style={{ width: '100%', zIndex: showLinkModal || shareLink || deleteLink || showSettings || notesLink || calImportProvider ? 101 : -3, background: 'rgba(0,0,0,0.4)', opacity: showLinkModal || shareLink || deleteLink || showSettings || notesLink || calImportProvider ? 0.4 : 0, height: 'calc(100% + 100px)', position: 'fixed', top: 0, left: 0, transition: '0.25s', pointerEvents: showLinkModal || shareLink || deleteLink || showSettings || notesLink || calImportProvider ? 'auto' : 'none' }} />
+      <div id="blur" style={{ width: '100%', zIndex: showLinkModal || shareLink || deleteLink || notesLink || calImportProvider ? 101 : -3, background: 'rgba(0,0,0,0.4)', opacity: showLinkModal || shareLink || deleteLink || notesLink || calImportProvider ? 0.4 : 0, height: 'calc(100% + 100px)', position: 'fixed', top: 0, left: 0, transition: '0.25s', pointerEvents: showLinkModal || shareLink || deleteLink || notesLink || calImportProvider ? 'auto' : 'none' }} />
+      <SideNav
+        onAdd={() => tryAdd(() => { setEditLink(null); setShowLinkModal(true) })}
+        page="links"
+        search={search}
+        onSearch={setSearch}
+      />
+      <div className="sn-content">
+
       {tzMismatch && (
         <div className="verify-banner tz-banner">
           <span>
@@ -395,11 +456,10 @@ export default function Links() {
           <button className="verify-banner-close" onClick={dismissPopupBanner}>✕</button>
         </div>
       )}
-      <Header
-        onSettings={() => setShowSettings(true)}
-        onAdd={() => tryAdd(() => { setEditLink(null); setShowLinkModal(true) })}
-        page="links"
-      />
+
+      {!onboardingDone && (
+        <OnboardingChecklist links={links} classes={obClasses} />
+      )}
 
       <div className={calendarEnabled ? 'lp-body' : ''}>
         <div className={calendarEnabled ? 'lp-links-col' : ''}>
@@ -421,15 +481,6 @@ export default function Links() {
               >✕</button>
             </div>
           )}
-
-          <div id="links-search-container">
-            <input
-              id="links-search"
-              placeholder="Search for links"
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-            />
-          </div>
 
           {pendingLinks.length > 0 && (
             <div id="pending-links">
@@ -483,10 +534,15 @@ export default function Links() {
               />
             )}
             {filtered.length === 0 && search && !loading && (
-              <div className="no-links" id="no-links-search">
-                <img src="/images/no-links-made.svg" alt="No results" />
-                <div>No links match your search</div>
-                <button className="modal-action-btn" style={{ marginTop: 8 }} onClick={() => setSearch('')}>Clear search</button>
+              <div className="bm-empty">
+                <div className="bm-empty-icon">
+                  <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                  </svg>
+                </div>
+                <div className="bm-empty-title">No results for "{search}"</div>
+                <div className="bm-empty-sub">Try a different search term</div>
+                <button className="bm-empty-clear" onClick={() => setSearch('')}>Clear search</button>
               </div>
             )}
             {(() => {
@@ -498,6 +554,7 @@ export default function Links() {
                   onDelete={handleDelete} onNotes={handleNotes}
                   onToggle={(id, val) => setLinks(prev => prev.map(lk => lk.id === id ? { ...lk, active: val } : lk))}
                   isNext={l.id === nextId}
+                  conflicts={conflictMap[l.id] || []}
                 />
               ))
             })()}
@@ -535,6 +592,7 @@ export default function Links() {
           onSuccess={refreshLinks}
           prefillDays={calPrefillDays}
           prefillDate={calPrefillDate}
+          allLinks={links}
         />
       )}
 
@@ -564,30 +622,21 @@ export default function Links() {
         />
       )}
 
-      {showSettings && (
-        <SettingsModal
-          user={user}
-          visible={showSettings}
-          onClose={() => { setShowSettings(false); usersApi.me().then(setUser).catch(() => {}) }}
-          onShowDeleted={() => setShowDeleted(true)}
-          onCalendarImport={() => { setShowSettings(false); setCalImportProvider('google') }}
-          onOutlookImport={() => { setShowSettings(false); setCalImportProvider('microsoft') }}
-          onUserRefresh={() => usersApi.me().then(setUser).catch(() => {})}
-        />
-      )}
-
-      {showWhatsNew && !loading && (
+{showWhatsNew && !loading && (
         <WhatsNewModal onClose={() => setShowWhatsNew(false)} />
       )}
 
+      {showTeacherSetup && (
+        <TeacherSetupModal onDone={() => setShowTeacherSetup(false)} />
+      )}
+
       {showDeleted && (
-        <div className="modal-overlay" onClick={() => setShowDeleted(false)}>
+        <div className="modal-overlay sn-page-overlay" onClick={() => setShowDeleted(false)}>
           <div className="modal-card" onClick={e => e.stopPropagation()}>
             <img src="/images/arrow-left.svg" className="modal-back" alt="back" onClick={() => setShowDeleted(false)} />
             <div className="modal-title">Deleted Links</div>
             {deletedLinks.length === 0 ? (
               <div className="modal-deleted-empty">
-                <img src="/images/no-links-made.svg" alt="Empty trash" />
                 <div>No deleted links</div>
               </div>
             ) : (
@@ -606,6 +655,7 @@ export default function Links() {
           </div>
         </div>
       )}
+      </div>{/* sn-content */}
     </div>
   )
 }

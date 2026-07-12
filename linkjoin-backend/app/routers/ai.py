@@ -47,11 +47,17 @@ async def extract_meeting(
         f'Body: {body.body[:800]}'
     )
 
-    msg = client.messages.create(
-        model=settings.anthropic_model,
-        max_tokens=150,
-        messages=[{"role": "user", "content": prompt}],
-    )
+    try:
+        msg = client.messages.create(
+            model=settings.anthropic_model,
+            max_tokens=150,
+            messages=[{"role": "user", "content": prompt}],
+        )
+    except anthropic.APIStatusError as e:
+        raise HTTPException(status_code=502, detail=f"AI service error: {e.message}")
+    except Exception:
+        raise HTTPException(status_code=503, detail="AI service unavailable")
+
     try:
         raw = msg.content[0].text.strip()
         raw = raw.removeprefix("```json").removeprefix("```").removesuffix("```").strip()

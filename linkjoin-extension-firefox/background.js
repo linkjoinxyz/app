@@ -1,5 +1,5 @@
-const BASE_URL = 'http://localhost:8000'
-const BASE_WS_URL = 'ws://localhost:8000'
+const BASE_URL = 'https://linkjoin.azurewebsites.net'
+const BASE_WS_URL = 'wss://linkjoin.azurewebsites.net'
 const PRE_MEET_MS = 5000
 
 let webSocket = null
@@ -9,7 +9,7 @@ let reconnectTimer = null
 
 async function getAuth() {
     const { token, email } = await chrome.storage.local.get(['token', 'email'])
-    return token && email ? { token, email } : null
+    return token ? { token, email: email || '' } : null
 }
 
 async function apiFetch(path, options = {}) {
@@ -315,6 +315,21 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
             reconnectTimer = null
         }
         chrome.alarms.clearAll()
+    }
+    if (msg.type === 'doLogin') {
+        fetch(`${BASE_URL}/auth/login`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: msg.email, password: msg.password }),
+        }).then(async res => {
+            if (!res.ok) { sendResponse({ ok: false }); return }
+            const data = await res.json()
+            await chrome.storage.local.set({ token: data.access_token, email: data.email })
+            if (webSocket) webSocket.close()
+            createWebsocket()
+            sendResponse({ ok: true, email: data.email })
+        }).catch(() => sendResponse({ ok: false }))
+        return true
     }
     if (msg.type === 'getLinks') {
         apiFetch('/links').then(result => sendResponse(result || null))

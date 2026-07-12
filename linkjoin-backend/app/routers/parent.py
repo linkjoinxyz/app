@@ -1,0 +1,252 @@
+from datetime import datetime, timezone, timedelta
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
+from app.auth import get_confirmed_user
+from app.database import motor_db
+
+router = APIRouter(prefix="/parent", tags=["parent"])
+
+_LOOKBACK_DAYS = 28
+_DAY_TO_WEEKDAY = {'Sun': 6, 'Mon': 0, 'Tue': 1, 'Wed': 2, 'Thu': 3, 'Fri': 4, 'Sat': 5}
+
+
+def _require_parent(user: dict) -> None:
+    if user.get("role") != "parent":
+        raise HTTPException(status_code=403, detail="Parent access required")
+
+
+async def _parent_student_ids(parent_user_id: str) -> list[str]:
+    links = await motor_db.parent_links.find(
+        {"parent_user_id": parent_user_id}, {"student_user_id": 1}
+    ).to_list(None)
+    return [lnk["student_user_id"] for lnk in links]
+
+
+@router.get("/children")
+async def list_children(user: dict = Depends(get_confirmed_user)):
+    _require_parent(user)
+    student_ids = await _parent_student_ids(user["user_id"])
+    if not student_ids:
+        return []
+
+    children = []
+    for uid in student_ids:
+        student = await motor_db.login.find_one(
+            {"user_id": uid},
+            {"_id": 0, "username": 1, "user_id": 1, "name": 1, "first_name": 1, "last_name": 1, "org_id": 1},
+        )
+        if student:
+            student.pop("_id", None)
+            children.append(student)
+    return children
+
+
+@router.get("/children/{student_id}/classes")
+async def get_child_classes(student_id: str, user: dict = Depends(get_confirmed_user)):
+    _require_parent(user)
+    linked_ids = await _parent_student_ids(user["user_id"])
+    if student_id not in linked_ids:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    student = await motor_db.login.find_one({"user_id": student_id}, {"username": 1, "_id": 0})
+    if not student:
+        raise HTTPException(status_code=404, detail="Student not found")
+    student_email = student["username"]
+
+    now = datetime.now(timezone.utc)
+    cutoff = now - timedelta(days=_LOOKBACK_DAYS)
+
+    result = []
+    async for cls in motor_db.classes.find({"student_ids": student_id}, {"_id": 0}):
+        class_id = cls["class_id"]
+
+        records = await motor_db.attendance.find(
+            {"class_id": class_id, "student_email": student_email, "opened_at": {"$gte": cutoff}},
+            {"_id": 0, "minutes_late": 1, "opened_at": 1},
+        ).to_list(None)
+
+        class_days = cls.get("days") or []
+        scheduled_weekdays = {_DAY_TO_WEEKDAY[d] for d in class_days if d in _DAY_TO_WEEKDAY}
+        expected = (
+            sum(1 for i in range(_LOOKBACK_DAYS) if (cutoff + timedelta(days=i)).weekday() in scheduled_weekdays)
+            if scheduled_weekdays else None
+        )
+
+        attended = len(records)
+        tardy = sum(1 for r in records if (r.get("minutes_late") or 0) > 5)
+        attendance_rate = round(attended / expected, 2) if expected else None
+
+        open_iv = await motor_db.interventions.find_one(
+            {"class_id": class_id, "student_email": student_email, "status": {"$ne": "resolved"}},
+            {"flag_type": 1, "status": 1, "_id": 0},
+        )
+
+        result.append({
+            "class_id": class_id,
+            "class_name": cls.get("name", ""),
+            "teacher_name": cls.get("teacher_name", ""),
+            "time": cls.get("time", ""),
+            "days": class_days,
+            "attended_last_28d": attended,
+            "expected_last_28d": expected,
+            "tardy_last_28d": tardy,
+            "attendance_rate": attendance_rate,
+            "active_flag": open_iv["flag_type"] if open_iv else None,
+        })
+
+    return result
+
+
+@router.get("/children/{student_id}/attendance")
+async def get_child_attendance(student_id: str, user: dict = Depends(get_confirmed_user)):
+    _require_parent(user)
+    linked_ids = await _parent_student_ids(user["user_id"])
+    if student_id not in linked_ids:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    student = await motor_db.login.find_one({"user_id": student_id}, {"username": 1, "_id": 0})
+    if not student:
+        raise HTTPException(status_code=404, detail="Student not found")
+    student_email = student["username"]
+
+    now = datetime.now(timezone.utc)
+    cutoff = now - timedelta(days=_LOOKBACK_DAYS)
+
+    # Index attendance records by (class_id, date)
+    records_map: dict = {}
+    async for r in motor_db.attendance.find(
+        {"student_email": student_email, "opened_at": {"$gte": cutoff}},
+        {"class_id": 1, "class_name": 1, "opened_at": 1, "minutes_late": 1},
+    ):
+        oid = str(r.pop("_id"))
+        opened_at = r["opened_at"]
+        date_str = opened_at.strftime("%Y-%m-%d") if hasattr(opened_at, "strftime") else str(opened_at)[:10]
+        r["record_id"] = oid
+        r["date"] = date_str
+        r["opened_at"] = opened_at.isoformat() if hasattr(opened_at, "isoformat") else str(opened_at)
+        records_map.setdefault((r["class_id"], date_str), r)
+
+    # Build per-class scheduled dates within the lookback window up to today
+    class_info: dict = {}
+    async for cls in motor_db.classes.find(
+        {"student_ids": student_id},
+        {"class_id": 1, "name": 1, "days": 1, "_id": 0},
+    ):
+        class_days = cls.get("days") or []
+        scheduled_weekdays = {_DAY_TO_WEEKDAY[d] for d in class_days if d in _DAY_TO_WEEKDAY}
+        if not scheduled_weekdays:
+            continue
+        scheduled_dates = {
+            (cutoff + timedelta(days=i)).strftime("%Y-%m-%d")
+            for i in range(_LOOKBACK_DAYS + 1)
+            if (cutoff + timedelta(days=i)).weekday() in scheduled_weekdays
+            and (cutoff + timedelta(days=i)).date() <= now.date()
+        }
+        class_info[cls["class_id"]] = {"class_name": cls["name"], "scheduled_dates": scheduled_dates}
+
+    # Index parent notes by (class_id, date)
+    notes_map: dict = {}
+    async for n in motor_db.parent_notes.find({"student_user_id": student_id}):
+        n.pop("_id", None)
+        ts = n.get("submitted_at")
+        n["submitted_at"] = ts.isoformat() if hasattr(ts, "isoformat") else str(ts)
+        notes_map[(n["class_id"], n["date"])] = n
+
+    events = []
+    seen: set = set()
+
+    # Attended sessions (on_time or tardy)
+    for (class_id, date_str), rec in records_map.items():
+        seen.add((class_id, date_str))
+        ml = rec.get("minutes_late") or 0
+        events.append({
+            "type": "tardy" if ml > 5 else "on_time",
+            "date": date_str,
+            "class_id": class_id,
+            "class_name": rec.get("class_name") or class_info.get(class_id, {}).get("class_name", ""),
+            "record_id": rec["record_id"],
+            "minutes_late": ml,
+            "parent_note": notes_map.get((class_id, date_str)),
+        })
+
+    # Absent sessions (scheduled but no record)
+    for class_id, info in class_info.items():
+        for date_str in info["scheduled_dates"]:
+            if (class_id, date_str) not in seen:
+                events.append({
+                    "type": "absent",
+                    "date": date_str,
+                    "class_id": class_id,
+                    "class_name": info["class_name"],
+                    "record_id": None,
+                    "minutes_late": None,
+                    "parent_note": notes_map.get((class_id, date_str)),
+                })
+
+    events.sort(key=lambda e: e["date"], reverse=True)
+    return {"events": events}
+
+
+class ParentNoteBody(BaseModel):
+    student_user_id: str
+    class_id: str
+    class_name: str
+    date: str  # YYYY-MM-DD
+    note: str
+    is_excuse: bool = False
+
+
+@router.post("/notes")
+async def submit_parent_note(body: ParentNoteBody, user: dict = Depends(get_confirmed_user)):
+    _require_parent(user)
+    linked_ids = await _parent_student_ids(user["user_id"])
+    if body.student_user_id not in linked_ids:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    student = await motor_db.login.find_one({"user_id": body.student_user_id}, {"username": 1, "_id": 0})
+    if not student:
+        raise HTTPException(status_code=404, detail="Student not found")
+
+    doc = {
+        "student_email": student["username"],
+        "student_user_id": body.student_user_id,
+        "parent_user_id": user["user_id"],
+        "class_id": body.class_id,
+        "class_name": body.class_name,
+        "date": body.date,
+        "note": body.note.strip(),
+        "is_excuse": body.is_excuse,
+        "submitted_at": datetime.now(timezone.utc),
+    }
+    await motor_db.parent_notes.update_one(
+        {"student_user_id": body.student_user_id, "class_id": body.class_id, "date": body.date},
+        {"$set": doc},
+        upsert=True,
+    )
+    return {"ok": True}
+
+
+@router.get("/children/{student_id}/notes")
+async def list_student_notes(student_id: str, user: dict = Depends(get_confirmed_user)):
+    """Accessible by the linked parent or school staff."""
+    role = user.get("role")
+    if role == "parent":
+        linked = await _parent_student_ids(user["user_id"])
+        if student_id not in linked:
+            raise HTTPException(status_code=403, detail="Access denied")
+    elif role in ("school_admin", "district_admin", "teacher"):
+        stu = await motor_db.login.find_one({"user_id": student_id}, {"org_id": 1, "_id": 0})
+        if not stu:
+            raise HTTPException(status_code=404, detail="Student not found")
+        if user.get("org_id") and stu.get("org_id") != user.get("org_id"):
+            raise HTTPException(status_code=403, detail="Access denied")
+    else:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    notes = []
+    async for n in motor_db.parent_notes.find({"student_user_id": student_id}).sort("submitted_at", -1):
+        n["id"] = str(n.pop("_id"))
+        ts = n.get("submitted_at")
+        n["submitted_at"] = ts.isoformat() if hasattr(ts, "isoformat") else str(ts)
+        notes.append(n)
+    return notes

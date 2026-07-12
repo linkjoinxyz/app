@@ -159,7 +159,8 @@ async function processEmailBody(bodyEl) {
 
         if ([...sessionDismissed].some(url => urlsMatch(url, detectedLink))) return
 
-        const linksData = await chrome.runtime.sendMessage({ type: 'getLinks' })
+        let linksData = null
+        try { linksData = await chrome.runtime.sendMessage({ type: 'getLinks' }) } catch {}
         if (linksData?.links?.some(l => l.link && urlsMatch(l.link, detectedLink))) return
 
         const subject = getEmailSubject()
@@ -168,13 +169,18 @@ async function processEmailBody(bodyEl) {
 
         const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone
 
-        chrome.runtime.sendMessage(
-            { type: 'extractMeeting', subject, body: text, timezone },
-            (result) => {
-                removeAnalyzing()
-                showOverlay(result || {}, detectedLink)
-            }
-        )
+        let done = false
+        const fallback = setTimeout(() => {
+            if (!done) { done = true; removeAnalyzing(); showOverlay({}, detectedLink) }
+        }, 12000)
+
+        chrome.runtime.sendMessage({ type: 'extractMeeting', subject, body: text, timezone })
+            .then(result => {
+                if (!done) { done = true; clearTimeout(fallback); removeAnalyzing(); showOverlay(result || {}, detectedLink) }
+            })
+            .catch(() => {
+                if (!done) { done = true; clearTimeout(fallback); removeAnalyzing(); showOverlay({}, detectedLink) }
+            })
     } catch {}
 }
 
@@ -251,7 +257,8 @@ if (IS_OUTLOOK) {
 
             if ([...sessionDismissed].some(url => urlsMatch(url, detectedLink))) return
 
-            const linksData = await chrome.runtime.sendMessage({ type: 'getLinks' })
+            let linksData = null
+            try { linksData = await chrome.runtime.sendMessage({ type: 'getLinks' }) } catch {}
             if (linksData?.links?.some(l => l.link && urlsMatch(l.link, detectedLink))) return
 
             if (document.getElementById('lj-overlay') || document.getElementById('lj-analyzing')) return
@@ -267,17 +274,13 @@ if (IS_OUTLOOK) {
                 if (!done) { done = true; removeAnalyzing(); showOverlay({}, detectedLink) }
             }, 12000)
 
-            chrome.runtime.sendMessage(
-                { type: 'extractMeeting', subject, body: text, timezone },
-                (result) => {
-                    if (!done) {
-                        done = true
-                        clearTimeout(fallback)
-                        removeAnalyzing()
-                        showOverlay(result || {}, detectedLink)
-                    }
-                }
-            )
+            chrome.runtime.sendMessage({ type: 'extractMeeting', subject, body: text, timezone })
+                .then(result => {
+                    if (!done) { done = true; clearTimeout(fallback); removeAnalyzing(); showOverlay(result || {}, detectedLink) }
+                })
+                .catch(() => {
+                    if (!done) { done = true; clearTimeout(fallback); removeAnalyzing(); showOverlay({}, detectedLink) }
+                })
         } catch {}
     }
 

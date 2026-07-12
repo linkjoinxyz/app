@@ -72,7 +72,7 @@ export default function Login() {
           setError('')
           try {
             const data = await authApi.googleTokenLogin(response.access_token)
-            login(data.access_token, data.email, data.confirmed ?? true)
+            login(data.access_token, data.email, data.confirmed ?? true, data)
             navigate(redirect, { replace: true })
           } catch (e) {
             if (alive) { setError(e.body?.detail || 'google_login_failed'); setLoading(false) }
@@ -108,7 +108,7 @@ export default function Login() {
     setShowReset(false)
     try {
       const data = await authApi.login({ email: emailVal, password })
-      login(data.access_token, data.email, data.confirmed ?? false)
+      login(data.access_token, data.email, data.confirmed ?? false, data)
       navigate(redirect, { replace: true })
     } catch (e) {
       const detail = e.body?.detail || 'login_failed'

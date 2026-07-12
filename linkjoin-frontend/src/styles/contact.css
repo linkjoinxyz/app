@@ -17,7 +17,7 @@ html::-webkit-scrollbar, body::-webkit-scrollbar { display: none; }
 .ct-main {
   display: flex;
   justify-content: center;
-  padding: 72px 24px 120px;
+  padding: 120px 24px 120px;
 }
 
 .ct-body {

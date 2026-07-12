@@ -13,4 +13,11 @@ export const linksApi = {
   addLink: (shareId) => apiGet(`/links/addlink?id=${shareId}`),
   dismissModifications: () => apiPost('/links/dismiss-modifications'),
   trackOpen: () => apiPost('/analytics', { field: 'links_opened' }),
+  logOpen: (link) => apiPost(`/links/${link.id}/open`, {}),
+  getHistory: (limit = 50, linkId = null, before = null) => {
+    let path = `/links/history?limit=${limit}`
+    if (linkId != null) path += `&link_id=${linkId}`
+    if (before) path += `&before=${encodeURIComponent(before)}`
+    return apiGet(path)
+  },
 }

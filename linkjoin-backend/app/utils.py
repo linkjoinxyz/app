@@ -1,5 +1,5 @@
 import secrets
-from datetime import datetime
+from datetime import datetime, date, timedelta, timezone
 from pymongo import ReturnDocument
 from app.database import sync_db, motor_db
 from app.encryption import decrypt
@@ -32,17 +32,18 @@ async def async_next_link_id() -> int:
     return int(doc["id"])
 
 
-async def analytics(event: str, **kwargs) -> None:
-    month = str(datetime.now().month)
-    if event == "users":
-        email = kwargs.get("email", "")
-        await motor_db.analytics.update_one(
-            {"id": event}, {"$inc": {f"{month}.{email}": 1}}, upsert=False
-        )
-    else:
-        await motor_db.analytics.update_one(
-            {"id": event}, {"$inc": {month: 1}}, upsert=False
-        )
+async def track_event(event: str, org_id: str | None = None, user_id: str | None = None) -> None:
+    try:
+        now = datetime.now(timezone.utc)
+        await motor_db.analytics_events.insert_one({
+            "event": event,
+            "ts": now,
+            "ym": now.strftime("%Y-%m"),
+            "org_id": org_id,
+            "user_id": user_id,
+        })
+    except Exception:
+        pass
 
 
 def _clean_items(items: list) -> list:
@@ -94,6 +95,20 @@ async def configure_data(email: str) -> dict:
         }
 
     return {key: _clean_items(items) for key, items in raw.items()}
+
+
+def get_blackout_set(org: dict) -> set[str]:
+    """Return all effective blackout dates: individual dates + expanded summer range."""
+    dates: set[str] = set(org.get("blackout_dates") or [])
+    start = org.get("summer_start") or ""
+    end = org.get("summer_end") or ""
+    if start and end and start <= end:
+        cur = date.fromisoformat(start)
+        stop = date.fromisoformat(end)
+        while cur <= stop:
+            dates.add(cur.isoformat())
+            cur += timedelta(days=1)
+    return dates
 
 
 def get_text_time(days: list, time: str, before: int) -> dict:

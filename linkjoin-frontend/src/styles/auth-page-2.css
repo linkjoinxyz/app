@@ -150,3 +150,61 @@
 @media (max-width: 768px) {
   .a2-right { display: none; }
 }
+
+/* ── MFA step ── */
+.ap-mfa-desc {
+  font-family: Montserrat, sans-serif;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.55);
+  line-height: 1.6;
+  margin: 0 0 20px;
+}
+.ap-mfa-input {
+  text-align: center;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: 0.25em;
+  font-family: monospace;
+}
+.ap-mfa-success {
+  background: rgba(74, 222, 128, 0.1);
+  border: 1px solid rgba(74, 222, 128, 0.25);
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-family: Montserrat, sans-serif;
+  font-size: 13px;
+  color: #4ade80;
+  margin-bottom: 12px;
+}
+.ap-mfa-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 16px;
+  gap: 8px;
+}
+.ap-mfa-resend {
+  background: none;
+  border: none;
+  padding: 0;
+  font-family: Montserrat, sans-serif;
+  font-size: 13px;
+  color: var(--lightblue, #2B8FD8);
+  cursor: pointer;
+  text-decoration: underline;
+}
+.ap-mfa-resend:disabled {
+  color: rgba(255, 255, 255, 0.3);
+  cursor: default;
+  text-decoration: none;
+}
+.ap-mfa-back {
+  background: none;
+  border: none;
+  padding: 0;
+  font-family: Montserrat, sans-serif;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.4);
+  cursor: pointer;
+}
+.ap-mfa-back:hover { color: rgba(255, 255, 255, 0.7); }

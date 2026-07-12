@@ -16,6 +16,8 @@ class Settings(BaseSettings):
     google_client_id: str = ""
     google_client_secret: str = ""
     google_chrome_client_id: str = ""
+    clever_client_id: str = ""
+    clever_client_secret: str = ""
     add_accounts_token: str = ""
     text_key: str = ""
     environment: str = "local"

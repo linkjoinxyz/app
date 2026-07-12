@@ -4,7 +4,7 @@
    ═══════════════════════════════════════════════════════════ */
 
 /* ── Tokens ── */
-.nh-root {
+:root {
   --nh-bg:       #060F1A;
   --nh-surface:  rgba(14, 32, 50, 0.65);
   --nh-border:   rgba(43, 143, 216, 0.18);
@@ -17,9 +17,10 @@
   --nh-card:     rgba(15, 35, 55, 0.72);
   --nh-radius:   14px;
   --nh-nav-h:    68px;
+  --nh-max-w:    1200px;
+}
 
-  --nh-max-w: 1200px;
-
+.nh-root {
   background: var(--nh-bg);
   color: var(--nh-text);
   font-family: Montserrat, sans-serif;
@@ -1582,3 +1583,380 @@ html:has(.nh-root)::-webkit-scrollbar-track { background: transparent; }
   letter-spacing: 0.01em;
 }
 html:has(.nh-root) { scrollbar-color: rgba(255,255,255,0.15) transparent; }
+
+/* ── Nav dropdowns ── */
+.nh-nav-dropdown {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.nh-nav-dd-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font: 500 15px Montserrat, sans-serif;
+  color: var(--nh-dim);
+  padding: 6px 4px;
+  border-radius: 6px;
+  transition: color 0.2s, background 0.2s;
+  white-space: nowrap;
+}
+.nh-nav-dropdown:hover .nh-nav-dd-trigger {
+  color: var(--nh-text);
+}
+
+.nh-nav-dd-chevron {
+  transition: transform 0.2s, opacity 0.2s;
+  flex-shrink: 0;
+  opacity: 0.5;
+}
+.nh-nav-dropdown:hover .nh-nav-dd-chevron {
+  transform: rotate(180deg);
+  opacity: 1;
+}
+
+.nh-nav-menu {
+  position: absolute;
+  top: calc(100% + 10px);
+  left: 50%;
+  transform: translateX(-50%) translateY(-6px);
+  min-width: 220px;
+  background: rgba(7, 18, 32, 0.98);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--nh-border);
+  border-radius: 12px;
+  padding: 6px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255,255,255,0.03);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.18s ease, transform 0.18s ease;
+  z-index: 200;
+}
+/* bridge gap between trigger and menu so mouse can travel between them */
+.nh-nav-menu::before {
+  content: '';
+  position: absolute;
+  top: -12px;
+  left: 0;
+  right: 0;
+  height: 14px;
+}
+.nh-nav-dropdown:hover .nh-nav-menu {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateX(-50%) translateY(0);
+}
+
+.nh-nav-menu-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  text-decoration: none;
+  color: var(--nh-dim);
+  transition: background 0.15s, color 0.15s;
+}
+.nh-nav-menu-item:hover {
+  background: rgba(43, 143, 216, 0.10);
+  color: var(--nh-text);
+}
+
+.nh-nav-menu-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  border-radius: 7px;
+  background: rgba(43, 143, 216, 0.12);
+  color: var(--nh-accent);
+  margin-top: 1px;
+}
+
+.nh-nav-menu-icon-text {
+  font: 700 15px Montserrat, sans-serif;
+  color: var(--nh-accent);
+}
+
+.nh-nav-menu-label {
+  display: block;
+  font: 600 13px Montserrat, sans-serif;
+  color: var(--nh-text);
+  line-height: 1.3;
+}
+.nh-nav-menu-sub {
+  display: block;
+  font: 400 11px Montserrat, sans-serif;
+  color: var(--nh-muted);
+  margin-top: 2px;
+  line-height: 1.4;
+}
+
+/* Mobile section labels */
+.nh-mobile-menu-section {
+  font: 600 11px Montserrat, sans-serif;
+  color: var(--nh-muted);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 14px 0 4px;
+  margin: 0;
+  border: none;
+}
+
+/* ── Schools hero section ── */
+.nh-schools-wrap {
+  position: relative;
+  z-index: 1;
+  background: var(--nh-bg);
+}
+
+/* Outer centering shell */
+.nh-schools-inner {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 80px clamp(24px, 4vw, 48px);
+  box-sizing: border-box;
+}
+
+/* Outer row: stripe content + image */
+.nh-schools-card {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 72px;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+/* Stripe treatment on the text block */
+.nh-schools-stripe {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  border-left: 4px solid #2B8FD8;
+  padding: 4px 0 4px 36px;
+  flex: 0 1 500px;
+  align-items: flex-start;
+}
+
+/* Image column */
+.nh-schools-img {
+  flex-shrink: 0;
+  width: 520px;
+}
+.nh-schools-img img {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.nh-schools-h2 {
+  font-size: clamp(28px, 3.5vw, 42px);
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: -0.02em;
+  color: white;
+  margin: 0;
+}
+
+.nh-schools-body {
+  font: 300 15px/1.7 Montserrat, sans-serif;
+  color: var(--nh-dim);
+  margin: 0;
+  max-width: 440px;
+}
+
+.nh-schools-feats {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.nh-schools-feat {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.nh-schools-feat-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--nh-accent);
+  flex-shrink: 0;
+}
+
+.nh-schools-feat-label {
+  font: 500 14px Montserrat, sans-serif;
+  color: rgba(255, 255, 255, 0.75);
+}
+
+/* Split layout (revert option — use class nh-schools-split on the wrapper div) */
+.nh-schools-split {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 80px;
+  align-items: center;
+  max-width: var(--nh-max-w);
+  margin: 0 auto;
+  padding: 120px clamp(24px, 6vw, 80px);
+  box-sizing: border-box;
+}
+
+/* Attendance mock card */
+.nh-mock-attendance {
+  background: rgba(8, 20, 38, 0.95);
+  border: 1px solid rgba(43, 143, 216, 0.22);
+  border-radius: 16px;
+  width: 100%;
+  max-width: 360px;
+  overflow: hidden;
+  box-shadow: 0 32px 80px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255,255,255,0.03);
+}
+
+.nh-mock-att-alert {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  background: rgba(43, 143, 216, 0.10);
+  border-bottom: 1px solid rgba(43, 143, 216, 0.18);
+  padding: 11px 16px;
+  font: 500 12px Montserrat, sans-serif;
+  color: #7EC8F0;
+}
+
+.nh-mock-att-alert-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #2B8FD8;
+  flex-shrink: 0;
+  animation: nh-att-pulse 2.2s ease-in-out infinite;
+}
+
+@keyframes nh-att-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.35; }
+}
+
+.nh-mock-att-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 16px 10px;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+
+.nh-mock-att-class {
+  font: 600 13px Montserrat, sans-serif;
+  color: white;
+}
+
+.nh-mock-att-time {
+  font: 400 12px Montserrat, sans-serif;
+  color: var(--nh-muted);
+}
+
+.nh-mock-att-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+}
+
+.nh-mock-att-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 8px;
+  border-radius: 8px;
+  transition: background 0.15s;
+}
+
+.nh-mock-att-flagged {
+  background: rgba(255, 80, 80, 0.05);
+}
+
+.nh-mock-att-avatar {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: rgba(43, 143, 216, 0.18);
+  color: #7EC8F0;
+  font: 700 11px Montserrat, sans-serif;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.nh-mock-att-name {
+  font: 400 13px Montserrat, sans-serif;
+  color: rgba(255,255,255,0.78);
+  flex: 1;
+}
+
+.nh-mock-att-badge {
+  font: 700 10px Montserrat, sans-serif;
+  padding: 3px 9px;
+  border-radius: 100px;
+  letter-spacing: 0.03em;
+  flex-shrink: 0;
+}
+
+.nh-att-present {
+  background: rgba(46, 213, 115, 0.12);
+  color: #3ecf8e;
+}
+
+.nh-att-absent {
+  background: rgba(255, 80, 80, 0.14);
+  color: #FF7070;
+}
+
+.nh-att-late {
+  background: rgba(255, 165, 60, 0.14);
+  color: #FFA94D;
+}
+
+.nh-mock-att-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 16px 14px;
+  border-top: 1px solid rgba(255,255,255,0.06);
+  font: 400 12px Montserrat, sans-serif;
+  color: var(--nh-muted);
+}
+
+.nh-mock-att-sent {
+  font: 600 12px Montserrat, sans-serif;
+  color: #3ecf8e;
+}
+
+@media (max-width: 900px) {
+  .nh-schools-split {
+    grid-template-columns: 1fr;
+    gap: 56px;
+    padding: 80px clamp(24px, 6vw, 80px);
+  }
+}
+
+@media (max-width: 1140px) {
+  .nh-schools-img { display: none; }
+  .nh-schools-card { justify-content: flex-start; }
+  .nh-schools-stripe { flex: 1 1 auto; }
+  .nh-schools-body { max-width: none; }
+}
+
+@media (max-width: 680px) {
+  .nh-schools-card { flex-direction: column; gap: 40px; }
+  .nh-schools-stripe { padding-left: 24px; }
+}

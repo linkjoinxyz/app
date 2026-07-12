@@ -732,3 +732,14 @@ html, body {scroll-behavior: smooth; overflow-x: visible;}
   transition: color 0.15s;
 }
 .modified-banner-dismiss:hover { color: rgba(255, 255, 255, 0.8); }
+
+[data-theme="light"] #popup { background: #fff; color: #0D1B2A; }
+[data-theme="light"] #popup-notes { background: #fff; color: #0D1B2A; }
+[data-theme="light"] #popup h2, [data-theme="light"] #popup-notes h2 { color: #0D1B2A; }
+[data-theme="light"] #popup input, [data-theme="light"] #popup select { background: #ffffff; color: #0D1B2A; border-color: #E2EAF2; }
+[data-theme="light"] #links-search { background: #ffffff; color: #0D1B2A; border-color: #E2EAF2; width: 260px; }
+[data-theme="light"] #links-search-container { background: transparent; border-bottom: none; }
+[data-theme="light"] .verify-banner { background: #1e3349; }
+[data-theme="light"] .verify-banner-close { color: rgba(255,255,255,0.5); }
+[data-theme="light"] .modified-banner { background: #1e3349; }
+[data-theme="light"] .modified-banner-dismiss { color: rgba(255,255,255,0.4); }

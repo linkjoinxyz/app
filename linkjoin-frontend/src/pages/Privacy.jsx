@@ -1,11 +1,12 @@
-import PublicHeader from '../components/PublicHeader.jsx'
+import NhNav from '../components/NhNav.jsx'
 import PublicFooter from '../components/PublicFooter.jsx'
+import '../styles/new-homepage.css'
 import '../styles/privacy.css'
 
 export default function Privacy() {
   return (
     <div className="pp-page">
-      <PublicHeader />
+      <NhNav />
 
       <main className="pp-main">
         <div className="pp-body">
@@ -55,9 +56,10 @@ export default function Privacy() {
             <ul>
               <li><strong>Twilio</strong> - used to deliver SMS reminders when you opt in to that feature.</li>
               <li><strong>Gmail SMTP</strong> - used to send transactional emails such as account verification.</li>
+              <li><strong>Anthropic</strong> - when you use the optional Gmail auto-detect feature in the browser extension, the subject line and body of the relevant email are sent to Anthropic's API to extract meeting details. Email content is not stored by LinkJoin beyond the duration of the request.</li>
             </ul>
             <p>
-              These providers receive only the minimum information necessary to perform their function. We do not sell, rent, or otherwise transfer your personal information to any third party.
+              These providers receive only the minimum information necessary to perform their function. We do not sell, rent, or otherwise transfer your personal information to any third party. A full list of subprocessors is available at <a href="/subprocessors" className="pp-link">linkjoin.xyz/subprocessors</a>.
             </p>
           </section>
 
@@ -83,11 +85,18 @@ export default function Privacy() {
           </section>
 
           <section className="pp-section">
-            <h2>7. Contact</h2>
+            <h2>7. Educational Use</h2>
+            <p>
+              If you are a school, teacher, student, or parent using LinkJoin in an educational setting, please see our <a href="/privacy-schools" className="pp-link">Student &amp; School Privacy Policy</a>, which describes how we handle student data and our FERPA and COPPA obligations. Schools deploying LinkJoin to students should also review our <a href="/dpa" className="pp-link">Data Processing Agreement</a>.
+            </p>
+          </section>
+
+          <section className="pp-section">
+            <h2>8. Contact</h2>
             <p>
               If you have questions or concerns about this Privacy Policy, please contact us at:
             </p>
-            <p><a href="mailto:seth@linkjoin.xyz" className="pp-link">seth@linkjoin.xyz</a></p>
+            <p><a href="/contact" className="pp-link">Contact us</a></p>
           </section>
         </div>
       </main>

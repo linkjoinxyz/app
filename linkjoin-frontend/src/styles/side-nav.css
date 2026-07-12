@@ -1,0 +1,264 @@
+/* ── Sidebar Nav ─────────────────────────────────────────────────────────────── */
+
+:root { --sn-w: 220px; }
+
+.sn-sidebar {
+  position: fixed;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 220px;
+  z-index: 100;
+  background: #0C1E30;
+  border-right: 1px solid rgba(255,255,255,0.07);
+  display: flex;
+  flex-direction: column;
+  transition: width 0.2s ease;
+  overflow: visible;
+}
+.sn-sidebar.sn-collapsed { width: 60px; }
+
+/* Inner wrapper clips content without clipping the toggle button */
+.sn-inner {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  overflow: hidden;
+  min-height: 0;
+}
+
+/* Main content offset — driven by JS via --sn-w on :root */
+.sn-content {
+  margin-left: var(--sn-w);
+  padding-top: 28px;
+  transition: margin-left 0.2s ease;
+}
+
+/* ── Logo / top area ─────────────────────────────────────────────────────────── */
+.sn-top {
+  padding: 18px 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  flex-shrink: 0;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+.sn-logo {
+  display: flex;
+  align-items: center;
+  text-decoration: none;
+  overflow: hidden;
+  padding: 0 4px;
+  height: 30px;
+}
+.sn-logo-text { height: 26px; flex-shrink: 0; }
+.sn-logo-icon { height: 26px; flex-shrink: 0; }
+
+/* Add meeting button */
+.sn-add-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: var(--lightblue, #2B8FD8);
+  border: none;
+  border-radius: 8px;
+  color: white;
+  font: 600 13px Montserrat, sans-serif;
+  padding: 8px 14px;
+  cursor: pointer;
+  transition: filter 0.15s;
+  white-space: nowrap;
+  width: 100%;
+}
+.sn-add-btn:hover { filter: brightness(1.12); }
+.sn-add-btn-label { overflow: hidden; }
+
+/* ── Sidebar search ──────────────────────────────────────────────────────────── */
+.sn-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  margin-bottom: 6px;
+}
+.sn-search-icon {
+  position: absolute;
+  left: 10px;
+  color: rgba(255,255,255,0.3);
+  pointer-events: none;
+  flex-shrink: 0;
+}
+.sn-search-input {
+  width: 100%;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 8px;
+  color: rgba(255,255,255,0.85);
+  font: 500 13px Montserrat, sans-serif;
+  padding: 8px 30px 8px 32px;
+  outline: none;
+  transition: background 0.15s, border-color 0.15s;
+}
+.sn-search-input::placeholder { color: rgba(255,255,255,0.3); }
+.sn-search-input:focus {
+  background: rgba(255,255,255,0.09);
+  border-color: rgba(43,143,216,0.5);
+}
+.sn-search-clear {
+  position: absolute;
+  right: 8px;
+  background: none;
+  border: none;
+  color: rgba(255,255,255,0.3);
+  font-size: 11px;
+  cursor: pointer;
+  padding: 2px 4px;
+  line-height: 1;
+}
+.sn-search-clear:hover { color: rgba(255,255,255,0.7); }
+
+/* ── Nav items ───────────────────────────────────────────────────────────────── */
+.sn-nav {
+  flex: 1;
+  padding: 10px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.sn-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 10px;
+  border-radius: 8px;
+  color: rgba(255,255,255,0.48);
+  font: 500 13px Montserrat, sans-serif;
+  text-decoration: none;
+  cursor: pointer;
+  background: none;
+  border: none;
+  width: 100%;
+  text-align: left;
+  white-space: nowrap;
+  transition: background 0.15s, color 0.15s;
+  flex-shrink: 0;
+}
+.sn-item:hover {
+  color: rgba(255,255,255,0.9);
+  background: rgba(255,255,255,0.06);
+}
+.sn-item--active {
+  color: #fff;
+  background: rgba(43,143,216,0.15);
+  font-weight: 600;
+}
+.sn-item--active:hover { background: rgba(43,143,216,0.22); }
+
+.sn-item-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 20px;
+}
+.sn-item-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  opacity: 1;
+  transition: opacity 0.15s;
+}
+.sn-collapsed .sn-item-label { opacity: 0; pointer-events: none; max-width: 0; overflow: hidden; }
+.sn-collapsed .sn-add-btn-label { opacity: 0; pointer-events: none; max-width: 0; overflow: hidden; }
+.sn-collapsed .sn-top { padding-left: 0; padding-right: 0; align-items: center; }
+.sn-collapsed .sn-add-btn { width: 40px; height: 40px; padding: 0; gap: 0; }
+.sn-collapsed .sn-add-btn svg { width: 20px; height: 20px; }
+
+/* ── Bottom actions ──────────────────────────────────────────────────────────── */
+.sn-bottom {
+  padding: 8px;
+  border-top: 1px solid rgba(255,255,255,0.06);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+/* ── Collapse toggle button ──────────────────────────────────────────────────── */
+.sn-toggle {
+  position: absolute;
+  right: -10px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 25px;
+  height: 25px;
+  background: #162d44;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: rgba(255,255,255,0.45);
+  transition: color 0.15s, background 0.15s;
+  z-index: 1;
+}
+.sn-toggle:hover {
+  color: #fff;
+  background: #1f3d5a;
+  border-color: rgba(255,255,255,0.22);
+}
+
+/* ── Extension banner (pinned above main content) ────────────────────────────── */
+.sn-ext-banner {
+  position: fixed;
+  top: 0;
+  left: var(--sn-w);
+  right: 0;
+  background: var(--blue);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid rgba(255,255,255,0.07);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 24px;
+  font: 500 13px Montserrat, sans-serif;
+  color: rgba(255,255,255,0.65);
+  z-index: 99;
+  transition: left 0.2s ease;
+}
+.sn-ext-install {
+  color: var(--lightblue, #2B8FD8);
+  text-decoration: none;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+.sn-ext-install:hover { text-decoration: underline; }
+.sn-ext-dismiss {
+  margin-left: auto;
+  background: none;
+  border: none;
+  color: rgba(255,255,255,0.35);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 2px 6px;
+  flex-shrink: 0;
+}
+.sn-ext-dismiss:hover { color: rgba(255,255,255,0.8); }
+
+/* Full-page overlays (welcome modal, etc.) cover only the content area */
+.sn-content .sn-page-overlay {
+  left: var(--sn-w);
+  transition: left 0.2s ease;
+}
+
+/* ── Mobile: hide sidebar ────────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .sn-sidebar { display: none; }
+  .sn-ext-banner { left: 0; }
+  .sn-content { margin-left: 0 !important; }
+  .sn-content .sn-page-overlay { left: 0; }
+  .ob-card {margin: 40px 0 60px 0 !important;}
+}

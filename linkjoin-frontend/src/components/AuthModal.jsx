@@ -52,6 +52,9 @@ export default function AuthModal({ mode: initialMode, onClose }) {
   const [loading, setLoading] = useState(false)
   const [showReset, setShowReset] = useState(false)
   const [googleReady, setGoogleReady] = useState(false)
+  const [mfaSession, setMfaSession] = useState(null)
+  const [mfaCode, setMfaCode] = useState('')
+  const [mfaError, setMfaError] = useState('')
   const modeRef = useRef(mode)
   const tokenClientRef = useRef(null)
   useEffect(() => { modeRef.current = mode }, [mode])
@@ -92,8 +95,13 @@ export default function AuthModal({ mode: initialMode, onClose }) {
           setError('')
           try {
             const data = await authApi.googleTokenLogin(response.access_token)
-            login(data.access_token, data.email, data.confirmed ?? true)
-            navigate('/meetings', { replace: true })
+            if (data.mfa_required) {
+              setMfaSession(data.mfa_session)
+              setLoading(false)
+              return
+            }
+            login(data.access_token, data.email, data.confirmed ?? true, data)
+            navigate(data.mfa_setup_required ? '/settings' : '/meetings', { replace: true })
           } catch (e) {
             if (!alive) return
             const detail = e.body?.detail ?? (modeRef.current === 'login' ? 'google_login_failed' : 'google_signup_failed')
@@ -145,14 +153,39 @@ export default function AuthModal({ mode: initialMode, onClose }) {
     setShowReset(false)
     try {
       const data = await authApi.login({ email, password })
-      login(data.access_token, data.email)
-      navigate('/meetings', { replace: true })
+      if (data.mfa_required) {
+        setMfaSession(data.mfa_session)
+        setLoading(false)
+        return
+      }
+      login(data.access_token, data.email, data.confirmed ?? false, data)
+      navigate(data.mfa_setup_required ? '/settings' : '/meetings', { replace: true })
     } catch (e) {
       const detail = e.body?.detail || 'login_failed'
       setError(detail)
       if (detail !== 'email_not_found') setShowReset(true)
       setLoading(false)
     }
+  }
+
+  async function handleMfaVerify() {
+    setLoading(true)
+    setMfaError('')
+    try {
+      const data = await authApi.verifyMfa(mfaSession, mfaCode.trim())
+      login(data.access_token, data.email, data.confirmed ?? true, data)
+      navigate('/meetings', { replace: true })
+    } catch (e) {
+      setMfaError('Incorrect or expired code. Please try again.')
+      setLoading(false)
+    }
+  }
+
+  async function handleMfaResend() {
+    try {
+      await authApi.resendMfa(mfaSession)
+      setMfaError('')
+    } catch (_) {}
   }
 
   async function handleSignup() {
@@ -164,7 +197,7 @@ export default function AuthModal({ mode: initialMode, onClose }) {
         countrycode: countryCode, offset, timezone,
       })
       if (data.access_token) {
-        login(data.access_token, data.email)
+        login(data.access_token, data.email, data.confirmed ?? false, data)
         navigate('/meetings', { replace: true })
       } else {
         navigate('/login?error=not_confirmed')
@@ -190,6 +223,42 @@ export default function AuthModal({ mode: initialMode, onClose }) {
   }
 
   const ERRORS = mode === 'login' ? LOGIN_ERRORS : SIGNUP_ERRORS
+
+  if (mfaSession) {
+    return (
+      <div className="auth-backdrop" onMouseDown={e => e.target === e.currentTarget && onClose()}>
+        <div className="auth-card">
+          <button className="auth-back" onClick={onClose} aria-label="Close">
+            <img src="/images/arrow-left.svg" height="20" width="20" alt="back" />
+          </button>
+          <div className="auth-heading">
+            <h2 className="auth-title">Confirm it's you.</h2>
+            <p className="auth-switch">Enter the 6-digit code sent to your phone.</p>
+          </div>
+          {mfaError && <div className="auth-error">{mfaError}</div>}
+          <div className="auth-field">
+            <label className="auth-label">Verification code</label>
+            <input
+              className="auth-input" type="text" inputMode="numeric" placeholder="000000"
+              maxLength={6} value={mfaCode}
+              onChange={e => setMfaCode(e.target.value.replace(/\D/g, ''))}
+              onKeyUp={e => e.key === 'Enter' && handleMfaVerify()}
+              autoFocus
+            />
+          </div>
+          <button className={`auth-submit${loading ? ' disabled' : ''}`} onClick={handleMfaVerify} disabled={loading || mfaCode.length < 6}>
+            {loading ? '' : 'Verify'}
+            {!loading && <img src="/images/arrow-right.svg" height="16" width="16" alt="" />}
+          </button>
+          <div style={{ textAlign: 'center', marginTop: 12 }}>
+            <button className="auth-reset" style={{ background: 'none', border: 'none', cursor: 'pointer' }} onClick={handleMfaResend}>Resend code</button>
+            {' · '}
+            <button className="auth-reset" style={{ background: 'none', border: 'none', cursor: 'pointer' }} onClick={() => setMfaSession(null)}>Back to login</button>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="auth-backdrop" onMouseDown={e => e.target === e.currentTarget && onClose()}>

@@ -138,7 +138,8 @@ input:focus {
     border-color: var(--lightblue);
 }
 
-#login-btn {
+#login-btn,
+.login-btn {
     background: var(--lightblue);
     border: none;
     border-radius: 8px;
@@ -153,13 +154,28 @@ input:focus {
     letter-spacing: 0.3px;
 }
 
-#login-btn:hover:not(:disabled) {
+#login-btn:hover:not(:disabled),
+.login-btn:hover:not(:disabled) {
     opacity: 0.85;
 }
 
-#login-btn:disabled {
+#login-btn:disabled,
+.login-btn:disabled {
     opacity: 0.5;
     cursor: default;
+}
+
+.login-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 2px;
+}
+
+.login-error {
+    font-size: 12px;
+    color: #f87171;
+    margin: 0;
 }
 
 .error {

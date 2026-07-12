@@ -1,0 +1,6 @@
+Method,Name,Error,Occurrences,First Seen,Last Seen
+GET,/admin/analytics,HTTPError('403 Client Error: Forbidden for url: /admin/analytics'),3,2026-07-10T05:59:09Z,2026-07-10T05:59:36Z
+GET,/classes,HTTPError('403 Client Error: Forbidden for url: /classes'),8,2026-07-10T05:58:54Z,2026-07-10T06:00:15Z
+GET,/admin/orgs,HTTPError('403 Client Error: Forbidden for url: /admin/orgs'),12,2026-07-10T05:58:50Z,2026-07-10T06:00:12Z
+GET,/interventions,HTTPError('403 Client Error: Forbidden for url: /interventions'),4,2026-07-10T05:58:57Z,2026-07-10T05:59:30Z
+GET,/admin/audit-logs,HTTPError('403 Client Error: Forbidden for url: /admin/audit-logs'),9,2026-07-10T05:58:49Z,2026-07-10T06:00:07Z

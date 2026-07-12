@@ -1,5 +1,5 @@
-const BASE_URL = 'http://localhost:8000'
-const APP_URL = 'http://localhost:5173'
+const BASE_URL = 'https://linkjoin.azurewebsites.net'
+const APP_URL = 'https://linkjoin.xyz'
 
 const MEETING_RE = /https?:\/\/(?:[a-z0-9-]+\.)?(?:zoom\.us\/j\/|meet\.google\.com\/[a-z-]{3,}|teams\.microsoft\.com\/l\/meetup-join\/|webex\.com\/meet\/|gotomeeting\.com\/join\/)[^\s"'<>]*/i
 
@@ -86,7 +86,7 @@ function escAttr(str) {
 
 async function getAuth() {
     const { token, email } = await chrome.storage.local.get(['token', 'email'])
-    return token && email ? { token, email } : null
+    return token ? { token, email: email || '' } : null
 }
 
 async function apiFetch(path, options = {}) {
@@ -198,12 +198,10 @@ async function handleScan() {
     app.querySelector('.scan-status').innerHTML = '<span class="spinner"></span> Extracting meeting info…'
 
     const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone
-    const aiResult = await new Promise(resolve => {
-        chrome.runtime.sendMessage(
-            { type: 'extractMeeting', subject: found.title, body: found.text, timezone },
-            result => resolve(result || {})
-        )
-    })
+    const aiResult = await apiFetch('/ai/extract-meeting', {
+        method: 'POST',
+        body: JSON.stringify({ subject: found.title, body: found.text, user_timezone: timezone }),
+    }) || {}
 
     renderAddForm(found.link, aiResult)
 }

@@ -14,4 +14,6 @@ export const authApi = {
   confirmEmail: (token) => apiFetch(`/auth/confirm?token=${token}`),
   resendConfirmation: () => apiPost('/auth/resend-confirmation', {}),
   me: () => apiFetch('/users/me'),
+  verifyMfa: (mfa_session, code) => apiPost('/auth/mfa/verify', { mfa_session, code }),
+  resendMfa: (mfa_session) => apiPost('/auth/mfa/resend', { mfa_session }),
 }
