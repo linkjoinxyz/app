@@ -199,6 +199,7 @@ export default function Bookmarks() {
         onAdd={() => { setEditBookmark(null); setShowModal(true) }}
         search={search}
         onSearch={setSearch}
+        searchPlaceholder="Search bookmarks…"
       />
       <div className="sn-content">
 

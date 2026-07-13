@@ -144,7 +144,7 @@ export default function SettingsModal({ user, visible, onClose, onShowDeleted, o
         {saveStatus && (
           <div className={`settings-save-toast ${saveStatus}`}>
             {saveStatus === 'saved'
-              ? <><svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M5 13l4 4L19 7" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/></svg> Saved</>
+              ? 'Saved'
               : <><svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M18 6L6 18M6 6l12 12" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"/></svg> Failed to save</>
             }
           </div>
