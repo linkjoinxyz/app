@@ -240,6 +240,7 @@
     }
 
     .lk-badge { display: none; }
+    .switch, .switch-checkbox { display: none; }
 }
 
 @media (max-width: 360px) {
