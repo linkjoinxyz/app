@@ -1,6 +1,5 @@
 import { useEffect, useRef } from 'react'
 import { linksApi } from '../api/links.js'
-import { attendanceApi } from '../api/attendance.js'
 import { shouldOpenThisWeek } from '../utils/repeatLogic.js'
 
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
@@ -70,14 +69,14 @@ export function useAutoOpen(links, user, onDisable, onDelete) {
 
         const premeetParams = new URLSearchParams({ name: link.name || '', link: link.link })
         if (link.password) premeetParams.set('pw', link.password)
+        if (link.class_id && link.link_type === 'primary') {
+          premeetParams.set('linkId', link.id)
+          premeetParams.set('classId', link.class_id)
+          premeetParams.set('className', link.class_name || '')
+          premeetParams.set('sched', target.toISOString())
+        }
         window.open(`/premeet?${premeetParams}`, '_blank', 'noopener,noreferrer')
         linksApi.logOpen(link).catch(() => {})
-        if (link.class_id && link.link_type === 'primary') {
-          const now = new Date()
-          const [sh, sm] = link.time.split(':').map(Number)
-          const minutesLate = (now.getHours() * 60 + now.getMinutes()) - (sh * 60 + sm)
-          attendanceApi.log(link.id, link.class_id, link.class_name, minutesLate).catch(() => {})
-        }
         setLastOpened(link.id)
         window.dispatchEvent(new CustomEvent('lj:opened'))
 

@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { linksApi } from '../api/links.js'
+import { attendanceApi } from '../api/attendance.js'
 import { openSafeUrl } from '../utils.js'
 import { useAuth } from '../context/AuthContext.jsx'
 
@@ -69,6 +70,14 @@ export default function LinkCard({ link, isPending, onEdit, onShare, onDelete, o
 
   function handleOpen() {
     linksApi.trackOpen().catch(() => {})
+    if (link.class_id && link.link_type === 'primary' && link.time) {
+      const [sh, sm] = link.time.split(':').map(Number)
+      if (!isNaN(sh) && !isNaN(sm)) {
+        const now = new Date()
+        const minutesLate = (now.getHours() * 60 + now.getMinutes()) - (sh * 60 + sm)
+        attendanceApi.log(link.id, link.class_id, link.class_name, minutesLate).catch(() => {})
+      }
+    }
     openSafeUrl(link.link)
   }
 

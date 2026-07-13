@@ -429,6 +429,160 @@
   margin-left: 4px;
 }
 
+.sc-mock-img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+/* Pre-meeting confirm mockup */
+.sc-premeet-mock {
+  background: #060F1A;
+  padding: 48px 32px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+.sc-premeet-mock-name {
+  font: 700 20px Montserrat, sans-serif;
+  color: #fff;
+  letter-spacing: -0.01em;
+}
+.sc-premeet-mock-sub {
+  font: 400 13px Montserrat, sans-serif;
+  color: rgba(255,255,255,0.35);
+  margin-top: -12px;
+}
+.sc-premeet-mock-ring {
+  position: relative;
+  width: 64px;
+  height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font: 700 20px Montserrat, sans-serif;
+  color: #fff;
+  transition: color 0.3s ease, transform 0.3s ease;
+}
+.sc-premeet-mock-ring--confirmed {
+  border-radius: 50%;
+  border: 4px solid #34D399;
+  color: #34D399;
+  transform: scale(1.08);
+}
+.sc-premeet-mock-ring svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+.sc-premeet-mock-ring-track {
+  fill: none;
+  stroke: rgba(43,143,216,0.15);
+  stroke-width: 5;
+}
+.sc-premeet-mock-ring-fill {
+  fill: none;
+  stroke: #2B8FD8;
+  stroke-width: 5;
+  stroke-linecap: round;
+  stroke-dasharray: 238.76;
+  transition: stroke-dashoffset 0.8s linear;
+}
+.sc-premeet-mock-ring-num {
+  position: relative;
+  z-index: 1;
+}
+.sc-premeet-mock-ring-check {
+  display: block;
+  width: 26px;
+  height: 26px;
+  background-color: currentColor;
+  -webkit-mask: url('/images/check.svg') center / contain no-repeat;
+  mask: url('/images/check.svg') center / contain no-repeat;
+}
+.sc-premeet-mock-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 4px;
+}
+.sc-premeet-mock-btn {
+  background: #2B8FD8;
+  color: #fff;
+  font: 600 13px Montserrat, sans-serif;
+  padding: 10px 20px;
+  border-radius: 8px;
+}
+.sc-premeet-mock-confirmed {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font: 500 12px Montserrat, sans-serif;
+  color: #34D399;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+.sc-premeet-mock-confirmed--show {
+  opacity: 1;
+}
+.sc-premeet-mock-confirmed-check {
+  display: block;
+  width: 12px;
+  height: 12px;
+  background-color: currentColor;
+  -webkit-mask: url('/images/check.svg') center / contain no-repeat;
+  mask: url('/images/check.svg') center / contain no-repeat;
+}
+
+/* Identity comparison mock */
+.sc-identity-compare {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+.sc-identity-col {
+  padding: 20px;
+}
+.sc-identity-col--bad {
+  background: #FEF2F2;
+  border-right: 1px solid var(--sc-border);
+}
+.sc-identity-col--good {
+  background: #F0FDF4;
+}
+.sc-identity-col-title {
+  font: 700 10px Montserrat, sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #9CA3AF;
+  margin-bottom: 12px;
+}
+.sc-identity-row {
+  font: 500 13px Montserrat, sans-serif;
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(0,0,0,0.04);
+}
+.sc-identity-row:last-child { border-bottom: none; }
+.sc-identity-col--bad .sc-identity-row { color: #B91C1C; }
+.sc-identity-col--good .sc-identity-row {
+  color: #059669;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.sc-identity-col--good .sc-identity-row::before {
+  content: "";
+  display: block;
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+  background-color: currentColor;
+  -webkit-mask: url('/images/check.svg') center / contain no-repeat;
+  mask: url('/images/check.svg') center / contain no-repeat;
+}
+
 /* Attendance table mock */
 .sc-mock-table {
   width: 100%;

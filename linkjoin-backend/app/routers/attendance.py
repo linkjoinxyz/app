@@ -22,6 +22,10 @@ class ExcuseBody(BaseModel):
     excused: bool
     excuse_reason: str = ""
 
+class OverrideBody(BaseModel):
+    date: str
+    present_emails: list[str] = []
+
 _DAY_TO_WEEKDAY = {'Sun': 6, 'Mon': 0, 'Tue': 1, 'Wed': 2, 'Thu': 3, 'Fri': 4, 'Sat': 5}
 _LOOKBACK_DAYS = 28
 _TARDY_THRESHOLD_MINUTES = 5
@@ -179,13 +183,130 @@ async def get_class_attendance(class_id: str, user: dict = Depends(get_confirmed
         raise HTTPException(status_code=403, detail="Access denied")
 
     records = []
+    present_combos: set[tuple[str, str]] = set()
     async for r in motor_db.attendance.find({"class_id": class_id}).sort("opened_at", -1).limit(200):
         r["record_id"] = str(r.pop("_id"))
         r.setdefault("excused", False)
         r.setdefault("excuse_reason", "")
-        r["opened_at"] = r["opened_at"].isoformat() if isinstance(r.get("opened_at"), datetime) else r.get("opened_at")
+        r.setdefault("manual", False)
+        r.setdefault("absent", False)
+        opened = r.get("opened_at")
+        date_str = opened.strftime("%Y-%m-%d") if isinstance(opened, datetime) else str(opened or "")[:10]
+        r["opened_at"] = opened.isoformat() if isinstance(opened, datetime) else opened
         records.append(r)
+        present_combos.add((r["student_email"], date_str))
+
+    # Fill in absences: for every scheduled class day in the recent lookback
+    # window, any roster student with no record at all gets a synthetic
+    # "absent" row instead of just being missing from the table.
+    now = datetime.now(timezone.utc)
+    cutoff = now - timedelta(days=_LOOKBACK_DAYS)
+    class_days = cls.get("days") or []
+    scheduled_weekdays = {_DAY_TO_WEEKDAY[d] for d in class_days if d in _DAY_TO_WEEKDAY}
+    expected_dates = [
+        (cutoff + timedelta(days=i)).strftime("%Y-%m-%d")
+        for i in range(_LOOKBACK_DAYS)
+        if (cutoff + timedelta(days=i)).weekday() in scheduled_weekdays
+    ]
+
+    org = await motor_db.orgs.find_one({"org_id": cls.get("org_id", "")}, {"blackout_dates": 1, "summer_start": 1, "summer_end": 1})
+    blackout_dates = get_blackout_set(org or {})
+    excused_by_email: dict[str, set] = defaultdict(set)
+    for e in cls.get("excused_absences") or []:
+        excused_by_email[e.get("student_email")].add(e.get("date"))
+
+    from app.routers.classes import _resolve_students
+    roster = await _resolve_students(cls.get("student_ids", []))
+
+    for date_str in expected_dates:
+        if date_str in blackout_dates:
+            continue
+        for s in roster:
+            email = s["username"]
+            if (email, date_str) in present_combos:
+                continue
+            records.append({
+                "record_id": None,
+                "student_email": email,
+                "class_id": class_id,
+                "class_name": cls.get("name", ""),
+                "share_id": None,
+                "opened_at": f"{date_str}T00:00:00",
+                "minutes_late": None,
+                "excused": date_str in excused_by_email.get(email, set()),
+                "excuse_reason": "",
+                "manual": False,
+                "absent": True,
+            })
+
+    records.sort(key=lambda r: r["opened_at"], reverse=True)
     return {"records": records}
+
+
+@router.post("/class/{class_id}/override")
+async def override_class_attendance(class_id: str, body: OverrideBody, user: dict = Depends(get_confirmed_user)):
+    require_teacher(user)
+
+    cls = await motor_db.classes.find_one({"class_id": class_id})
+    if not cls:
+        raise HTTPException(status_code=404, detail="Class not found")
+    if user.get("role") == "teacher" and cls["teacher_id"] != user["user_id"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+    if user.get("role") in ("school_admin", "district_admin") and cls["org_id"] != user.get("org_id"):
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    try:
+        day = date_type.fromisoformat(body.date)
+    except ValueError:
+        raise HTTPException(status_code=422, detail="Invalid date")
+
+    day_start = datetime(day.year, day.month, day.day, tzinfo=timezone.utc)
+    day_end = day_start + timedelta(days=1)
+
+    from app.routers.classes import _resolve_students
+    roster_emails = {s["username"] for s in await _resolve_students(cls.get("student_ids", []))}
+
+    existing_by_email = defaultdict(list)
+    async for r in motor_db.attendance.find(
+        {"class_id": class_id, "opened_at": {"$gte": day_start, "$lt": day_end}},
+        {"student_email": 1},
+    ):
+        existing_by_email[r["student_email"]].append(r["_id"])
+
+    present_emails = {e for e in dict.fromkeys(body.present_emails) if e in roster_emails}
+
+    to_insert = [
+        {
+            "student_email": email,
+            "link_id": None,
+            "class_id": class_id,
+            "class_name": cls.get("name", ""),
+            "share_id": None,
+            "opened_at": day_start,
+            "minutes_late": 0,
+            "manual": True,
+            "entered_by": user["username"],
+        }
+        for email in present_emails
+        if email not in existing_by_email
+    ]
+    to_remove_ids = [
+        oid
+        for email, ids in existing_by_email.items()
+        if email not in present_emails
+        for oid in ids
+    ]
+
+    if to_insert:
+        await motor_db.attendance.insert_many(to_insert)
+    if to_remove_ids:
+        await motor_db.attendance.delete_many({"_id": {"$in": to_remove_ids}})
+
+    await log_audit(
+        user["username"], "data.attendance_override",
+        detail={"class_id": class_id, "date": body.date, "inserted": len(to_insert), "removed": len(to_remove_ids)},
+    )
+    return {"inserted": len(to_insert), "removed": len(to_remove_ids)}
 
 
 @router.patch("/{record_id}")

@@ -326,12 +326,10 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
         return true
     }
     if (msg.type === 'extractMeeting') {
-        console.log('[LJ] extractMeeting received, calling apiFetch directly')
         apiFetch('/ai/extract-meeting', {
             method: 'POST',
             body: JSON.stringify({ subject: msg.subject, body: msg.body, user_timezone: msg.timezone }),
         }).then(result => {
-            console.log('[LJ] extractMeeting result:', result)
             sendResponse(result || null)
         })
         return true
