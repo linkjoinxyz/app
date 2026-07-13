@@ -231,13 +231,18 @@
 @media (max-width: 480px) {
     .link {
         width: 92%;
-        padding: 12px 14px;
+        height: auto;
+        min-height: unset;
+        padding: 10px 14px;
     }
 
     .time {
-        font-size: 16px;
-        padding: 5px 10px;
+        font-size: 15px;
+        padding: 4px 9px;
     }
+
+    .lk-badge { display: none; }
+    .switch, .switch-checkbox { display: none; }
 }
 
 @media (max-width: 360px) {
