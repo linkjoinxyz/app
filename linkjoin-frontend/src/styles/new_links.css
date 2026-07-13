@@ -547,7 +547,7 @@ html, body {scroll-behavior: smooth; overflow-x: visible;}
 }
 
 @media (max-width: 900px) {
-    .link_event {margin: 0 0 10px 0; width: calc(100% - 100px); height: 150px;}
+    .link_event {margin: 0 0 10px 0; width: calc(100% - 100px); height: 100px;}
     .highlight {
         left: 0;
         top: 0;
