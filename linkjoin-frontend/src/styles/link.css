@@ -231,6 +231,7 @@
 @media (max-width: 480px) {
     .link {
         width: 92%;
+        height: auto;
         min-height: unset;
         padding: 10px 14px;
     }
