@@ -1,3 +1,9 @@
+.admin-page {
+  padding: 28px 32px 64px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
 .pa-header {
   margin-bottom: 28px;
   display: flex;
@@ -342,6 +348,12 @@
   color: rgba(255,255,255,0.35);
   text-transform: uppercase;
   letter-spacing: 0.05em;
+}
+
+.pa-stat-sub {
+  font-size: 11px;
+  color: rgba(255,255,255,0.25);
+  margin-top: 4px;
 }
 
 /* 3-column donut row */

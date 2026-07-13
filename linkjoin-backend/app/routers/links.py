@@ -352,6 +352,7 @@ async def share_link(body: ShareLinkRequest, user: dict = Depends(get_confirmed_
             pass
 
         await manager.broadcast(await configure_data(recipient_email), recipient_email)
+        await track_event("link_share", org_id=user.get("org_id"), user_id=user.get("user_id"))
 
     return {"message": "Shared"}
 

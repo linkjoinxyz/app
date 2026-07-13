@@ -276,11 +276,12 @@ function fmtTs(iso) {
     d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false })
 }
 
-function StatCard({ val, label, accent }) {
+function StatCard({ val, label, accent, sub }) {
   return (
     <div className="pa-stat-card" style={accent ? { borderColor: accent + '33', boxShadow: `0 0 0 1px ${accent}22 inset` } : {}}>
       <div className="pa-stat-val" style={accent ? { color: accent } : {}}>{val ?? '-'}</div>
       <div className="pa-stat-label">{label}</div>
+      {sub != null && <div className="pa-stat-sub">{sub} users</div>}
     </div>
   )
 }
@@ -356,7 +357,7 @@ function AnalyticsTab() {
   if (loading) return <div className="pa-section"><div className="pa-empty">Loading...</div></div>
   if (err) return <div className="pa-section"><div className="pa-error">{err}</div></div>
 
-  const { users, orgs, invites, monthly_signups, recent_audit } = data
+  const { users, orgs, invites, monthly_signups, last_30d, recent_audit } = data
   const maxSignups = Math.max(...monthly_signups.map(m => m.count), 1)
 
   const roleSegments = [
@@ -390,6 +391,16 @@ function AnalyticsTab() {
         <StatCard val={users.total}         label="Total users"         accent="#c084fc" />
         <StatCard val={users.institutional} label="Institutional users" accent="#4ade80" />
         <StatCard val={invites.pending}     label="Pending invites"     accent="#fbbf24" />
+      </div>
+
+      {/* Last-30-day activity */}
+      <div className="pa-section-title">Last 30 days</div>
+      <div className="pa-stat-grid">
+        <StatCard val={last_30d?.logins?.count       ?? 0} sub={last_30d?.logins?.unique_users       ?? 0} label="Logins"         accent="#60a5fa" />
+        <StatCard val={last_30d?.signups?.count      ?? 0} sub={last_30d?.signups?.unique_users      ?? 0} label="Signups"        accent="#4ade80" />
+        <StatCard val={last_30d?.link_creates?.count ?? 0} sub={last_30d?.link_creates?.unique_users ?? 0} label="Links created"  accent="#a78bfa" />
+        <StatCard val={last_30d?.link_opens?.count   ?? 0} sub={last_30d?.link_opens?.unique_users   ?? 0} label="Links opened"   accent="#fb923c" />
+        <StatCard val={last_30d?.link_shares?.count  ?? 0} sub={last_30d?.link_shares?.unique_users  ?? 0} label="Link shares"    accent="#f472b6" />
       </div>
 
       {/* Donut charts row */}
