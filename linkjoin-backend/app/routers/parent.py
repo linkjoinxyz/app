@@ -6,7 +6,15 @@ from app.database import motor_db
 
 router = APIRouter(prefix="/parent", tags=["parent"])
 
-_LOOKBACK_DAYS = 28
+_LOOKBACK_DAYS = 365
+
+def formatDate(date_str: str) -> str:
+    try:
+        from datetime import date as _date
+        y, mo, d = map(int, date_str.split("-"))
+        return _date(y, mo, d).strftime("%b %-d, %Y")
+    except Exception:
+        return date_str
 _DAY_TO_WEEKDAY = {'Sun': 6, 'Mon': 0, 'Tue': 1, 'Wed': 2, 'Thu': 3, 'Fri': 4, 'Sat': 5}
 
 
@@ -81,10 +89,20 @@ async def get_child_classes(student_id: str, user: dict = Depends(get_confirmed_
             {"flag_type": 1, "status": 1, "_id": 0},
         )
 
+        teacher_email = ""
+        teacher_id = cls.get("teacher_id")
+        if teacher_id:
+            t = await motor_db.login.find_one({"user_id": teacher_id}, {"username": 1, "_id": 0})
+            if not t:
+                t = await motor_db.login.find_one({"username": teacher_id}, {"username": 1, "_id": 0})
+            if t:
+                teacher_email = t.get("username", "")
+
         result.append({
             "class_id": class_id,
             "class_name": cls.get("name", ""),
             "teacher_name": cls.get("teacher_name", ""),
+            "teacher_email": teacher_email,
             "time": cls.get("time", ""),
             "days": class_days,
             "attended_last_28d": attended,
@@ -98,7 +116,7 @@ async def get_child_classes(student_id: str, user: dict = Depends(get_confirmed_
 
 
 @router.get("/children/{student_id}/attendance")
-async def get_child_attendance(student_id: str, user: dict = Depends(get_confirmed_user)):
+async def get_child_attendance(student_id: str, limit: int = 20, offset: int = 0, q: str = "", user: dict = Depends(get_confirmed_user)):
     _require_parent(user)
     linked_ids = await _parent_student_ids(user["user_id"])
     if student_id not in linked_ids:
@@ -184,7 +202,11 @@ async def get_child_attendance(student_id: str, user: dict = Depends(get_confirm
                 })
 
     events.sort(key=lambda e: e["date"], reverse=True)
-    return {"events": events}
+    if q:
+        ql = q.lower()
+        events = [e for e in events if ql in e["date"].lower() or ql in formatDate(e["date"]).lower()]
+    total = len(events)
+    return {"events": events[offset:offset + limit], "total": total, "offset": offset, "limit": limit}
 
 
 class ParentNoteBody(BaseModel):

@@ -3,7 +3,7 @@ import { useAuth } from '../context/AuthContext.jsx'
 import { useNavigate } from 'react-router-dom'
 import { apiGet, apiPost } from '../api/client.js'
 import { usersApi } from '../api/users.js'
-import HeaderModern from '../components/HeaderModern.jsx'
+import SideNav from '../components/SideNav.jsx'
 import '../styles/parent-portal.css'
 import '../styles/globals.css'
 
@@ -115,6 +115,15 @@ function ClassesTab({ student }) {
                     <span className="pp-stat-label">Times tardy (28 days)</span>
                   </div>
                 </div>
+                {(cls.teacher_name || cls.teacher_email) && (
+                  <div className="pp-teacher-info">
+                    <span className="pp-teacher-label">Teacher</span>
+                    <span className="pp-teacher-name">{cls.teacher_name || cls.teacher_email}</span>
+                    {cls.teacher_email && (
+                      <a className="pp-teacher-email" href={`mailto:${cls.teacher_email}`}>{cls.teacher_email}</a>
+                    )}
+                  </div>
+                )}
                 {cls.active_flag && (
                   <div className="pp-flag-notice">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -179,8 +188,10 @@ function NoteModal({ event, studentId, onClose, onSaved }) {
           onChange={e => setNoteText(e.target.value)}
           autoFocus
         />
-        <label className="pp-modal-excuse-row">
-          <input type="checkbox" checked={isExcuse} onChange={e => setIsExcuse(e.target.checked)} />
+        <label className="pp-modal-excuse-row" onClick={() => setIsExcuse(v => !v)}>
+          <span className={`pp-modal-checkbox${isExcuse ? ' pp-modal-checkbox--checked' : ''}`}>
+            {isExcuse && <img src="/images/check.svg" alt="" className="pp-modal-check-img" />}
+          </span>
           <span className="pp-modal-excuse-label">Mark as excused</span>
         </label>
         {error && <div style={{ fontSize: 12, color: '#f87171' }}>{error}</div>}
@@ -195,33 +206,49 @@ function NoteModal({ event, studentId, onClose, onSaved }) {
   )
 }
 
+const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+
 function AttendanceTab({ student }) {
-  const [events, setEvents] = useState([])
+  const [allEvents, setAllEvents] = useState([])
   const [loading, setLoading] = useState(true)
   const [noteTarget, setNoteTarget] = useState(null)
+  const [filterClass, setFilterClass] = useState('')
+  const [filterMonth, setFilterMonth] = useState('')
+  const [filterDay, setFilterDay] = useState('')
+  const [filterYear, setFilterYear] = useState('')
+  const [filterStatus, setFilterStatus] = useState('')
 
   useEffect(() => {
     setLoading(true)
-    apiGet(`/parent/children/${student.user_id}/attendance`)
-      .then(data => setEvents(data.events ?? []))
-      .catch(() => setEvents([]))
+    apiGet(`/parent/children/${student.user_id}/attendance?limit=1000&offset=0`)
+      .then(data => setAllEvents(data.events ?? []))
+      .catch(() => setAllEvents([]))
       .finally(() => setLoading(false))
   }, [student.user_id])
 
-  function openNote(ev) {
-    setNoteTarget(ev)
-  }
-
   function handleNoteSaved(note) {
-    setEvents(evs => evs.map(e =>
+    setAllEvents(evs => evs.map(e =>
       e.class_id === noteTarget.class_id && e.date === noteTarget.date
         ? { ...e, parent_note: note }
         : e
     ))
   }
 
-  if (loading) return <div className="pp-loading">Loading attendance...</div>
-  if (!events.length) return <div className="pp-empty">No scheduled sessions in the past 28 days.</div>
+  const classes = [...new Set(allEvents.map(e => e.class_name))].sort()
+  const years = [...new Set(allEvents.map(e => e.date.slice(0, 4)))].sort().reverse()
+  const days = Array.from({ length: 31 }, (_, i) => String(i + 1))
+
+  const filtered = allEvents.filter(e => {
+    const [y, m, d] = e.date.split('-')
+    if (filterClass && e.class_name !== filterClass) return false
+    if (filterYear && y !== filterYear) return false
+    if (filterMonth && Number(m) !== MONTHS.indexOf(filterMonth) + 1) return false
+    if (filterDay && Number(d) !== Number(filterDay)) return false
+    if (filterStatus && e.type !== filterStatus) return false
+    return true
+  })
+
+  const hasFilters = filterClass || filterMonth || filterDay || filterYear || filterStatus
 
   return (
     <>
@@ -233,44 +260,94 @@ function AttendanceTab({ student }) {
           onSaved={handleNoteSaved}
         />
       )}
-      <div className="pp-attendance">
-        <table className="pp-table">
-          <thead>
-            <tr>
-              <th>Date</th>
-              <th>Class</th>
-              <th>Status</th>
-              <th>Parent note</th>
-            </tr>
-          </thead>
-          <tbody>
-            {events.map((ev, i) => (
-              <tr key={i} className={`pp-row-${ev.type}`}>
-                <td className="pp-dim">{formatDate(ev.date)}</td>
-                <td>{ev.class_name}</td>
-                <td>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                    {ev.type === 'on_time' && <span className="pp-badge pp-badge--good">On time</span>}
-                    {ev.type === 'tardy' && <span className="pp-badge pp-badge--ok">{ev.minutes_late}m late</span>}
-                    {ev.type === 'absent' && <span className="pp-badge pp-badge--warn">Absent</span>}
-                    {ev.parent_note?.is_excuse && <span className="pp-note-excuse-tag">Excused</span>}
-                  </div>
-                </td>
-                <td>
-                  {ev.parent_note ? (
-                    <div className="pp-note-cell">
-                      <span className="pp-note-preview">{ev.parent_note.note}</span>
-                      <button className="pp-note-btn pp-note-btn--has-note" onClick={() => openNote(ev)}>Edit</button>
-                    </div>
-                  ) : (
-                    <button className="pp-note-btn" onClick={() => openNote(ev)}>Add note</button>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <div className="pp-att-filters">
+        <label className="pp-att-filter-group">
+          <span className="pp-att-filter-label">Class</span>
+          <select className="pp-att-filter" value={filterClass} onChange={e => setFilterClass(e.target.value)}>
+            <option value="">All</option>
+            {classes.map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
+        </label>
+        <label className="pp-att-filter-group">
+          <span className="pp-att-filter-label">Month</span>
+          <select className="pp-att-filter" value={filterMonth} onChange={e => setFilterMonth(e.target.value)}>
+            <option value="">All</option>
+            {MONTHS.map(m => <option key={m} value={m}>{m}</option>)}
+          </select>
+        </label>
+        <label className="pp-att-filter-group">
+          <span className="pp-att-filter-label">Day</span>
+          <select className="pp-att-filter" value={filterDay} onChange={e => setFilterDay(e.target.value)}>
+            <option value="">All</option>
+            {days.map(d => <option key={d} value={d}>{d}</option>)}
+          </select>
+        </label>
+        <label className="pp-att-filter-group">
+          <span className="pp-att-filter-label">Year</span>
+          <select className="pp-att-filter" value={filterYear} onChange={e => setFilterYear(e.target.value)}>
+            <option value="">All</option>
+            {years.map(y => <option key={y} value={y}>{y}</option>)}
+          </select>
+        </label>
+        <label className="pp-att-filter-group">
+          <span className="pp-att-filter-label">Status</span>
+          <select className="pp-att-filter" value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
+            <option value="">All</option>
+            <option value="on_time">On time</option>
+            <option value="tardy">Tardy</option>
+            <option value="absent">Absent</option>
+          </select>
+        </label>
+        {hasFilters && (
+          <button className="pp-att-filter-clear" onClick={() => { setFilterClass(''); setFilterMonth(''); setFilterDay(''); setFilterYear(''); setFilterStatus('') }}>
+            Clear
+          </button>
+        )}
       </div>
+      {loading ? (
+        <div className="pp-loading">Loading attendance...</div>
+      ) : !filtered.length ? (
+        <div className="pp-empty">No sessions found.</div>
+      ) : (
+        <div className="pp-attendance">
+          <table className="pp-table">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Class</th>
+                <th>Status</th>
+                <th>Parent note</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((ev, i) => (
+                <tr key={i} className={`pp-row-${ev.type}`}>
+                  <td className="pp-dim">{formatDate(ev.date)}</td>
+                  <td>{ev.class_name}</td>
+                  <td>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                      {ev.type === 'on_time' && <span className="pp-badge pp-badge--good">On time</span>}
+                      {ev.type === 'tardy' && <span className="pp-badge pp-badge--ok">{ev.minutes_late}m late</span>}
+                      {ev.type === 'absent' && <span className="pp-badge pp-badge--warn">Absent</span>}
+                      {ev.parent_note?.is_excuse && <span className="pp-note-excuse-tag">Excused</span>}
+                    </div>
+                  </td>
+                  <td>
+                    {ev.parent_note ? (
+                      <div className="pp-note-cell">
+                        <span className="pp-note-preview">{ev.parent_note.note}</span>
+                        <button className="pp-note-btn pp-note-btn--has-note" onClick={() => setNoteTarget(ev)}>Edit</button>
+                      </div>
+                    ) : (
+                      <button className="pp-note-btn" onClick={() => setNoteTarget(ev)}>Add note</button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </>
   )
 }
@@ -314,9 +391,9 @@ export default function ParentPortal() {
   }, [token])
 
   return (
-    <div className="pp-root">
-      <HeaderModern page="parent" />
-      <div className="pp-page">
+    <div className="pp-root" style={{ display: 'flex' }}>
+      <SideNav page="parent" />
+      <div className="sn-content pp-page">
         <div className="pp-header">
           <div className="pp-header-title">Parent Portal</div>
           <div className="pp-header-sub">View your children's classes and attendance, and leave notes on absences or tardies</div>

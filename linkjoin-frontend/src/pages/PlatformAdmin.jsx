@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { apiGet, apiPatch, apiPost } from '../api/client.js'
 import { incidentsApi } from '../api/incidents.js'
-import HeaderModern from '../components/HeaderModern.jsx'
+import SideNav from '../components/SideNav.jsx'
 import '../styles/platform-admin.css'
 import '../styles/incident.css'
 
@@ -686,9 +686,9 @@ export default function PlatformAdmin() {
   const [showCreateAdmin, setShowCreateAdmin] = useState(false)
 
   return (
-    <div className="admin-root">
-      <HeaderModern page="admin" />
-      <div className="admin-page">
+    <div className="admin-root" style={{ display: 'flex' }}>
+      <SideNav page="platform-admin" />
+      <div className="sn-content admin-page">
         <div className="pa-header">
           <div>
             <div className="pa-header-title">Platform Admin</div>
