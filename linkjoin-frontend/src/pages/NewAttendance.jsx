@@ -6,6 +6,8 @@ export default function NewAttendance() {
   const [scrolled, setScrolled] = useState(false)
   const [visSet, setVisSet] = useState(new Set())
   const [activeTab, setActiveTab] = useState(0)
+  const [premeetCountdown, setPremeetCountdown] = useState(3)
+  const [premeetConfirmed, setPremeetConfirmed] = useState(false)
 
   useEffect(() => {
     const handler = () => setScrolled(window.scrollY > 10)
@@ -35,6 +37,28 @@ export default function NewAttendance() {
 
   const rc = (id, base = '') =>
     [base, 'nh-reveal', visSet.has(id) ? 'nh-visible' : ''].filter(Boolean).join(' ')
+
+  const premeetVisible = visSet.has('s1b')
+
+  useEffect(() => {
+    if (!premeetVisible) return
+    let n = 3
+    setPremeetCountdown(3)
+    const id = setInterval(() => {
+      n -= 1
+      if (n < 0) {
+        clearInterval(id)
+        setPremeetConfirmed(true)
+        return
+      }
+      setPremeetCountdown(n)
+    }, 800)
+    return () => clearInterval(id)
+  }, [premeetVisible])
+
+  const PREMEET_MOCK_SECS = 3
+  const PREMEET_MOCK_CIRC = 2 * Math.PI * 38
+  const premeetDashOffset = PREMEET_MOCK_CIRC * (1 - premeetCountdown / PREMEET_MOCK_SECS)
 
   const AWARDS = [
     {
@@ -201,6 +225,102 @@ export default function NewAttendance() {
                 </div>
               </div>
               <div className="sc-att-flow-note">0 minutes of teacher time per class</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* S1b: Verified presence */}
+      <section className="sc-section">
+        <div data-rid="s1b" className={rc('s1b', 'sc-hl')}>
+          <div className="sc-hl-text">
+            <span className="sc-eyebrow">Confirmed presence</span>
+            <h2 className="sc-h2">Verify student joins.</h2>
+            <p className="sc-body">
+              LinkJoin only confirms attendance once the meeting screen was
+              actually on-screen, not just open in the background, so an idle laptop
+              can't rack up attendance on its own.
+            </p>
+            <ul className="sc-bullets">
+              <li>Confirms only if the tab was visible for the full countdown</li>
+              <li>A background or minimized tab never logs a "present"</li>
+              <li>One button click confirms instantly, no extra step</li>
+            </ul>
+          </div>
+          <div className="sc-hl-visual">
+            <div className="sc-mock">
+              <div className="sc-mock-header">
+                <div className="sc-mock-header-dot" />
+                <div className="sc-mock-header-dot" />
+                <div className="sc-mock-header-dot" />
+                <span className="sc-mock-header-title">Student device</span>
+              </div>
+              <div className="sc-premeet-mock">
+                <div className="sc-premeet-mock-name">English 10</div>
+                <div className="sc-premeet-mock-sub">is starting soon</div>
+                <div className={`sc-premeet-mock-ring${premeetConfirmed ? ' sc-premeet-mock-ring--confirmed' : ''}`}>
+                  {!premeetConfirmed && (
+                    <svg viewBox="0 0 96 96" className="sc-premeet-mock-ring-svg">
+                      <circle className="sc-premeet-mock-ring-track" cx="48" cy="48" r="38" />
+                      <circle
+                        className="sc-premeet-mock-ring-fill"
+                        cx="48" cy="48" r="38"
+                        style={{ strokeDashoffset: premeetDashOffset }}
+                      />
+                    </svg>
+                  )}
+                  {premeetConfirmed ? (
+                    <span className="sc-premeet-mock-ring-check" aria-hidden="true" />
+                  ) : (
+                    <span className="sc-premeet-mock-ring-num">{premeetCountdown}</span>
+                  )}
+                </div>
+                <div className="sc-premeet-mock-actions">
+                  <span className="sc-premeet-mock-btn">Join now</span>
+                  <span className={`sc-premeet-mock-confirmed${premeetConfirmed ? ' sc-premeet-mock-confirmed--show' : ''}`}>
+                    <span className="sc-premeet-mock-confirmed-check" aria-hidden="true" />
+                    Attendance confirmed
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* S1c: Verified identity */}
+      <section className="sc-section sc-section--alt">
+        <div data-rid="s1c" className={rc('s1c', 'sc-hl sc-hl--flip')}>
+          <div className="sc-hl-text">
+            <span className="sc-eyebrow">Verified identity</span>
+            <h2 className="sc-h2">Record attendance with 100% confidence.</h2>
+            <p className="sc-body">
+              Instead of tracking attendance by meeting username, records are created from the student's roster account,
+              so the record is correct from the moment it's created.
+            </p>
+            <ul className="sc-bullets">
+              <li>Meetings show device names, nicknames, or personal emails, not roster identities</li>
+              <li>LinkJoin's attendance record is tied to the authenticated roster account</li>
+            </ul>
+          </div>
+          <div className="sc-hl-visual">
+            <div className="sc-mock">
+              <div className="sc-identity-compare">
+                <div className="sc-identity-col sc-identity-col--bad">
+                  <div className="sc-identity-col-title">Zoom participant log</div>
+                  <div className="sc-identity-row">iPhone (3)</div>
+                  <div className="sc-identity-row">senpai_1204@gmail.com</div>
+                  <div className="sc-identity-row">Untitled</div>
+                  <div className="sc-identity-row">Mom's iPad</div>
+                </div>
+                <div className="sc-identity-col sc-identity-col--good">
+                  <div className="sc-identity-col-title">LinkJoin record</div>
+                  <div className="sc-identity-row">Jordan Torres</div>
+                  <div className="sc-identity-row">Maya Reynolds</div>
+                  <div className="sc-identity-row">Sam Liu</div>
+                  <div className="sc-identity-row">Priya Mehta</div>
+                </div>
+              </div>
             </div>
           </div>
         </div>

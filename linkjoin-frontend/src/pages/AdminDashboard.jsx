@@ -372,6 +372,12 @@ function ClassDetail({ cls, onBack, onUpdate, onViewStudent }) {
   const [editingLink, setEditingLink] = useState(null)
   const [exporting, setExporting] = useState(false)
 
+  // Manual attendance override
+  const [showOverrideModal, setShowOverrideModal] = useState(false)
+  const [overrideDate, setOverrideDate] = useState(() => new Date().toISOString().slice(0, 10))
+  const [overridePresent, setOverridePresent] = useState({})
+  const [overrideSaving, setOverrideSaving] = useState(false)
+
   // Student join code
   const [joinCode, setJoinCode] = useState(null) // null = not loaded, false = none exists
   const [joinCodeLoading, setJoinCodeLoading] = useState(false)
@@ -637,6 +643,47 @@ function ClassDetail({ cls, onBack, onUpdate, onViewStudent }) {
     }
   }
 
+  function attendedEmailsForDate(dateStr) {
+    return new Set(
+      attendance.filter(r => r.opened_at && r.opened_at.slice(0, 10) === dateStr).map(r => r.student_email)
+    )
+  }
+
+  function resetOverrideChecklist(dateStr) {
+    const already = attendedEmailsForDate(dateStr)
+    const init = {}
+    students.forEach(s => { init[s.username] = already.has(s.username) })
+    setOverridePresent(init)
+  }
+
+  function openOverrideModal() {
+    resetOverrideChecklist(overrideDate)
+    setShowOverrideModal(true)
+  }
+
+  function handleOverrideDateChange(d) {
+    setOverrideDate(d)
+    resetOverrideChecklist(d)
+  }
+
+  function toggleOverridePresent(email) {
+    setOverridePresent(prev => ({ ...prev, [email]: !prev[email] }))
+  }
+
+  async function submitOverride() {
+    setOverrideSaving(true)
+    try {
+      const presentEmails = Object.entries(overridePresent).filter(([, v]) => v).map(([email]) => email)
+      await apiPost(`/attendance/class/${cls.class_id}/override`, { date: overrideDate, present_emails: presentEmails })
+      const attRes = await apiGet(`/attendance/class/${cls.class_id}`)
+      setAttendance(attRes.records || [])
+      setShowOverrideModal(false)
+    } catch (e) {
+      console.error(e)
+    }
+    setOverrideSaving(false)
+  }
+
   async function excuseRecord(recordId, excused, reason = '') {
     try {
       await apiPatch(`/attendance/${recordId}`, { excused, excuse_reason: reason })
@@ -683,6 +730,11 @@ function ClassDetail({ cls, onBack, onUpdate, onViewStudent }) {
           }),
         }
       })
+      setAttendance(prev => prev.map(r =>
+        r.absent && r.student_email === studentEmail && r.opened_at.slice(0, 10) === date
+          ? { ...r, excused: shouldExcuse }
+          : r
+      ))
     } catch (e) {
       console.error(e)
     }
@@ -914,6 +966,52 @@ function ClassDetail({ cls, onBack, onUpdate, onViewStudent }) {
           </div>
         )}
 
+        {showOverrideModal && (
+          <div className="admin-modal-backdrop" onClick={() => setShowOverrideModal(false)}>
+            <div className="admin-modal" onClick={e => e.stopPropagation()}>
+              <h3>Day override</h3>
+              <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.55)', marginTop: -8, marginBottom: 16 }}>
+                For when automatic tracking didn't run (e.g. a meeting-platform outage), or to
+                correct a record that's wrong. This replaces the attendance record for this day
+                to match exactly who's checked below.
+              </p>
+              <div className="admin-modal-field">
+                <label className="admin-modal-label">Date</label>
+                <input
+                  className="admin-input"
+                  type="date"
+                  value={overrideDate}
+                  onChange={e => handleOverrideDateChange(e.target.value)}
+                />
+              </div>
+              <div className="admin-modal-field">
+                <label className="admin-modal-label">Present</label>
+                <div style={{ maxHeight: 240, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  {students.map(s => (
+                    <label
+                      key={s.user_id}
+                      className="admin-checkbox-row"
+                      onClick={() => toggleOverridePresent(s.username)}
+                    >
+                      <span className={`admin-checkbox${overridePresent[s.username] ? ' admin-checkbox--checked' : ''}`}>
+                        {overridePresent[s.username] && <img src="/images/check.svg" alt="" className="admin-checkbox-img" />}
+                      </span>
+                      {s.username}
+                    </label>
+                  ))}
+                  {students.length === 0 && <div className="admin-empty">No students in this class.</div>}
+                </div>
+              </div>
+              <div className="admin-modal-actions">
+                <button className="admin-btn-ghost" onClick={() => setShowOverrideModal(false)}>Cancel</button>
+                <button className="admin-btn" onClick={submitOverride} disabled={overrideSaving}>
+                  {overrideSaving ? 'Saving…' : 'Save attendance'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Students tab */}
         {classTab === 'students' && <div className="detail-section-card">
           <div className="detail-section-header">
@@ -1040,6 +1138,14 @@ function ClassDetail({ cls, onBack, onUpdate, onViewStudent }) {
             <span className="detail-section-count">{attendance.length}</span>
             <button
               className="detail-export-btn"
+              onClick={openOverrideModal}
+              title="Manually mark students present for a day"
+              style={{ marginLeft: 'auto' }}
+            >
+              Day override
+            </button>
+            <button
+              className="detail-export-btn"
               onClick={handleExportCsv}
               disabled={exporting}
               title="Export CSV"
@@ -1065,9 +1171,12 @@ function ClassDetail({ cls, onBack, onUpdate, onViewStudent }) {
                     const timeStr = dt.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
                     const tardyThreshold = patterns?.thresholds?.tardy_threshold_minutes ?? 5
                     const late = r.minutes_late
-                    const isTardy = late > tardyThreshold
+                    const isTardy = !r.absent && late > tardyThreshold
                     let statusLabel, statusClass
-                    if (r.excused) {
+                    if (r.absent) {
+                      statusLabel = 'Absent'
+                      statusClass = 'att-late'
+                    } else if (r.excused) {
                       statusLabel = isTardy ? `${late}m late` : (late <= 1 ? 'On time' : `${late}m late`)
                       statusClass = isTardy ? 'att-late' : 'att-on-time'
                     } else if (late <= 1) {
@@ -1088,13 +1197,23 @@ function ClassDetail({ cls, onBack, onUpdate, onViewStudent }) {
                             ? <button className="sp-student-link" onClick={() => onViewStudent?.(s.user_id)}>{r.student_email}</button>
                             : r.student_email
                         })()}</td>
-                        <td className="att-time">{dateStr} {timeStr}</td>
+                        <td className="att-time">{r.absent ? dateStr : `${dateStr} ${timeStr}`}</td>
                         <td>
-                          <span className={`att-badge ${statusClass}`}>{statusLabel}</span>
+                          {r.manual ? (
+                            <span className="att-badge att-excused">Manually marked</span>
+                          ) : (
+                            <span className={`att-badge ${statusClass}`}>{statusLabel}</span>
+                          )}
                           {r.excused && <span className="att-badge att-excused" style={{ marginLeft: 4 }}>Excused</span>}
                         </td>
                         <td className="att-action-cell">
-                          {r.excused ? (
+                          {r.absent ? (
+                            r.excused ? (
+                              <button className="att-undo-btn" onClick={() => excuseAbsence(r.student_email, r.opened_at.slice(0, 10), false)}>Undo</button>
+                            ) : (
+                              <button className="iv-open-btn" onClick={() => excuseAbsence(r.student_email, r.opened_at.slice(0, 10), true)}>Excuse</button>
+                            )
+                          ) : r.excused ? (
                             <button className="att-undo-btn" onClick={() => excuseRecord(r.record_id, false)}>Undo</button>
                           ) : isTardy ? (
                             <button className="iv-open-btn" onClick={() => excuseRecord(r.record_id, true)}>Excuse</button>

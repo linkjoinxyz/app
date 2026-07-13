@@ -1,6 +1,9 @@
 const BASE_URL = 'https://linkjoin.xyz'
 
-const MEETING_RE = /https?:\/\/(?:[a-z0-9-]+\.)?(?:zoom\.us\/j\/|meet\.google\.com\/[a-z-]{3,}|teams\.microsoft\.com\/l\/meetup-join\/|webex\.com\/meet\/|gotomeeting\.com\/join\/)[^\s"'<>]*/i
+// Keep in sync with the copy injected in popup.js's handleScan (extension
+// contexts can't share a module there since it runs via chrome.scripting.executeScript).
+const MEETING_PATH_SRC = '(?:[a-z0-9-]+\\.)*(?:zoom\\.us\\/(?:j|my|w|s|webinar)\\/|meet\\.google\\.com\\/[a-z-]{3,}|teams\\.microsoft\\.com\\/l\\/meetup-join\\/|webex\\.com\\/meet\\/|gotomeeting\\.com\\/join\\/)[^\\s"\'<>]*'
+const MEETING_RE = new RegExp('https?:\\/\\/' + MEETING_PATH_SRC, 'i')
 
 const DAYS_ALL = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 const REPEAT_OPTIONS = ['never', 'week', 'month', '2 times', '3 times', '4 times']
@@ -116,7 +119,7 @@ function findMeetingLink(bodyEl) {
     }
     MEETING_RE.lastIndex = 0
     const text = bodyEl.textContent || ''
-    const bare = text.match(/(?:https?:\/\/)?(?:[a-z0-9-]+\.)?(?:zoom\.us\/j\/|meet\.google\.com\/[a-z-]{3,}|teams\.microsoft\.com\/l\/meetup-join\/|webex\.com\/meet\/|gotomeeting\.com\/join\/)[^\s"'<>]*/gi)
+    const bare = text.match(new RegExp('(?:https?:\\/\\/)?' + MEETING_PATH_SRC, 'gi'))
     if (!bare) return null
     const url = bare[0]
     return /^https?:\/\//.test(url) ? url : 'https://' + url

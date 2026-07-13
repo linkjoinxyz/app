@@ -170,7 +170,8 @@ async function handleScan() {
         const results = await chrome.scripting.executeScript({
             target: { tabId: tab.id },
             func: () => {
-                const RE = /https?:\/\/(?:[a-z0-9-]+\.)?(?:zoom\.us\/j\/|meet\.google\.com\/[a-z-]{3,}|teams\.microsoft\.com\/l\/meetup-join\/|webex\.com\/meet\/|gotomeeting\.com\/join\/)[^\s"'<>]*/i
+                // Keep in sync with MEETING_PATH_SRC in content.js
+                const RE = /https?:\/\/(?:[a-z0-9-]+\.)*(?:zoom\.us\/(?:j|my|w|s|webinar)\/|meet\.google\.com\/[a-z-]{3,}|teams\.microsoft\.com\/l\/meetup-join\/|webex\.com\/meet\/|gotomeeting\.com\/join\/)[^\s"'<>]*/i
                 const title = document.title
                 // Prefer the reading-pane area if on Outlook
                 const scope = document.querySelector('[role="main"]') || document.body

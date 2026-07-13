@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
+import { attendanceApi } from '../api/attendance.js'
 import '../styles/premeet.css'
 
 const SECS = 5
@@ -10,10 +11,17 @@ export default function PreMeet() {
   const name = params.get('name') || 'Your meeting'
   const link = params.get('link') || ''
   const password = params.get('pw') || ''
+  const linkId = params.get('linkId')
+  const classId = params.get('classId')
+  const className = params.get('className') || ''
+  const sched = params.get('sched')
+  const tracksAttendance = Boolean(linkId && classId)
 
   const [seconds, setSeconds] = useState(SECS)
   const [copied, setCopied] = useState(false)
   const [launched, setLaunched] = useState(false)
+  const [attended, setAttended] = useState(false)
+  const wasHiddenRef = useRef(document.visibilityState !== 'visible')
 
   const validLink = (() => {
     try {
@@ -27,11 +35,30 @@ export default function PreMeet() {
     return () => { document.documentElement.className = '' }
   }, [])
 
+  // Screen must have actually been on-screen for the countdown, not opened
+  // in a background/backgrounded tab on an idle machine, to auto-confirm.
+  useEffect(() => {
+    function onVisibilityChange() {
+      if (document.visibilityState !== 'visible') wasHiddenRef.current = true
+    }
+    document.addEventListener('visibilitychange', onVisibilityChange)
+    return () => document.removeEventListener('visibilitychange', onVisibilityChange)
+  }, [])
+
+  function confirmAttendance() {
+    if (!tracksAttendance || attended) return
+    const minutesLate = sched ? Math.round((Date.now() - new Date(sched).getTime()) / 60000) : 0
+    attendanceApi.log(Number(linkId), classId, className, minutesLate)
+      .then(() => setAttended(true))
+      .catch(() => {})
+  }
+
   useEffect(() => {
     if (!validLink || launched) return
     if (seconds <= 0) {
       setLaunched(true)
       window.open(link, '_blank', 'noopener,noreferrer')
+      if (!wasHiddenRef.current) confirmAttendance()
       return
     }
     const t = setTimeout(() => setSeconds(s => s - 1), 1000)
@@ -40,8 +67,11 @@ export default function PreMeet() {
 
   function joinNow() {
     if (!validLink) return
-    setLaunched(true)
-    window.open(link, '_blank', 'noopener,noreferrer')
+    if (!launched) {
+      setLaunched(true)
+      window.open(link, '_blank', 'noopener,noreferrer')
+    }
+    confirmAttendance()
   }
 
   function dismiss() {
@@ -94,6 +124,11 @@ export default function PreMeet() {
             <button className="pm-btn pm-btn-primary" onClick={joinNow}>
               Join now
             </button>
+          )}
+          {tracksAttendance && attended && (
+            <div className="pm-sub" style={{ fontSize: '0.8em', opacity: 0.7 }}>
+              Attendance confirmed
+            </div>
           )}
           {!launched && (
             <button className="pm-btn pm-btn-ghost" onClick={dismiss} style={{ opacity: 0.5 }}>

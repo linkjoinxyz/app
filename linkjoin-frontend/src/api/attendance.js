@@ -8,4 +8,9 @@ export const attendanceApi = {
       class_name: className || '',
       minutes_late: minutesLate,
     }),
+  override: (classId, date, presentEmails) =>
+    apiPost(`/attendance/class/${classId}/override`, {
+      date,
+      present_emails: presentEmails,
+    }),
 }
