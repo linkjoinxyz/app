@@ -1,9 +1,10 @@
+import asyncio
 import csv
 import io
 import json
 import secrets
 import string
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from app.auth import get_confirmed_user
@@ -695,6 +696,28 @@ async def get_analytics(user: dict = Depends(get_confirmed_user)):
 
     monthly_signups = [{"ym": mo, "count": monthly.get(mo, 0)} for mo in months]
 
+    # Last-30-day activity counts from analytics_events
+    thirty_days_ago = now - timedelta(days=30)
+
+    async def event_stats(event: str) -> dict:
+        pipeline = [
+            {"$match": {"event": event, "ts": {"$gte": thirty_days_ago}}},
+            {"$group": {"_id": None, "count": {"$sum": 1}, "users": {"$addToSet": "$user_id"}}},
+        ]
+        docs = await motor_db.analytics_events.aggregate(pipeline).to_list(1)
+        if not docs:
+            return {"count": 0, "unique_users": 0}
+        return {"count": docs[0]["count"], "unique_users": len([u for u in docs[0]["users"] if u])}
+
+    stats = await asyncio.gather(
+        event_stats("login"),
+        event_stats("signup"),
+        event_stats("link_open"),
+        event_stats("link_create"),
+        event_stats("link_share"),
+    )
+    logins_30d, signups_30d, link_opens_30d, link_creates_30d, link_shares_30d = stats
+
     # Recent audit log
     recent_audit = []
     async for entry in motor_db.audit_logs.find(
@@ -717,6 +740,13 @@ async def get_analytics(user: dict = Depends(get_confirmed_user)):
             "by_type": invite_by_type,
         },
         "monthly_signups": monthly_signups,
+        "last_30d": {
+            "logins":       logins_30d,
+            "signups":      signups_30d,
+            "link_opens":   link_opens_30d,
+            "link_creates": link_creates_30d,
+            "link_shares":  link_shares_30d,
+        },
         "recent_audit": recent_audit,
     }
 

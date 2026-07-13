@@ -110,7 +110,7 @@ async def register(request: Request, body: RegisterRequest, background_tasks: Ba
             "LinkJoin: Confirm email address",
             email,
         )
-        await track_event("signup")
+        await track_event("signup", user_id=account.get("user_id"))
         await log_audit(email, "auth.register", ip=request.client.host if request.client else None)
         access_token = create_token(email)
         return {
@@ -122,7 +122,7 @@ async def register(request: Request, body: RegisterRequest, background_tasks: Ba
             "onboarding_done": bool(account.get("onboarding_done", False)),
         }
 
-    await track_event("signup")
+    await track_event("signup", user_id=account.get("user_id"))
     await log_audit(email, "auth.register", ip=request.client.host if request.client else None)
     access_token = create_token(email)
     return {
@@ -159,7 +159,7 @@ async def confirm_email(token: str):
 
     await motor_db.login.update_one({"username": email}, {"$set": {"confirmed": "true"}})
     await _blacklist_token(payload)
-    await track_event("signup")
+    await track_event("signup", user_id=user.get("user_id"))
     user = await motor_db.login.find_one({"username": email})
     access_token = create_token(email)
     return {
@@ -238,7 +238,7 @@ async def login(request: Request, body: LoginRequest):
     if user.get("offset") is None:
         await motor_db.login.update_one({"username": email}, {"$set": {"offset": "0.0"}})
 
-    await track_event("login")
+    await track_event("login", org_id=user.get("org_id"), user_id=user.get("user_id"))
     ip = request.client.host if request.client else None
     await log_audit(email, "auth.login", ip=ip)
 
@@ -339,7 +339,7 @@ async def google_code_exchange(request: Request, body: GoogleCodeRequest):
             "org_name": email.split("@")[1],
         }
         await motor_db.login.insert_one(account)
-        await track_event("signup")
+        await track_event("signup", user_id=account.get("user_id"))
         user = account
 
     is_admin_role = user.get("role") in {"school_admin", "district_admin"} or user.get("admin") == "true"
@@ -402,7 +402,7 @@ async def google_token_auth(request: Request, body: dict):
             "org_name": email.split("@")[1],
         }
         await motor_db.login.insert_one(account)
-        await track_event("signup")
+        await track_event("signup", user_id=account.get("user_id"))
         user = account
 
     is_admin_role = user.get("role") in {"school_admin", "district_admin"} or user.get("admin") == "true"
