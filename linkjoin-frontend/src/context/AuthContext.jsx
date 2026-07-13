@@ -20,6 +20,7 @@ export function AuthProvider({ children }) {
   const [isAdmin, setIsAdmin] = useState(() => localStorage.getItem('lj_admin') === 'true')
   const [onboardingDone, setOnboardingDone] = useState(() => localStorage.getItem('lj_onboarding_done') === 'true')
   const [mustChangePassword, setMustChangePassword] = useState(() => localStorage.getItem('lj_must_change_pw') === 'true')
+  const [mfaEnabled, setMfaEnabledState] = useState(() => localStorage.getItem('lj_mfa_enabled') === 'true')
 
   const isTeacher = TEACHER_ROLES.has(role)
   const isOrgAdmin = ADMIN_ROLES.has(role)
@@ -35,16 +36,19 @@ export function AuthProvider({ children }) {
       const at = data.account_type || 'personal'
       const ob = data.onboarding_done !== false
       const adm = data.admin === 'true'
+      const mfa = !!data.mfa_enabled
       if (r) localStorage.setItem('lj_role', r); else localStorage.removeItem('lj_role')
       if (o) localStorage.setItem('lj_org_id', o); else localStorage.removeItem('lj_org_id')
       localStorage.setItem('lj_account_type', at)
       localStorage.setItem('lj_onboarding_done', ob ? 'true' : 'false')
       if (adm) localStorage.setItem('lj_admin', 'true'); else localStorage.removeItem('lj_admin')
+      if (mfa) localStorage.setItem('lj_mfa_enabled', 'true'); else localStorage.removeItem('lj_mfa_enabled')
       setRole(r)
       setOrgId(o)
       setAccountType(at)
       setOnboardingDone(ob)
       setIsAdmin(adm)
+      setMfaEnabledState(mfa)
     }).catch(() => {})
   }, [])
 
@@ -64,6 +68,9 @@ export function AuthProvider({ children }) {
     const mcp = meta.must_change_password === true
     if (mcp) localStorage.setItem('lj_must_change_pw', 'true')
     else localStorage.removeItem('lj_must_change_pw')
+    const mfa = !!meta.mfa_enabled
+    if (mfa) localStorage.setItem('lj_mfa_enabled', 'true')
+    else localStorage.removeItem('lj_mfa_enabled')
     setToken(accessToken)
     setEmail(userEmail)
     setConfirmed(isConfirmed)
@@ -73,6 +80,7 @@ export function AuthProvider({ children }) {
     setIsAdmin(meta.admin === 'true')
     setOnboardingDone(ob)
     setMustChangePassword(mcp)
+    setMfaEnabledState(mfa)
     window.postMessage({ type: 'lj:login' }, window.location.origin)
   }, [])
 
@@ -110,6 +118,7 @@ export function AuthProvider({ children }) {
     localStorage.removeItem('lj_admin')
     localStorage.removeItem('lj_onboarding_done')
     localStorage.removeItem('lj_must_change_pw')
+    localStorage.removeItem('lj_mfa_enabled')
     setToken(null)
     setEmail(null)
     setConfirmed(false)
@@ -119,7 +128,14 @@ export function AuthProvider({ children }) {
     setIsAdmin(false)
     setOnboardingDone(false)
     setMustChangePassword(false)
+    setMfaEnabledState(false)
     window.postMessage({ type: 'lj:logout' }, window.location.origin)
+  }, [])
+
+  const setMfaEnabled = useCallback((val) => {
+    if (val) localStorage.setItem('lj_mfa_enabled', 'true')
+    else localStorage.removeItem('lj_mfa_enabled')
+    setMfaEnabledState(val)
   }, [])
 
   return (
@@ -128,6 +144,7 @@ export function AuthProvider({ children }) {
       isAdmin, isTeacher, isOrgAdmin,
       onboardingDone, markOnboardingDone,
       mustChangePassword, clearMustChangePassword,
+      mfaEnabled, setMfaEnabled,
       login, logout, refreshAuth,
     }}>
       {children}

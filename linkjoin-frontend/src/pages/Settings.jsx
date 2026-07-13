@@ -46,6 +46,7 @@ async function resizeToDataURL(file, size = 220) {
 }
 
 function MfaSection({ user, showToast }) {
+  const { mfaEnabled, setMfaEnabled } = useAuth()
   const [expanded, setExpanded] = useState(false)
   const [mfaPhone, setMfaPhone] = useState('')
   const [mfaCountry, setMfaCountry] = useState('1')
@@ -53,7 +54,7 @@ function MfaSection({ user, showToast }) {
   const [mfaStep, setMfaStep] = useState('idle') // idle | sent | disabling
   const [mfaError, setMfaError] = useState('')
   const [mfaLoading, setMfaLoading] = useState(false)
-  const isEnabled = !!user?.mfa_enabled
+  const isEnabled = mfaEnabled
 
   function fullPhone() { return mfaCountry + mfaPhone.replace(/\D/g, '') }
 
@@ -77,13 +78,12 @@ function MfaSection({ user, showToast }) {
     setMfaError('')
     try {
       await usersApi.verifyMfaSetup(mfaCode.trim(), fullPhone())
+      setMfaEnabled(true)
       showToast(true)
       setMfaStep('idle')
       setExpanded(false)
       setMfaCode('')
       setMfaPhone('')
-      // Reload user data
-      window.location.reload()
     } catch (e) {
       setMfaError(e.body?.detail || 'Invalid code. Please try again.')
     } finally {
@@ -96,10 +96,10 @@ function MfaSection({ user, showToast }) {
     setMfaError('')
     try {
       await usersApi.setupMfa(false, null)
+      setMfaEnabled(false)
       showToast(true)
       setMfaStep('idle')
       setExpanded(false)
-      window.location.reload()
     } catch (e) {
       setMfaError(e.body?.detail || 'Failed to disable MFA.')
     } finally {
