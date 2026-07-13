@@ -240,6 +240,7 @@
   border-radius: 2px;
   transition: transform 0.3s, opacity 0.3s;
 }
+.nh-hamburger span:nth-child(2) { transition: transform 0.3s, opacity 0s; }
 .nh-hamburger.open span:nth-child(1) { transform: translateY(8px) rotate(45deg); }
 .nh-hamburger.open span:nth-child(2) { opacity: 0; }
 .nh-hamburger.open span:nth-child(3) { transform: translateY(-8px) rotate(-45deg); }

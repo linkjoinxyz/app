@@ -238,6 +238,8 @@
         font-size: 16px;
         padding: 5px 10px;
     }
+
+    .lk-badge { display: none; }
 }
 
 @media (max-width: 360px) {

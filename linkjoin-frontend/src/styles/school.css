@@ -870,13 +870,20 @@
     width: 100%;
     margin-left: 0;
   }
+  .sc-footer {
+    grid-template-columns: 1fr;
+  }
+  .sc-footer-cols {
+    flex-wrap: wrap;
+    gap: 32px;
+  }
 }
 
 @media (max-width: 560px) {
   .sc-hero-actions { flex-direction: column; align-items: stretch; }
-  .sc-hero-actions a { text-align: center; }
+  .sc-hero-actions a { text-align: center; justify-content: center; }
   .sc-cta-actions { flex-direction: column; align-items: stretch; }
-  .sc-cta-actions a, .sc-cta-actions button { display: inline; }
+  .sc-cta-actions a, .sc-cta-actions button { display: flex; justify-content: center; }
   .sc-trust { gap: 12px; }
   .sc-logo-grid { grid-template-columns: 1fr; }
 }
@@ -2355,6 +2362,11 @@
   .sc-na-vtab-sidebar { position: static; }
   .sc-na-vtab-content .sc-mock { max-width: 100%; }
   .sc-na-vtab-content { padding: 0; }
+}
+
+@media (max-width: 560px) {
+  .sc-na-vtab-content { display: none; }
+  .sc-na-vtab-wrap { padding: 48px clamp(20px, 5vw, 40px); }
 }
 
 /* ── S6: Admin 2-column split ────────────────────────────────────────────────── */

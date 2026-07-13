@@ -197,6 +197,11 @@
 }
 .note-editor-preview a { color: #4db8ff; }
 
+@media (max-width: 560px) {
+  .notes-root { padding: 12px 16px 40px; }
+  .notes-list { grid-template-columns: 1fr; }
+}
+
 .note-editor-placeholder {
   color: rgba(255, 255, 255, 0.25);
   font-style: italic;
