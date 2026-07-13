@@ -585,7 +585,6 @@ html, body {scroll-behavior: smooth; overflow-x: visible;}
 
 
 @media (max-width: 730px) {
-    .plus {display: flex !important}
     .plus_button {display: none}
     #click_to_copy {display: inline-block; margin-left: 40%;}
     #share_link {margin-left: 20%}
@@ -605,9 +604,6 @@ html, body {scroll-behavior: smooth; overflow-x: visible;}
     }
     #links-search {
         width: calc(100vw - 32px);
-    }
-    .plus {
-        bottom: max(20px, calc(env(safe-area-inset-bottom) + 12px));
     }
 }
 
