@@ -39,6 +39,7 @@ class Settings(BaseSettings):
     anthropic_model: str = "claude-haiku-4-5-20251001"
     mongo_database: str = "zoom_opener"
     contact_email: str = "seth@linkjoin.xyz"
+    sentry_dsn: str = ""
 
 
 @lru_cache
