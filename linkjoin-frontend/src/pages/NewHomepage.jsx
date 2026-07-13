@@ -33,12 +33,6 @@ const FAQ_ITEMS = [
 
 const PLATFORMS = ['Zoom', 'Google Meet', 'Teams', 'Webex']
 
-const TESTIMONIALS = [
-  { quote: "I was always a few minutes late to our morning standup. Set this up on a Monday and haven't been late since.", name: 'Sarah M.', title: 'Engineering Lead' },
-  { quote: "We rolled it out to the whole team. Everyone gets the same link and it just opens when it's supposed to. No more 'can you send the Zoom link?' in Slack.", name: 'James T.', title: 'Director of Operations' },
-  { quote: "The Chrome extension is what sold me. Got a calendar invite, clicked add, done in ten seconds. I haven't copy-pasted a meeting link in months.", name: 'Priya N.', title: 'UX Designer' },
-  { quote: "I step away from my desk a lot during the day. The text reminder means I actually make it back in time instead of realizing I missed something an hour later.", name: 'David L.', title: 'Account Executive' },
-]
 const BAND = '#091B30'
 const BASE = '#060F1A'
 
@@ -63,15 +57,6 @@ export default function NewHomepage() {
   const [visSet, setVisSet] = useState(() => new Set())
   const howRef = useRef(null)
   const curveRef = useRef(null)
-  const carouselRef = useRef(null)
-
-  function scrollTestimonials(dir) {
-    const el = carouselRef.current
-    if (!el) return
-    const card = el.querySelector('.nh-testimonial')
-    el.scrollBy({ left: dir * ((card?.offsetWidth ?? 300) + 20), behavior: 'smooth' })
-  }
-
   // Scroll-reveal — stores visibility in React state so it survives re-renders
   useEffect(() => {
     const obs = new IntersectionObserver(
@@ -186,8 +171,8 @@ export default function NewHomepage() {
         </div>
         <div className="nh-stat-divider" />
         <div className="nh-stat">
-          <span className="nh-stat-num">0</span>
-          <span className="nh-stat-label">Clicks needed</span>
+          <span className="nh-stat-num">&lt;1 min</span>
+          <span className="nh-stat-label">To set up</span>
         </div>
         <div className="nh-stat-divider" />
         <div className="nh-stat">
@@ -539,27 +524,6 @@ export default function NewHomepage() {
         </div>
       </section>
 
-      {/* Testimonials */}
-      <section className="nh-testimonials">
-        <div className="nh-testimonials-head">
-          <p data-rid="t-label" className={rc('t-label', 'nh-section-label')}>What people say</p>
-          <div className="nh-tcar-arrows">
-            <button className="nh-tcar-btn" onClick={() => scrollTestimonials(-1)} aria-label="Previous">‹</button>
-            <button className="nh-tcar-btn" onClick={() => scrollTestimonials(1)} aria-label="Next">›</button>
-          </div>
-        </div>
-        <div className="nh-tcarousel" ref={carouselRef}>
-          {TESTIMONIALS.map((t, i) => (
-            <div key={i} className="nh-testimonial">
-              <p className="nh-testimonial-quote">"{t.quote}"</p>
-              <div className="nh-testimonial-attr">
-                <span className="nh-testimonial-name">{t.name}</span>
-                <span className="nh-testimonial-title">{t.title}</span>
-              </div>
-            </div>
-          ))}
-        </div>
-      </section>
 
       {/* FAQ */}
       <section className="nh-faq">
