@@ -1,8 +1,11 @@
+import asyncio
+import json
 import nh3
 import mistune
 from collections import defaultdict
 from datetime import datetime, timezone, timedelta
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import Response
 from pydantic import BaseModel
 from app.auth import get_confirmed_user, get_current_user
 from app.database import motor_db
@@ -460,3 +463,35 @@ async def update_mfa(body: dict, user: dict = Depends(get_confirmed_user)):
         )
         await log_audit(user["username"], "auth.mfa_disabled")
         return {"message": "MFA disabled"}
+
+
+_PROFILE_STRIP = {"_id", "password", "_jti", "_exp"}
+
+@router.get("/me/export")
+async def export_my_data(user: dict = Depends(get_confirmed_user)):
+    email = user["username"]
+
+    profile = await motor_db.login.find_one({"username": email})
+    profile = {k: v for k, v in profile.items() if k not in _PROFILE_STRIP}
+
+    links, deleted_links, bookmarks, open_log = await asyncio.gather(
+        motor_db.links.find({"username": email}, {"_id": 0}).to_list(None),
+        motor_db.deleted_links.find({"username": email}, {"_id": 0}).to_list(None),
+        motor_db.bookmarks.find({"username": email}, {"_id": 0}).to_list(None),
+        motor_db.open_log.find({"username": email}, {"_id": 0}).sort("opened_at", -1).to_list(None),
+    )
+
+    payload = json.dumps({
+        "exported_at": datetime.now(timezone.utc).isoformat(),
+        "profile": profile,
+        "links": links,
+        "deleted_links": deleted_links,
+        "bookmarks": bookmarks,
+        "open_log": open_log,
+    }, default=str, indent=2)
+
+    return Response(
+        content=payload,
+        media_type="application/json",
+        headers={"Content-Disposition": f'attachment; filename="linkjoin-export-{email}.json"'},
+    )
