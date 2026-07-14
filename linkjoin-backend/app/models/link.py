@@ -84,7 +84,10 @@ class CreateLinkRequest(BaseModel):
 class UpdateLinkRequest(BaseModel):
     id: int
     name: str
-    link: str
+    # Optional: class-linked edits may omit this entirely, since the raw meeting
+    # URL is redacted client-side for organizational links (attendance-integrity
+    # brief). Omitted means "keep the existing meeting link".
+    link: Optional[str] = None
     time: str
     days: list[str]
     repeats: str

@@ -6,7 +6,7 @@ from apscheduler.jobstores.memory import MemoryJobStore
 from pytz import utc, timezone as pytz_timezone
 from app.config import get_settings
 from app.database import sync_db, motor_db
-from app.utils import get_text_time, get_blackout_set
+from app.utils import get_text_time, get_blackout_set, compute_session_start_utc
 
 _settings = get_settings()
 scheduler = AsyncIOScheduler(timezone=utc, jobstores={"default": MemoryJobStore()})
@@ -207,7 +207,6 @@ async def check_absences() -> None:
 
     now_utc = datetime.now(timezone.utc)
     today_date = now_utc.strftime("%Y-%m-%d")
-    day_abbrs = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 
     async for cls in motor_db.classes.find({"family_alerts": True}):
         class_days = cls.get("days") or []
@@ -217,25 +216,10 @@ async def check_absences() -> None:
 
         teacher = await motor_db.login.find_one({"user_id": cls.get("teacher_id", "")}, {"timezone": 1})
         tz_name = (teacher or {}).get("timezone") or "UTC"
-        try:
-            tz = pytz_timezone(tz_name)
-        except Exception:
-            tz = utc
 
-        try:
-            h, m = (int(x) for x in class_time_str.split(":"))
-        except (ValueError, TypeError):
+        class_start_utc = compute_session_start_utc(class_time_str, class_days, tz_name, now_utc)
+        if class_start_utc is None:
             continue
-
-        now_local = now_utc.astimezone(tz)
-        today_local = now_local.date()
-        today_abbr = day_abbrs[today_local.weekday()]
-        if today_abbr not in class_days:
-            continue
-
-        from datetime import datetime as _dt
-        class_start_local = tz.localize(_dt(today_local.year, today_local.month, today_local.day, h, m, 0))
-        class_start_utc = class_start_local.astimezone(utc)
         delta = now_utc.replace(tzinfo=None) - class_start_utc.replace(tzinfo=None)
         if not (timedelta(minutes=30) <= delta <= timedelta(minutes=90)):
             continue

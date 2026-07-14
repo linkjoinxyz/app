@@ -1,37 +1,31 @@
 import { useState, useEffect, useRef } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
+import { Link, useParams } from 'react-router-dom'
+import { apiGet } from '../api/client.js'
 import '../styles/premeet.css'
 
 const SECS = 5
 const CIRC = 2 * Math.PI * 38
 
-// Non-class links only — class-linked meetings route through /c/:slug
-// (ClassLinkRedirect.jsx), the one code path that logs attendance.
-export default function PreMeet() {
-  const [params] = useSearchParams()
-  const name = params.get('name') || 'Your meeting'
-  const link = params.get('link') || ''
-  const password = params.get('pw') || ''
-
+// The `/c/:slug` redirect: resolves the slug via the backend (which logs
+// attendance when eligible) and opens the real meeting URL. This is the one
+// code path every class-linked join goes through — see attendance-integrity
+// brief. Since this app uses Bearer-token auth (no cookie session), the
+// "redirect" happens client-side after an authenticated API call, not as a
+// literal server 302.
+export default function ClassLinkRedirect() {
+  const { slug } = useParams()
+  const [status, setStatus] = useState('loading') // loading | ready | error
+  const [meeting, setMeeting] = useState(null)
   const [seconds, setSeconds] = useState(SECS)
   const [copied, setCopied] = useState(false)
   const [launched, setLaunched] = useState(false)
   const wasHiddenRef = useRef(document.visibilityState !== 'visible')
-
-  const validLink = (() => {
-    try {
-      const { protocol } = new URL(link)
-      return protocol === 'http:' || protocol === 'https:'
-    } catch { return false }
-  })()
 
   useEffect(() => {
     document.documentElement.className = 'nobar'
     return () => { document.documentElement.className = '' }
   }, [])
 
-  // Screen must have actually been on-screen for the countdown, not opened
-  // in a background/backgrounded tab on an idle machine, to auto-confirm.
   useEffect(() => {
     function onVisibilityChange() {
       if (document.visibilityState !== 'visible') wasHiddenRef.current = true
@@ -41,22 +35,34 @@ export default function PreMeet() {
   }, [])
 
   useEffect(() => {
-    if (!validLink || launched) return
+    apiGet(`/links/c/${slug}`)
+      .then(data => { setMeeting(data); setStatus('ready') })
+      .catch(() => setStatus('error'))
+  }, [slug])
+
+  const validLink = (() => {
+    if (!meeting?.url) return false
+    try {
+      const { protocol } = new URL(meeting.url)
+      return protocol === 'http:' || protocol === 'https:'
+    } catch { return false }
+  })()
+
+  useEffect(() => {
+    if (status !== 'ready' || !validLink || launched) return
     if (seconds <= 0) {
       setLaunched(true)
-      window.open(link, '_blank', 'noopener,noreferrer')
+      window.open(meeting.url, '_blank', 'noopener,noreferrer')
       return
     }
     const t = setTimeout(() => setSeconds(s => s - 1), 1000)
     return () => clearTimeout(t)
-  }, [seconds, validLink, launched, link])
+  }, [seconds, status, validLink, launched, meeting])
 
   function joinNow() {
-    if (!validLink) return
-    if (!launched) {
-      setLaunched(true)
-      window.open(link, '_blank', 'noopener,noreferrer')
-    }
+    if (!validLink || launched) return
+    setLaunched(true)
+    window.open(meeting.url, '_blank', 'noopener,noreferrer')
   }
 
   function dismiss() {
@@ -64,13 +70,40 @@ export default function PreMeet() {
   }
 
   function copyPassword() {
-    navigator.clipboard.writeText(password).then(() => {
+    navigator.clipboard.writeText(meeting.password).then(() => {
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
     }).catch(() => {
       setCopied('failed')
       setTimeout(() => setCopied(false), 2000)
     })
+  }
+
+  if (status === 'loading') {
+    return (
+      <div className="pm-page">
+        <div className="pm-logo">
+          <Link to="/"><img src="/images/logo-text.svg" alt="LinkJoin" /></Link>
+        </div>
+        <div className="pm-card">
+          <div className="pm-name">Loading meeting&hellip;</div>
+        </div>
+      </div>
+    )
+  }
+
+  if (status === 'error') {
+    return (
+      <div className="pm-page">
+        <div className="pm-logo">
+          <Link to="/"><img src="/images/logo-text.svg" alt="LinkJoin" /></Link>
+        </div>
+        <div className="pm-card">
+          <div className="pm-name">This link isn't valid</div>
+          <div className="pm-sub">Ask your teacher for an updated link.</div>
+        </div>
+      </div>
+    )
   }
 
   const dashOffset = CIRC * (1 - seconds / SECS)
@@ -82,7 +115,7 @@ export default function PreMeet() {
       </div>
 
       <div className="pm-card">
-        <div className="pm-name">{name}</div>
+        <div className="pm-name">{meeting.name || 'Your meeting'}</div>
         <div className="pm-sub">is starting soon</div>
 
         {validLink && (
@@ -100,7 +133,7 @@ export default function PreMeet() {
         )}
 
         <div className="pm-actions">
-          {password && (
+          {meeting.password && (
             <button className="pm-btn pm-btn-ghost" onClick={copyPassword}>
               {copied === 'failed' ? 'Copy failed' : copied ? 'Copied!' : 'Copy password'}
             </button>
@@ -109,6 +142,11 @@ export default function PreMeet() {
             <button className="pm-btn pm-btn-primary" onClick={joinNow}>
               Join now
             </button>
+          )}
+          {meeting.logged && (
+            <div className="pm-sub" style={{ fontSize: '0.8em', opacity: 0.7 }}>
+              Attendance recorded
+            </div>
           )}
           {!launched && (
             <button className="pm-btn pm-btn-ghost" onClick={dismiss} style={{ opacity: 0.5 }}>

@@ -83,8 +83,12 @@ export default function LinkModal({ visible, editLink, onClose, onSuccess, prefi
   const isEdit = Boolean(editLink)
   const { closing, handleClose } = useModalClose(onClose)
 
+  const isClassLinked = isEdit && Boolean(editLink?.class_id)
+
   const [name, setName] = useState('')
   const [url, setUrl] = useState('')
+  const [newUrl, setNewUrl] = useState('')
+  const [linkCopied, setLinkCopied] = useState(false)
   const [hour, setHour] = useState('')
   const [minute, setMinute] = useState('')
   const [period, setPeriod] = useState('AM')
@@ -125,6 +129,8 @@ export default function LinkModal({ visible, editLink, onClose, onSuccess, prefi
       setAutoOpen(editLink.active !== 'false')
       setCustomDate(editLink.date || '')
       setEndDate(editLink.end_date || '')
+      setNewUrl('')
+      setLinkCopied(false)
     } else {
       const initialDays = prefillDays || [ALL_DAYS[new Date().getDay()]]
       setName(''); setUrl(''); setHour(''); setMinute('00'); setPeriod('AM')
@@ -132,6 +138,8 @@ export default function LinkModal({ visible, editLink, onClose, onSuccess, prefi
       setText('false'); setPassword(''); setMinute(''); setAutoOpen(defaultAutoOpen)
       setCustomDate(prefillDate || nextDateForDays(initialDays))
       setEndDate('')
+      setNewUrl('')
+      setLinkCopied(false)
     }
     setError('')
   }, [visible, editLink])
@@ -157,7 +165,7 @@ export default function LinkModal({ visible, editLink, onClose, onSuccess, prefi
   }, [hour, minute, period, days, allLinks, editLink])
 
   async function handleSubmit() {
-    if (!name || !url || !hour || (!days.length && repeats !== 'month' && repeats !== 'day')) {
+    if (!name || (!isClassLinked && !url) || !hour || (!days.length && repeats !== 'month' && repeats !== 'day')) {
       setError('Please fill in all required fields.')
       return
     }
@@ -181,7 +189,11 @@ export default function LinkModal({ visible, editLink, onClose, onSuccess, prefi
       const d = new Date(parseInt(yr), parseInt(mo) - 1, parseInt(dy))
       finalDays = isNaN(d.getDay()) ? days : [ALL_DAYS[d.getDay()]]
     }
-    const payload = { name, link: url, time, days: finalDays, repeats: finalRepeats, date: customDate, end_date: endDate || undefined, text, password: password || undefined, active: autoOpen ? 'true' : 'false' }
+    // Class-linked edits omit `link` entirely unless the teacher filled in
+    // "Replace meeting link" — the raw URL is redacted client-side, so there's
+    // nothing to resubmit, and omitting it keeps the existing link server-side.
+    const linkValue = isClassLinked ? (newUrl.trim() || undefined) : url
+    const payload = { name, link: linkValue, time, days: finalDays, repeats: finalRepeats, date: customDate, end_date: endDate || undefined, text, password: password || undefined, active: autoOpen ? 'true' : 'false' }
     try {
       if (isEdit) {
         await linksApi.update(editLink.id, { id: editLink.id, ...payload })
@@ -214,14 +226,55 @@ export default function LinkModal({ visible, editLink, onClose, onSuccess, prefi
             onChange={e => setName(e.target.value)}
           />
         </div>
-        <div className="modal-field">
-          <span className="modal-field-tag">Meeting link</span>
-          <input
-            className="modal-input"
-            value={url}
-            onChange={e => setUrl(e.target.value)}
-          />
-        </div>
+        {isClassLinked ? (
+          <>
+            <div className="modal-field">
+              <span className="modal-field-tag">Class link</span>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <input
+                  className="modal-input"
+                  readOnly
+                  value={`${window.location.origin}/c/${editLink.slug || ''}`}
+                  onClick={e => e.target.select()}
+                />
+                <button
+                  type="button"
+                  className={`modal-copy-btn${linkCopied === true ? ' modal-copy-btn--done' : ''}`}
+                  onClick={() => {
+                    navigator.clipboard.writeText(`${window.location.origin}/c/${editLink.slug || ''}`).then(() => {
+                      setLinkCopied(true)
+                      setTimeout(() => setLinkCopied(false), 2000)
+                    }).catch(() => {
+                      setLinkCopied('failed')
+                      setTimeout(() => setLinkCopied(false), 2000)
+                    })
+                  }}
+                >{linkCopied === 'failed' ? 'Copy failed' : linkCopied ? 'Copied!' : 'Copy'}</button>
+              </div>
+              <span className="modal-field-opt" style={{ display: 'block', marginTop: 6 }}>
+                Students join through this LinkJoin link so attendance gets recorded.
+              </span>
+            </div>
+            <div className="modal-field">
+              <span className="modal-field-tag">Replace meeting link<span className="modal-field-opt">optional</span></span>
+              <input
+                className="modal-input"
+                placeholder="Paste a new meeting URL to update it"
+                value={newUrl}
+                onChange={e => setNewUrl(e.target.value)}
+              />
+            </div>
+          </>
+        ) : (
+          <div className="modal-field">
+            <span className="modal-field-tag">Meeting link</span>
+            <input
+              className="modal-input"
+              value={url}
+              onChange={e => setUrl(e.target.value)}
+            />
+          </div>
+        )}
         <div className="modal-field" style={{ marginBottom: 24 }}>
           <span className="modal-field-tag">Password<span className="modal-field-opt">optional</span></span>
           <input

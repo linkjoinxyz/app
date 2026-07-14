@@ -107,8 +107,8 @@
     display: block;
     width: 100%;
     font: 500 17px Montserrat;
-    height: 44px;
-    padding: 4px 2px;
+    height: 40px;
+    padding: 2px 2px;
     border: none;
     border-bottom: 2px solid rgba(255, 255, 255, 0.5);
     margin-bottom: 20px;
@@ -129,7 +129,7 @@
 }
 
 .modal-field {
-    margin-bottom: 20px;
+    margin-bottom: 14px;
 }
 
 .modal-field-tag {
@@ -390,6 +390,31 @@
 
 .modal-submit:hover {
     filter: brightness(1.15);
+}
+
+.modal-copy-btn {
+    flex: 0 0 auto;
+    height: 44px;
+    padding: 0 16px;
+    border-radius: 7px;
+    background: rgba(43, 143, 216, 0.12);
+    border: 1px solid rgba(43, 143, 216, 0.35);
+    color: var(--lightblue);
+    font: 600 13px Montserrat;
+    cursor: pointer;
+    transition: background 0.2s, border-color 0.2s;
+    white-space: nowrap;
+}
+
+.modal-copy-btn:hover {
+    background: rgba(43, 143, 216, 0.2);
+    border-color: rgba(43, 143, 216, 0.55);
+}
+
+.modal-copy-btn--done {
+    background: rgba(72, 197, 120, 0.14);
+    border-color: rgba(72, 197, 120, 0.4);
+    color: #48c578;
 }
 
 /* Settings */

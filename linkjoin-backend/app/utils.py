@@ -1,6 +1,7 @@
 import secrets
 from datetime import datetime, date, timedelta, timezone
 from pymongo import ReturnDocument
+from pytz import utc, timezone as pytz_timezone
 from app.database import sync_db, motor_db
 from app.encryption import decrypt
 
@@ -46,15 +47,42 @@ async def track_event(event: str, org_id: str | None = None, user_id: str | None
         pass
 
 
+_PLATFORM_PATTERNS = [
+    ("zoom", ("zoom.us",)),
+    ("meet", ("meet.google.com",)),
+    ("teams", ("teams.microsoft.com", "teams.live.com")),
+]
+
+
+def _detect_platform(url: str) -> str:
+    low = (url or "").lower()
+    for name, patterns in _PLATFORM_PATTERNS:
+        if any(p in low for p in patterns):
+            return name
+    return "other"
+
+
 def _clean_items(items: list) -> list:
+    # Organizational (class-linked) links never expose their raw meeting URL here —
+    # only the /c/:slug redirect link is meant to be visible to teachers/students/
+    # admins. Personal (non-class) links are unaffected. See attendance-integrity brief.
     cleaned = []
     for item in items:
         item = {k: v for k, v in item.items() if k != "_id"}
+        is_class_linked = bool(item.get("class_id"))
         try:
             if "link" in item:
-                item["link"] = decrypt(item["link"])
+                raw_url = decrypt(item["link"])
+                if is_class_linked:
+                    item["platform"] = _detect_platform(raw_url)
+                    item.pop("link", None)
+                else:
+                    item["link"] = raw_url
         except Exception:
-            item["link"] = ""
+            if is_class_linked:
+                item.pop("link", None)
+            else:
+                item["link"] = ""
         try:
             if "share" in item:
                 item["share"] = decrypt(item["share"])
@@ -67,6 +95,22 @@ def _clean_items(items: list) -> list:
             item["password"] = ""
         cleaned.append(item)
     return cleaned
+
+
+def gen_slug() -> str:
+    # 128-bit entropy from token_urlsafe(16) makes collisions negligible, same
+    # justification as links.py's _unique_share_id().
+    return secrets.token_urlsafe(16)
+
+
+async def ensure_link_slug(link: dict) -> str:
+    """Lazily backfill a slug onto a pre-existing link doc that predates this field."""
+    if link.get("slug"):
+        return link["slug"]
+    slug = gen_slug()
+    await motor_db.links.update_one({"id": link["id"], "username": link["username"]}, {"$set": {"slug": slug}})
+    link["slug"] = slug
+    return slug
 
 
 async def configure_data(email: str) -> dict:
@@ -94,7 +138,39 @@ async def configure_data(email: str) -> dict:
             "deleted-bookmarks": await motor_db.deleted_bookmarks.find({"username": email}).to_list(None),
         }
 
+    for l in raw["links"]:
+        await ensure_link_slug(l)
+
     return {key: _clean_items(items) for key, items in raw.items()}
+
+
+def compute_session_start_utc(class_time: str, class_days: list, tz_name: str, now_utc: datetime) -> datetime | None:
+    """Timezone-correct instant a class session starts today, if today is scheduled.
+
+    Port of the class-start computation in scheduler.check_absences(); reused wherever
+    minutes_late/on-time status needs to be derived from a class's time+days+teacher tz.
+    Returns None if class_time is unset/unparseable or today isn't a scheduled day.
+    """
+    if not class_time or not class_days:
+        return None
+    try:
+        h, m = (int(x) for x in class_time.split(":"))
+    except (ValueError, TypeError):
+        return None
+    try:
+        tz = pytz_timezone(tz_name or "UTC")
+    except Exception:
+        tz = utc
+
+    day_abbrs = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+    now_local = now_utc.astimezone(tz)
+    today_local = now_local.date()
+    today_abbr = day_abbrs[today_local.weekday()]
+    if today_abbr not in class_days:
+        return None
+
+    class_start_local = tz.localize(datetime(today_local.year, today_local.month, today_local.day, h, m, 0))
+    return class_start_local.astimezone(utc)
 
 
 def get_blackout_set(org: dict) -> set[str]:

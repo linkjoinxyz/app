@@ -67,15 +67,17 @@ export function useAutoOpen(links, user, onDisable, onDelete) {
         const lastTs = getLastOpened()[link.id]
         if (lastTs && Date.now() - lastTs < 2 * 60 * 1000) continue
 
-        const premeetParams = new URLSearchParams({ name: link.name || '', link: link.link })
-        if (link.password) premeetParams.set('pw', link.password)
-        if (link.class_id && link.link_type === 'primary') {
-          premeetParams.set('linkId', link.id)
-          premeetParams.set('classId', link.class_id)
-          premeetParams.set('className', link.class_name || '')
-          premeetParams.set('sched', target.toISOString())
+        // Class-linked meetings always route through /c/:slug — the only code
+        // path that logs a linkjoin_click and the only place the raw URL is
+        // ever sent to the browser. Personal (non-class) links keep opening
+        // directly via /premeet, which still has the raw url.
+        if (link.class_id && link.slug) {
+          window.open(`/c/${link.slug}`, '_blank', 'noopener,noreferrer')
+        } else {
+          const premeetParams = new URLSearchParams({ name: link.name || '', link: link.link })
+          if (link.password) premeetParams.set('pw', link.password)
+          window.open(`/premeet?${premeetParams}`, '_blank', 'noopener,noreferrer')
         }
-        window.open(`/premeet?${premeetParams}`, '_blank', 'noopener,noreferrer')
         linksApi.logOpen(link).catch(() => {})
         setLastOpened(link.id)
         window.dispatchEvent(new CustomEvent('lj:opened'))

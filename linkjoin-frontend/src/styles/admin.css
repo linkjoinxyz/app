@@ -875,6 +875,10 @@
   background: rgba(255,255,255,0.03);
 }
 
+[data-theme="light"] .attendance-table th { color: rgba(15,23,42,0.45); border-bottom-color: rgba(0,0,0,0.08); }
+[data-theme="light"] .attendance-table td { color: rgba(15,23,42,0.8); border-bottom-color: rgba(0,0,0,0.05); }
+[data-theme="light"] .att-class-row:hover td { background: rgba(0,0,0,0.02); }
+
 .att-class-row .teacher-chevron {
   transition: transform 0.2s, color 0.15s;
   color: rgba(255,255,255,0.28);
@@ -2531,6 +2535,19 @@ button.iv-status-pill { cursor: pointer; }
 [data-theme="light"] .att-undo-btn { color: rgba(15,23,42,0.35); }
 [data-theme="light"] .att-undo-btn:hover { color: rgba(15,23,42,0.65); }
 [data-theme="light"] .att-empty { color: rgba(15,23,42,0.4); }
+[data-theme="light"] .att-email { color: rgba(15,23,42,0.75); }
+[data-theme="light"] .att-time { color: rgba(15,23,42,0.5); }
+
+[data-theme="light"] .class-link-pill { color: rgba(15,23,42,0.8); background: rgba(0,0,0,0.04); border-color: rgba(0,0,0,0.12); }
+[data-theme="light"] .class-link-pill:hover { background: rgba(0,0,0,0.07); border-color: rgba(0,0,0,0.2); }
+[data-theme="light"] .class-link-pill button { color: rgba(15,23,42,0.4); }
+
+.leak-signal-meta { font-size: 13px; color: rgba(255,255,255,0.5); }
+.leak-signal-desc { font-size: 12px; color: rgba(255,255,255,0.55); padding: 0 20px; margin-top: 8px; }
+.leak-signal-section-label { font-size: 13px; font-weight: 600; color: rgba(255,255,255,0.7); }
+[data-theme="light"] .leak-signal-meta { color: rgba(15,23,42,0.5); }
+[data-theme="light"] .leak-signal-desc { color: rgba(15,23,42,0.55); }
+[data-theme="light"] .leak-signal-section-label { color: rgba(15,23,42,0.7); }
 
 [data-theme="light"] .iv-save-btn { background: rgba(0,0,0,0.06); color: #0f172a; }
 
