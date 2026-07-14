@@ -1,10 +1,11 @@
 import { useState, useEffect, useCallback } from 'react'
 
 function getPreferred() {
-  const stored = localStorage.getItem('lj_theme')
-  if (stored === 'light') return false
-  if (stored === 'dark') return true
-  return window.matchMedia('(prefers-color-scheme: dark)').matches
+  // Dark is the only supported theme now — the toggle UI was removed from
+  // the main app shell (SideNav), but a stale localStorage value or a
+  // light-preferring OS could otherwise strand someone in an unreachable
+  // light mode with no way back. Always dark, regardless of either.
+  return true
 }
 
 function applyTheme(isDark) {
