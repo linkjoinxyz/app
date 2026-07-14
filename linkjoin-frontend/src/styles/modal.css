@@ -107,8 +107,8 @@
     display: block;
     width: 100%;
     font: 500 17px Montserrat;
-    height: 44px;
-    padding: 4px 2px;
+    height: 40px;
+    padding: 2px 2px;
     border: none;
     border-bottom: 2px solid rgba(255, 255, 255, 0.5);
     margin-bottom: 20px;
@@ -129,7 +129,7 @@
 }
 
 .modal-field {
-    margin-bottom: 20px;
+    margin-bottom: 14px;
 }
 
 .modal-field-tag {
