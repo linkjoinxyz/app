@@ -252,8 +252,7 @@ export default function LinkModal({ visible, editLink, onClose, onSuccess, prefi
                 >{linkCopied === 'failed' ? 'Copy failed' : linkCopied ? 'Copied!' : 'Copy'}</button>
               </div>
               <span className="modal-field-opt" style={{ display: 'block', marginTop: 6 }}>
-                Students join through this LinkJoin link so attendance gets recorded. The
-                underlying meeting URL isn't shown here — sharing it directly means joins won't be logged.
+                Students join through this LinkJoin link so attendance gets recorded.
               </span>
             </div>
             <div className="modal-field">
