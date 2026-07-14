@@ -3248,22 +3248,22 @@ function LeakSignalTab({ orgId }) {
     <div className="detail-section-card detail-section-card--full" style={{ marginTop: 24 }}>
       <div className="detail-section-header" style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
         <span className="detail-section-title">Data quality &mdash; leak signal</span>
-        <span style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)' }}>
+        <span className="leak-signal-meta">
           Trailing {data.lookback_days} days &middot; flag threshold {Math.round(threshold * 100)}%
         </span>
       </div>
-      <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.55)', padding: '0 20px', marginTop: 8 }}>
+      <p className="leak-signal-desc">
         Leak rate is the share of attendance events reason-coded "joined outside LinkJoin" &mdash;
         a signal that students are joining via a pasted raw meeting link instead of a LinkJoin
         redirect. A class over the threshold has unreliable tardiness stats, since leaked joins
         have no timestamps.
       </p>
       <div style={{ padding: '8px 20px 20px' }}>
-        <div style={{ fontSize: 13, fontWeight: 600, margin: '12px 0 8px', color: 'rgba(255,255,255,0.7)' }}>By teacher</div>
+        <div className="leak-signal-section-label" style={{ margin: '12px 0 8px' }}>By teacher</div>
         <div style={{ overflowX: 'auto' }}>
           <Table rows={data.by_teacher} cols={teacherCols} sort={teacherSort} onSort={toggleSort(setTeacherSort)} />
         </div>
-        <div style={{ fontSize: 13, fontWeight: 600, margin: '24px 0 8px', color: 'rgba(255,255,255,0.7)' }}>By class</div>
+        <div className="leak-signal-section-label" style={{ margin: '24px 0 8px' }}>By class</div>
         <div style={{ overflowX: 'auto' }}>
           <Table rows={data.by_class} cols={classCols} sort={classSort} onSort={toggleSort(setClassSort)} />
         </div>
