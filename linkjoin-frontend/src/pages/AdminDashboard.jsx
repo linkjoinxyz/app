@@ -739,7 +739,7 @@ function ClassDetail({ cls, onBack, onUpdate, onViewStudent }) {
         if (!prev) return prev
         return {
           ...prev,
-          students: prev.students.map(s => {
+          students: (prev.students || []).map(s => {
             if (s.student_email !== studentEmail) return s
             const excusedDates = shouldExcuse
               ? [...s.excused_absence_dates, date].sort()
@@ -1342,9 +1342,9 @@ function ClassDetail({ cls, onBack, onUpdate, onViewStudent }) {
           <div className="detail-section-card detail-section-card--full">
             <div className="detail-section-header">
               <span className="detail-section-label">Patterns</span>
-              {patterns.students.filter(s => s.flags.length > 0).length > 0 && (
+              {(patterns.students || []).filter(s => s.flags.length > 0).length > 0 && (
                 <span className="att-flag-count">
-                  {patterns.students.filter(s => s.flags.length > 0).length} flagged
+                  {(patterns.students || []).filter(s => s.flags.length > 0).length} flagged
                 </span>
               )}
               <span className="detail-section-meta">Last {patterns.lookback_days} days · {patterns.expected_count} expected sessions</span>
@@ -1357,7 +1357,7 @@ function ClassDetail({ cls, onBack, onUpdate, onViewStudent }) {
               </div>
             )}
             <div className="detail-section-body">
-              {patterns.students.length === 0 ? (
+              {(patterns.students || []).length === 0 ? (
                 <div className="admin-empty">No student data yet for this class.</div>
               ) : (
                 <table className="attendance-table">
@@ -1372,7 +1372,7 @@ function ClassDetail({ cls, onBack, onUpdate, onViewStudent }) {
                     </tr>
                   </thead>
                   <tbody>
-                    {patterns.students.map((s, i) => {
+                    {(patterns.students || []).map((s, i) => {
                       const pct = Math.round(s.attendance_rate * 100)
                       const hasFlags = s.flags.length > 0
                       const effectiveExpected = s.effective_expected ?? patterns.expected_count
