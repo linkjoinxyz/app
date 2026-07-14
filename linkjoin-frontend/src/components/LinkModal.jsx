@@ -245,9 +245,12 @@ export default function LinkModal({ visible, editLink, onClose, onSuccess, prefi
                     navigator.clipboard.writeText(`${window.location.origin}/c/${editLink.slug || ''}`).then(() => {
                       setLinkCopied(true)
                       setTimeout(() => setLinkCopied(false), 2000)
+                    }).catch(() => {
+                      setLinkCopied('failed')
+                      setTimeout(() => setLinkCopied(false), 2000)
                     })
                   }}
-                >{linkCopied ? 'Copied!' : 'Copy'}</button>
+                >{linkCopied === 'failed' ? 'Copy failed' : linkCopied ? 'Copied!' : 'Copy'}</button>
               </div>
               <span className="modal-field-opt" style={{ display: 'block', marginTop: 6 }}>
                 Students join through this LinkJoin link so attendance gets recorded. The
