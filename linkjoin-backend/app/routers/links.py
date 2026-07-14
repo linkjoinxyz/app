@@ -1,9 +1,10 @@
 import asyncio
 import html as _html
+import logging
 import secrets
 from datetime import datetime, timezone
 from urllib.parse import urlparse
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request
 from app.auth import get_confirmed_user, get_current_user
 from app.audit import log_audit
 from app.database import motor_db
@@ -14,11 +15,12 @@ from app.models.link import (
     AcceptLinkRequest,
 )
 from app.scheduler import create_text_job, delete_text_job
-from app.utils import configure_data, track_event, async_next_link_id
+from app.utils import configure_data, track_event, async_next_link_id, gen_slug, compute_session_start_utc
 from app.websocket_manager import manager
 from app.email_service import send_email
 from app.config import get_settings
 
+log = logging.getLogger(__name__)
 router = APIRouter(prefix="/links", tags=["links"])
 _settings = get_settings()
 
@@ -30,6 +32,11 @@ def _gen_share_id() -> str:
 async def _unique_share_id() -> str:
     # 128-bit entropy from token_urlsafe(16) makes collisions negligible (~1 in 2^128)
     return _gen_share_id()
+
+
+async def _unique_slug() -> str:
+    # Same 128-bit-entropy justification as _unique_share_id() above.
+    return gen_slug()
 
 
 def _valid_url(url: str) -> bool:
@@ -51,6 +58,87 @@ def _normalize_url(url: str) -> str:
 @router.get("")
 async def get_links(user: dict = Depends(get_current_user)):
     return await configure_data(user["username"])
+
+
+@router.get("/c/{slug}")
+async def resolve_class_link(slug: str, background_tasks: BackgroundTasks, user: dict = Depends(get_confirmed_user)):
+    """Log a linkjoin_click (when eligible) and hand back the meeting URL for the frontend
+    to open. Every failure mode short of an unknown slug still returns a url — never lock
+    a student out of class over a logging problem."""
+    link = await motor_db.links.find_one({"slug": slug})
+    if not link:
+        raise HTTPException(status_code=404, detail="Link not found")
+
+    logged = False
+    class_id = link.get("class_id")
+    try:
+        if class_id and user.get("role") == "student":
+            cls = await motor_db.classes.find_one({"class_id": class_id})
+            if cls:
+                is_rostered = user["user_id"] in (cls.get("student_ids") or [])
+                if not is_rostered:
+                    await log_audit(user["username"], "attendance.roster_miss", "class", class_id)
+                else:
+                    teacher = await motor_db.login.find_one({"user_id": cls.get("teacher_id", "")}, {"timezone": 1})
+                    tz_name = (teacher or {}).get("timezone") or "UTC"
+                    now_utc = datetime.now(timezone.utc)
+                    session_start = compute_session_start_utc(cls.get("time", ""), cls.get("days") or [], tz_name, now_utc)
+                    if session_start is not None:
+                        # Match on record_date (the class's local calendar day), not a UTC
+                        # timestamp range — session_start's local evening can fall on the
+                        # *next* UTC day for negative-offset timezones, which would make a
+                        # UTC-midnight-aligned window miss the very row it just inserted.
+                        record_date = session_start.strftime("%Y-%m-%d")
+                        existing = await motor_db.attendance.find_one({
+                            "class_id": class_id,
+                            "student_email": user["username"],
+                            "source": "linkjoin_click",
+                            "record_date": record_date,
+                        })
+                        if existing:
+                            logged = True
+                        else:
+                            minutes_late = round((now_utc - session_start).total_seconds() / 60)
+                            await motor_db.attendance.insert_one({
+                                "student_email": user["username"],
+                                "link_id": link.get("id"),
+                                "class_id": class_id,
+                                "class_name": link.get("class_name") or cls.get("name", ""),
+                                "share_id": link.get("share_id"),
+                                "opened_at": now_utc,
+                                "minutes_late": minutes_late,
+                                "source": "linkjoin_click",
+                                "recorded_by_user_id": None,
+                                "reason_code": None,
+                                "note": "",
+                                "recorded_at": now_utc,
+                                "record_date": record_date,
+                                "previous_record": None,
+                            })
+                            logged = True
+                            from app.routers.attendance import _gc_sync_if_due
+                            background_tasks.add_task(_gc_sync_if_due, class_id)
+    except Exception:
+        log.exception("class link resolve failed for slug=%s", slug)
+
+    try:
+        url = decrypt(link["link"])
+    except Exception:
+        url = ""
+    password = ""
+    if link.get("password"):
+        try:
+            password = decrypt(link["password"])
+        except Exception:
+            password = ""
+
+    return {
+        "url": url,
+        "name": link.get("name", ""),
+        "class_name": link.get("class_name", ""),
+        "password": password,
+        "logged": logged,
+    }
 
 
 @router.get("/history")
@@ -167,6 +255,7 @@ async def create_link(request: Request, body: CreateLinkRequest, user: dict = De
         "active": body.active if body.active in ("true", "false") else "true",
         "share": encrypt(share_url),
         "share_token": sid,
+        "slug": await _unique_slug(),
         "repeat": body.repeats,
         "days": body.days,
         "text": body.text,
@@ -192,18 +281,27 @@ async def update_link(link_id: int, request: Request, body: UpdateLinkRequest, u
     if not existing:
         raise HTTPException(status_code=404, detail="Link not found")
 
-    link_url = _normalize_url(body.link)
-    if not _valid_url(link_url):
-        raise HTTPException(status_code=422, detail="Invalid URL")
+    if body.link:
+        link_url = _normalize_url(body.link)
+        if not _valid_url(link_url):
+            raise HTTPException(status_code=422, detail="Invalid URL")
+        encrypted_link = encrypt(link_url)
+    else:
+        # Class-linked edits may omit `link` — the raw URL is redacted client-side
+        # for organizational links, so no value means "keep the existing link".
+        link_url = None
+        encrypted_link = existing["link"]
+
     doc = {
         "username": email,
         "id": link_id,
         "time": body.time,
-        "link": encrypt(link_url),
+        "link": encrypted_link,
         "name": body.name,
         "active": existing["active"],
         "share": existing.get("share"),
         "share_token": existing.get("share_token"),
+        "slug": existing.get("slug"),
         "repeat": body.repeats,
         "days": body.days,
         "text": body.text,
@@ -214,15 +312,21 @@ async def update_link(link_id: int, request: Request, body: UpdateLinkRequest, u
         doc["password"] = encrypt(body.password)
     if existing.get("share_id"):
         doc["share_id"] = existing["share_id"]
+    if existing.get("class_id"):
+        doc["class_id"] = existing["class_id"]
+        doc["class_name"] = existing.get("class_name", "")
+        doc["link_type"] = existing.get("link_type", "")
 
     # Propagate updates to shared copies and notify recipients
     async for shared in motor_db.links.find({"share_id": link_id}):
         upd: dict = {
             "name": body.name, "time": body.time, "days": body.days,
-            "link": encrypt(link_url), "repeat": body.repeats,
+            "repeat": body.repeats,
             "date": body.date or "", "end_date": body.end_date or "",
             "modified": True,
         }
+        if link_url:
+            upd["link"] = encrypt(link_url)
         if body.password:
             upd["password"] = encrypt(body.password)
         await motor_db.links.update_one(

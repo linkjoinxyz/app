@@ -376,7 +376,20 @@ function ClassDetail({ cls, onBack, onUpdate, onViewStudent }) {
   const [showOverrideModal, setShowOverrideModal] = useState(false)
   const [overrideDate, setOverrideDate] = useState(() => new Date().toISOString().slice(0, 10))
   const [overridePresent, setOverridePresent] = useState({})
+  const [overrideStatus, setOverrideStatus] = useState('present')
+  const [overrideReasonCode, setOverrideReasonCode] = useState('')
+  const [overrideNote, setOverrideNote] = useState('')
+  const [overrideJoinTime, setOverrideJoinTime] = useState('')
   const [overrideSaving, setOverrideSaving] = useState(false)
+
+  const OVERRIDE_REASON_CODES = [
+    { value: 'joined_outside_linkjoin', label: 'Joined outside LinkJoin (leak)' },
+    { value: 'device_failure', label: 'Device failure' },
+    { value: 'connectivity_outage', label: 'Connectivity outage' },
+    { value: 'excused', label: 'Excused' },
+    { value: 'late_enrollment', label: 'Late enrollment' },
+    { value: 'other', label: 'Other' },
+  ]
 
   // Student join code
   const [joinCode, setJoinCode] = useState(null) // null = not loaded, false = none exists
@@ -643,10 +656,17 @@ function ClassDetail({ cls, onBack, onUpdate, onViewStudent }) {
     }
   }
 
+  function currentRecordsForDate(dateStr) {
+    const map = {}
+    attendance
+      .filter(r => (r.record_date || (r.opened_at ? r.opened_at.slice(0, 10) : '')) === dateStr)
+      .filter(r => r.is_current !== false && r.record_id)
+      .forEach(r => { map[r.student_email] = r })
+    return map
+  }
+
   function attendedEmailsForDate(dateStr) {
-    return new Set(
-      attendance.filter(r => r.opened_at && r.opened_at.slice(0, 10) === dateStr).map(r => r.student_email)
-    )
+    return new Set(Object.keys(currentRecordsForDate(dateStr)))
   }
 
   function resetOverrideChecklist(dateStr) {
@@ -654,6 +674,10 @@ function ClassDetail({ cls, onBack, onUpdate, onViewStudent }) {
     const init = {}
     students.forEach(s => { init[s.username] = already.has(s.username) })
     setOverridePresent(init)
+    setOverrideStatus('present')
+    setOverrideReasonCode('')
+    setOverrideNote('')
+    setOverrideJoinTime('')
   }
 
   function openOverrideModal() {
@@ -671,10 +695,19 @@ function ClassDetail({ cls, onBack, onUpdate, onViewStudent }) {
   }
 
   async function submitOverride() {
+    if (!overrideReasonCode) return
+    if (overrideReasonCode === 'other' && !overrideNote.trim()) return
     setOverrideSaving(true)
     try {
-      const presentEmails = Object.entries(overridePresent).filter(([, v]) => v).map(([email]) => email)
-      await apiPost(`/attendance/class/${cls.class_id}/override`, { date: overrideDate, present_emails: presentEmails })
+      const studentEmails = Object.entries(overridePresent).filter(([, v]) => v).map(([email]) => email)
+      await apiPost(`/attendance/class/${cls.class_id}/override`, {
+        date: overrideDate,
+        student_emails: studentEmails,
+        status: overrideStatus,
+        reason_code: overrideReasonCode,
+        note: overrideNote.trim() || undefined,
+        join_time: overrideJoinTime || undefined,
+      })
       const attRes = await apiGet(`/attendance/class/${cls.class_id}`)
       setAttendance(attRes.records || [])
       setShowOverrideModal(false)
@@ -731,7 +764,7 @@ function ClassDetail({ cls, onBack, onUpdate, onViewStudent }) {
         }
       })
       setAttendance(prev => prev.map(r =>
-        r.absent && r.student_email === studentEmail && r.opened_at.slice(0, 10) === date
+        r.absent && r.student_email === studentEmail && (r.record_date || r.opened_at?.slice(0, 10)) === date
           ? { ...r, excused: shouldExcuse }
           : r
       ))
@@ -966,14 +999,19 @@ function ClassDetail({ cls, onBack, onUpdate, onViewStudent }) {
           </div>
         )}
 
-        {showOverrideModal && (
+        {showOverrideModal && (() => {
+          const currentByEmail = currentRecordsForDate(overrideDate)
+          const overwritingReal = students.filter(s => {
+            const rec = currentByEmail[s.username]
+            return overridePresent[s.username] && rec && rec.source === 'linkjoin_click'
+          })
+          return (
           <div className="admin-modal-backdrop" onClick={() => setShowOverrideModal(false)}>
             <div className="admin-modal" onClick={e => e.stopPropagation()}>
-              <h3>Day override</h3>
+              <h3>Attendance override</h3>
               <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.55)', marginTop: -8, marginBottom: 16 }}>
-                For when automatic tracking didn't run (e.g. a meeting-platform outage), or to
-                correct a record that's wrong. This replaces the attendance record for this day
-                to match exactly who's checked below.
+                For when automatic tracking didn't run, or to correct a record that's wrong.
+                Overrides are appended to the history, not destructive — nothing is deleted.
               </p>
               <div className="admin-modal-field">
                 <label className="admin-modal-label">Date</label>
@@ -985,32 +1023,95 @@ function ClassDetail({ cls, onBack, onUpdate, onViewStudent }) {
                 />
               </div>
               <div className="admin-modal-field">
-                <label className="admin-modal-label">Present</label>
-                <div style={{ maxHeight: 240, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 4 }}>
-                  {students.map(s => (
-                    <label
-                      key={s.user_id}
-                      className="admin-checkbox-row"
-                      onClick={() => toggleOverridePresent(s.username)}
-                    >
-                      <span className={`admin-checkbox${overridePresent[s.username] ? ' admin-checkbox--checked' : ''}`}>
-                        {overridePresent[s.username] && <img src="/images/check.svg" alt="" className="admin-checkbox-img" />}
-                      </span>
-                      {s.username}
-                    </label>
-                  ))}
+                <label className="admin-modal-label">Select students</label>
+                <div style={{ maxHeight: 200, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  {students.map(s => {
+                    const rec = currentByEmail[s.username]
+                    return (
+                      <label
+                        key={s.user_id}
+                        className="admin-checkbox-row"
+                        onClick={() => toggleOverridePresent(s.username)}
+                      >
+                        <span className={`admin-checkbox${overridePresent[s.username] ? ' admin-checkbox--checked' : ''}`}>
+                          {overridePresent[s.username] && <img src="/images/check.svg" alt="" className="admin-checkbox-img" />}
+                        </span>
+                        {s.username}
+                        {rec && rec.source === 'linkjoin_click' && (
+                          <span style={{ fontSize: 11, opacity: 0.5, marginLeft: 6 }}>
+                            already joined via LinkJoin{rec.opened_at ? ` at ${rec.opened_at.slice(11, 16)}` : ''}
+                          </span>
+                        )}
+                      </label>
+                    )
+                  })}
                   {students.length === 0 && <div className="admin-empty">No students in this class.</div>}
                 </div>
               </div>
+
+              {overwritingReal.length > 0 && (
+                <div className="modal-warn" style={{ marginBottom: 12 }}>
+                  ⚠ This will replace a real LinkJoin join for {overwritingReal.map(s => s.username).join(', ')}.
+                </div>
+              )}
+
+              <div className="admin-modal-field">
+                <label className="admin-modal-label">Status</label>
+                <select className="admin-input" value={overrideStatus} onChange={e => setOverrideStatus(e.target.value)}>
+                  <option value="present">Present</option>
+                  <option value="absent">Absent</option>
+                  <option value="excused">Excused</option>
+                </select>
+              </div>
+
+              <div className="admin-modal-field">
+                <label className="admin-modal-label">Reason</label>
+                <select className="admin-input" value={overrideReasonCode} onChange={e => setOverrideReasonCode(e.target.value)}>
+                  <option value="">Select a reason&hellip;</option>
+                  {OVERRIDE_REASON_CODES.map(r => (
+                    <option key={r.value} value={r.value}>{r.label}</option>
+                  ))}
+                </select>
+              </div>
+
+              {overrideReasonCode === 'other' && (
+                <div className="admin-modal-field">
+                  <label className="admin-modal-label">Note (required)</label>
+                  <input
+                    className="admin-input"
+                    value={overrideNote}
+                    onChange={e => setOverrideNote(e.target.value)}
+                    placeholder="What happened?"
+                  />
+                </div>
+              )}
+
+              {overrideStatus === 'present' && (
+                <div className="admin-modal-field">
+                  <label className="admin-modal-label">Join time <span style={{ fontWeight: 400, opacity: 0.6 }}>(optional, if known)</span></label>
+                  <input
+                    className="admin-input"
+                    type="time"
+                    value={overrideJoinTime}
+                    onChange={e => setOverrideJoinTime(e.target.value)}
+                  />
+                </div>
+              )}
+
               <div className="admin-modal-actions">
                 <button className="admin-btn-ghost" onClick={() => setShowOverrideModal(false)}>Cancel</button>
-                <button className="admin-btn" onClick={submitOverride} disabled={overrideSaving}>
+                <button
+                  className="admin-btn"
+                  onClick={submitOverride}
+                  disabled={overrideSaving || !overrideReasonCode || (overrideReasonCode === 'other' && !overrideNote.trim())}
+                >
                   {overrideSaving ? 'Saving…' : 'Save attendance'}
                 </button>
               </div>
             </div>
           </div>
-        )}
+          )
+        })()}
 
         {/* Students tab */}
         {classTab === 'students' && <div className="detail-section-card">
@@ -1166,7 +1267,9 @@ function ClassDetail({ cls, onBack, onUpdate, onViewStudent }) {
                 </thead>
                 <tbody>
                   {attendance.map((r, i) => {
-                    const dt = new Date(r.opened_at)
+                    // opened_at is null on an absent/excused override — fall back to
+                    // record_date (always set) so the row doesn't show the 1970 epoch.
+                    const dt = new Date(r.opened_at || r.record_date)
                     const dateStr = dt.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
                     const timeStr = dt.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
                     const tardyThreshold = patterns?.thresholds?.tardy_threshold_minutes ?? 5
@@ -1209,9 +1312,9 @@ function ClassDetail({ cls, onBack, onUpdate, onViewStudent }) {
                         <td className="att-action-cell">
                           {r.absent ? (
                             r.excused ? (
-                              <button className="att-undo-btn" onClick={() => excuseAbsence(r.student_email, r.opened_at.slice(0, 10), false)}>Undo</button>
+                              <button className="att-undo-btn" onClick={() => excuseAbsence(r.student_email, r.record_date || r.opened_at?.slice(0, 10), false)}>Undo</button>
                             ) : (
-                              <button className="iv-open-btn" onClick={() => excuseAbsence(r.student_email, r.opened_at.slice(0, 10), true)}>Excuse</button>
+                              <button className="iv-open-btn" onClick={() => excuseAbsence(r.student_email, r.record_date || r.opened_at?.slice(0, 10), true)}>Excuse</button>
                             )
                           ) : r.excused ? (
                             <button className="att-undo-btn" onClick={() => excuseRecord(r.record_id, false)}>Undo</button>
@@ -1246,6 +1349,13 @@ function ClassDetail({ cls, onBack, onUpdate, onViewStudent }) {
               )}
               <span className="detail-section-meta">Last {patterns.lookback_days} days · {patterns.expected_count} expected sessions</span>
             </div>
+            {patterns.data_quality?.flagged && (
+              <div className="modal-warn" style={{ margin: '0 20px 16px' }}>
+                ⚠ {Math.round(patterns.data_quality.leak_rate * 100)}% of this class's attendance events
+                are joins outside LinkJoin (a "leak"). Tardiness stats below are unreliable for
+                sessions with no real timestamp — flags are annotated, not suppressed, below.
+              </div>
+            )}
             <div className="detail-section-body">
               {patterns.students.length === 0 ? (
                 <div className="admin-empty">No student data yet for this class.</div>
@@ -1340,6 +1450,12 @@ function ClassDetail({ cls, onBack, onUpdate, onViewStudent }) {
                                   Reopen case
                                 </button>
                               ))}
+                              {s.suppressed && (s.flags.length > 0 || (s.reopen_flags || []).length > 0) && (
+                                <span title="High leak rate for this class — flags may reflect incomplete data"
+                                  style={{ fontSize: 11, opacity: 0.5, alignSelf: 'center' }}>
+                                  low confidence
+                                </span>
+                              )}
                             </div>
                           </td>
                         </tr>
@@ -1602,6 +1718,7 @@ const DEFAULT_THRESHOLDS = {
   tardy_rate_flag: 33,
   attendance_rate_flag: 50,
   min_sessions_to_flag: 3,
+  leak_rate_flag: 15,
 }
 
 function AlertSettingsCard({ orgId }) {
@@ -1619,6 +1736,7 @@ function AlertSettingsCard({ orgId }) {
         tardy_rate_flag: Math.round(s.tardy_rate_flag * 100),
         attendance_rate_flag: Math.round(s.attendance_rate_flag * 100),
         min_sessions_to_flag: s.min_sessions_to_flag,
+        leak_rate_flag: Math.round((s.leak_rate_flag ?? 0.15) * 100),
       }
       setSettings(normalized)
       setDraft(normalized)
@@ -1636,10 +1754,12 @@ function AlertSettingsCard({ orgId }) {
     const tardyRate = Number(draft.tardy_rate_flag)
     const attRate = Number(draft.attendance_rate_flag)
     const minSess = Number(draft.min_sessions_to_flag)
+    const leakRate = Number(draft.leak_rate_flag)
     if (tardyMin < 0 || tardyMin > 60) return setSaveError('Minutes late must be between 0 and 60.')
     if (tardyRate < 1 || tardyRate > 100) return setSaveError('Tardy rate must be between 1% and 100%.')
     if (attRate < 1 || attRate > 100) return setSaveError('Attendance rate must be between 1% and 100%.')
     if (minSess < 1 || minSess > 20) return setSaveError('Minimum sessions must be between 1 and 20.')
+    if (leakRate < 1 || leakRate > 100) return setSaveError('Leak rate must be between 1% and 100%.')
     setSaving(true)
     setSaveError(null)
     try {
@@ -1648,6 +1768,7 @@ function AlertSettingsCard({ orgId }) {
         tardy_rate_flag: tardyRate / 100,
         attendance_rate_flag: attRate / 100,
         min_sessions_to_flag: minSess,
+        leak_rate_flag: leakRate / 100,
       })
       setSettings(draft)
       setSaved(true)
@@ -1663,7 +1784,8 @@ function AlertSettingsCard({ orgId }) {
     draft.tardy_threshold_minutes !== settings.tardy_threshold_minutes ||
     draft.tardy_rate_flag !== settings.tardy_rate_flag ||
     draft.attendance_rate_flag !== settings.attendance_rate_flag ||
-    draft.min_sessions_to_flag !== settings.min_sessions_to_flag
+    draft.min_sessions_to_flag !== settings.min_sessions_to_flag ||
+    draft.leak_rate_flag !== settings.leak_rate_flag
   )
 
   return (
@@ -1694,6 +1816,12 @@ function AlertSettingsCard({ orgId }) {
             <input type="number" className="alert-settings-input" min={1} max={20}
               value={draft.min_sessions_to_flag}
               onChange={e => handleChange('min_sessions_to_flag', e.target.value)} />
+          </label>
+          <label className="alert-settings-label">
+            Flag classes when leak rate exceeds (%)
+            <input type="number" className="alert-settings-input" min={1} max={100}
+              value={draft.leak_rate_flag}
+              onChange={e => handleChange('leak_rate_flag', e.target.value)} />
           </label>
         </div>
         <div className="alert-settings-footer">
@@ -3021,6 +3149,129 @@ function OrgAttendanceTab({ orgId }) {
   )
 }
 
+// ─── Leak Signal (attendance-integrity brief §D) ──────────────────────────────
+
+function LeakSignalTab({ orgId }) {
+  const [data, setData] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
+  const [classSort, setClassSort] = useState({ key: 'leak_rate', dir: -1 })
+  const [teacherSort, setTeacherSort] = useState({ key: 'leak_rate', dir: -1 })
+
+  useEffect(() => {
+    if (!orgId) return
+    setLoading(true)
+    apiGet(`/orgs/${orgId}/leak-signal`)
+      .then(d => { setData(d); setLoading(false) })
+      .catch(() => { setError('Failed to load leak signal data.'); setLoading(false) })
+  }, [orgId])
+
+  function sortRows(rows, sort) {
+    return [...rows].sort((a, b) => {
+      const av = a[sort.key] ?? 0, bv = b[sort.key] ?? 0
+      return typeof av === 'number' ? (av - bv) * sort.dir : String(av).localeCompare(String(bv)) * sort.dir
+    })
+  }
+
+  function toggleSort(setSort) {
+    return key => setSort(s => s.key === key ? { key, dir: s.dir * -1 } : { key, dir: -1 })
+  }
+
+  function rateColor(rate, threshold) {
+    if (rate >= threshold) return '#f87171'
+    if (rate >= threshold * 0.5) return '#facc15'
+    return '#4ade80'
+  }
+
+  if (loading) return <div className="admin-empty" style={{ padding: '48px 0' }}>Loading leak signal data...</div>
+  if (error) return <div className="admin-empty" style={{ padding: '48px 0', color: '#f87171' }}>{error}</div>
+  if (!data) return null
+
+  const threshold = data.leak_threshold ?? 0.15
+  const classCols = [
+    { key: 'class_name', label: 'Class' },
+    { key: 'teacher_name', label: 'Teacher' },
+    { key: 'total_events', label: 'Sessions' },
+    { key: 'override_rate', label: 'Override rate' },
+    { key: 'leak_rate', label: 'Leak rate' },
+  ]
+  const teacherCols = [
+    { key: 'teacher_name', label: 'Teacher' },
+    { key: 'total_events', label: 'Sessions' },
+    { key: 'override_rate', label: 'Override rate' },
+    { key: 'leak_rate', label: 'Leak rate' },
+  ]
+
+  function Table({ rows, cols, sort, onSort }) {
+    return (
+      <table className="attendance-table" style={{ width: '100%' }}>
+        <thead>
+          <tr>
+            {cols.map(col => (
+              <th key={col.key} style={{ cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap' }}
+                onClick={() => onSort(col.key)}>
+                {col.label} {sort.key === col.key ? (sort.dir === 1 ? '↑' : '↓') : <span style={{ opacity: 0.3 }}>↕</span>}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {sortRows(rows, sort).map((row, i) => (
+            <tr key={row.class_id || row.teacher_id || i}>
+              {cols.map(col => {
+                const val = row[col.key]
+                if (col.key === 'leak_rate' || col.key === 'override_rate') {
+                  const pct = Math.round((val ?? 0) * 100)
+                  return (
+                    <td key={col.key} style={{ textAlign: 'center' }}>
+                      <span style={{ color: col.key === 'leak_rate' ? rateColor(val, threshold) : 'inherit', fontWeight: col.key === 'leak_rate' ? 600 : 400 }}>
+                        {pct}%
+                      </span>
+                      {col.key === 'leak_rate' && row.flagged && <span title="Over threshold" style={{ marginLeft: 6 }}>⚠</span>}
+                    </td>
+                  )
+                }
+                if (col.key === 'total_events') return <td key={col.key} style={{ textAlign: 'center' }}>{val}</td>
+                return <td key={col.key}>{val || '—'}</td>
+              })}
+            </tr>
+          ))}
+          {rows.length === 0 && (
+            <tr><td colSpan={cols.length} className="admin-empty" style={{ padding: 16 }}>No data in the lookback window.</td></tr>
+          )}
+        </tbody>
+      </table>
+    )
+  }
+
+  return (
+    <div className="detail-section-card detail-section-card--full" style={{ marginTop: 24 }}>
+      <div className="detail-section-header" style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
+        <span className="detail-section-title">Data quality &mdash; leak signal</span>
+        <span style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)' }}>
+          Trailing {data.lookback_days} days &middot; flag threshold {Math.round(threshold * 100)}%
+        </span>
+      </div>
+      <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.55)', padding: '0 20px', marginTop: 8 }}>
+        Leak rate is the share of attendance events reason-coded "joined outside LinkJoin" &mdash;
+        a signal that students are joining via a pasted raw meeting link instead of a LinkJoin
+        redirect. A class over the threshold has unreliable tardiness stats, since leaked joins
+        have no timestamps.
+      </p>
+      <div style={{ padding: '8px 20px 20px' }}>
+        <div style={{ fontSize: 13, fontWeight: 600, margin: '12px 0 8px', color: 'rgba(255,255,255,0.7)' }}>By teacher</div>
+        <div style={{ overflowX: 'auto' }}>
+          <Table rows={data.by_teacher} cols={teacherCols} sort={teacherSort} onSort={toggleSort(setTeacherSort)} />
+        </div>
+        <div style={{ fontSize: 13, fontWeight: 600, margin: '24px 0 8px', color: 'rgba(255,255,255,0.7)' }}>By class</div>
+        <div style={{ overflowX: 'auto' }}>
+          <Table rows={data.by_class} cols={classCols} sort={classSort} onSort={toggleSort(setClassSort)} />
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ─── Org Intervention List ────────────────────────────────────────────────────
 
 function OrgInterventionList({ onBack, initialExpanded = null }) {
@@ -3557,6 +3808,7 @@ function SchoolAdminView() {
           {openCases.length > 0 && <span className="admin-tab-badge">{openCases.length}</span>}
         </button>
         <button className={`admin-tab${activeTab === 'attendance' ? ' admin-tab--active' : ''}`} onClick={() => setActiveTab('attendance')}>Attendance</button>
+        <button className={`admin-tab${activeTab === 'leak-signal' ? ' admin-tab--active' : ''}`} onClick={() => setActiveTab('leak-signal')}>Data Quality</button>
         <button className={`admin-tab${activeTab === 'log' ? ' admin-tab--active' : ''}`} onClick={() => setActiveTab('log')}>Meeting Open Log</button>
         <button className={`admin-tab${activeTab === 'org' ? ' admin-tab--active' : ''}`} onClick={() => setActiveTab('org')}>Organization</button>
         <button className={`admin-tab${activeTab === 'integrations' ? ' admin-tab--active' : ''}`} onClick={() => setActiveTab('integrations')}>Integrations</button>
@@ -3568,6 +3820,7 @@ function SchoolAdminView() {
       </div>
 
       {activeTab === 'attendance' && <OrgAttendanceTab orgId={orgId} />}
+      {activeTab === 'leak-signal' && <LeakSignalTab orgId={orgId} />}
       {activeTab === 'interventions' && <OrgInterventionList onBack={() => setActiveTab('teachers')} />}
       {activeTab === 'log' && <HistoryPanel />}
       {activeTab === 'org' && <OrgSettingsTab orgId={orgId} orgName={orgName} setOrgName={setOrgName} orgNameSaved={orgNameSaved} saveOrgName={saveOrgName} brandName={brandName} setBrandName={setBrandName} brandSaved={brandSaved} saveBrandName={saveBrandName} />}

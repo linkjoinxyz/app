@@ -19,7 +19,8 @@ export async function apiFetch(path, options = {}) {
     if (res.status === 401 && !path.startsWith('/auth/')) {
       localStorage.removeItem('lj_token')
       localStorage.removeItem('lj_email')
-      window.location.href = '/login'
+      const redirect = window.location.pathname + window.location.search
+      window.location.href = `/login?redirect=${encodeURIComponent(redirect)}`
       return
     }
     const detail = body.detail

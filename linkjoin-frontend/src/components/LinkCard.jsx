@@ -2,7 +2,6 @@ import { useState, useRef, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { linksApi } from '../api/links.js'
-import { attendanceApi } from '../api/attendance.js'
 import { openSafeUrl } from '../utils.js'
 import { useAuth } from '../context/AuthContext.jsx'
 
@@ -70,13 +69,11 @@ export default function LinkCard({ link, isPending, onEdit, onShare, onDelete, o
 
   function handleOpen() {
     linksApi.trackOpen().catch(() => {})
-    if (link.class_id && link.link_type === 'primary' && link.time) {
-      const [sh, sm] = link.time.split(':').map(Number)
-      if (!isNaN(sh) && !isNaN(sm)) {
-        const now = new Date()
-        const minutesLate = (now.getHours() * 60 + now.getMinutes()) - (sh * 60 + sm)
-        attendanceApi.log(link.id, link.class_id, link.class_name, minutesLate).catch(() => {})
-      }
+    // Class-linked meetings route through /c/:slug — the one code path that
+    // logs a linkjoin_click and the only place the raw URL is ever exposed.
+    if (link.class_id && link.slug) {
+      navigate(`/c/${link.slug}`)
+      return
     }
     openSafeUrl(link.link)
   }
@@ -104,7 +101,12 @@ export default function LinkCard({ link, isPending, onEdit, onShare, onDelete, o
   const days = Array.isArray(link.days)
     ? [...link.days].sort((a, b) => DAY_ORDER.indexOf(a) - DAY_ORDER.indexOf(b))
     : []
-  const platform = detectPlatform(link.link)
+  // Class-linked meetings don't carry the raw URL client-side (redacted server-side),
+  // so use the server-computed platform field there; personal links keep detecting locally.
+  const detectedPlatform = detectPlatform(link.link)
+  const platform = link.platform
+    ? { zoom: 'Zoom', meet: 'Meet', teams: 'Teams' }[link.platform] || null
+    : detectedPlatform
 
   function formatDays(d) {
     const sorted = d.join(',')

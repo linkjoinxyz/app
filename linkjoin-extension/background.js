@@ -93,7 +93,10 @@ async function recreateAlarms(links) {
     }
 
     for (const link of links) {
-        if (link.active === 'false' || !link.link) continue
+        // Class-linked meetings have their raw URL redacted server-side (see
+        // attendance-integrity brief) — they carry a `slug` instead, resolved
+        // via /links/c/:slug at open time. Personal links still carry `link`.
+        if (link.active === 'false' || (!link.link && !link.slug)) continue
         if (isPastEndDate(link)) continue
 
         if (link.repeat === 'same_weekday') {
@@ -106,7 +109,7 @@ async function recreateAlarms(links) {
                 if (check.getDate() === firstBizDay(check.getFullYear(), check.getMonth()) && check.getTime() > Date.now()) {
                     const alarmName = `lj-${link.id}-fbm`
                     chrome.alarms.create(alarmName, { when: check.getTime() - PRE_MEET_MS })
-                    alarmData[alarmName] = { id: link.id, link: link.link, repeat: link.repeat, name: link.name, password: link.password || null }
+                    alarmData[alarmName] = { id: link.id, link: link.link, slug: link.slug || null, repeat: link.repeat, name: link.name, password: link.password || null }
                     const notifyWhen = check.getTime() - 2 * 60 * 1000
                     if (notifyWhen > Date.now()) {
                         const notifyName = `lj-notify-${link.id}-fbm`
@@ -147,7 +150,7 @@ async function recreateAlarms(links) {
             if (target) {
                 const alarmName = `lj-${link.id}-dom`
                 chrome.alarms.create(alarmName, { when: target.getTime() - PRE_MEET_MS })
-                alarmData[alarmName] = { id: link.id, link: link.link, repeat: link.repeat, name: link.name, password: link.password || null }
+                alarmData[alarmName] = { id: link.id, link: link.link, slug: link.slug || null, repeat: link.repeat, name: link.name, password: link.password || null }
                 const notifyWhen = target.getTime() - 2 * 60 * 1000
                 if (notifyWhen > Date.now()) {
                     const notifyName = `lj-notify-${link.id}-dom`
@@ -184,7 +187,7 @@ async function recreateAlarms(links) {
                 if (target && target.getTime() > Date.now()) {
                     const alarmName = `lj-${link.id}-${day}`
                     chrome.alarms.create(alarmName, { when: target.getTime() - PRE_MEET_MS })
-                    alarmData[alarmName] = { id: link.id, link: link.link, repeat: link.repeat, name: link.name, password: link.password || null }
+                    alarmData[alarmName] = { id: link.id, link: link.link, slug: link.slug || null, repeat: link.repeat, name: link.name, password: link.password || null }
                     const notifyWhen = target.getTime() - 2 * 60 * 1000
                     if (notifyWhen > Date.now()) {
                         const notifyName = `lj-notify-${link.id}-${day}`
@@ -229,7 +232,7 @@ async function recreateAlarms(links) {
             if (when > Date.now()) {
                 const alarmName = `lj-${link.id}-${day}`
                 chrome.alarms.create(alarmName, { when: when - PRE_MEET_MS })
-                alarmData[alarmName] = { id: link.id, link: link.link, repeat: link.repeat, name: link.name, password: link.password || null }
+                alarmData[alarmName] = { id: link.id, link: link.link, slug: link.slug || null, repeat: link.repeat, name: link.name, password: link.password || null }
 
                 const notifyWhen = when - 2 * 60 * 1000
                 if (notifyWhen > Date.now()) {
@@ -272,13 +275,19 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
     // Skip if web app already opened this meeting in the last 2 minutes
     if (lj_last_opened[entry.id] && Date.now() - lj_last_opened[entry.id] < 2 * 60 * 1000) return
 
-    try {
-        const proto = new URL(entry.link).protocol
-        if (proto !== 'http:' && proto !== 'https:') return
-    } catch { return }
-
-    const premeetParams = new URLSearchParams({ name: entry.name || '', link: entry.link })
-    if (entry.password) premeetParams.set('pw', entry.password)
+    let premeetParams
+    if (entry.slug) {
+        // Class-linked meeting: premeet.js resolves the slug itself via
+        // /links/c/:slug (logs attendance), so just hand it the slug + name.
+        premeetParams = new URLSearchParams({ name: entry.name || '', slug: entry.slug })
+    } else {
+        try {
+            const proto = new URL(entry.link).protocol
+            if (proto !== 'http:' && proto !== 'https:') return
+        } catch { return }
+        premeetParams = new URLSearchParams({ name: entry.name || '', link: entry.link })
+        if (entry.password) premeetParams.set('pw', entry.password)
+    }
     await chrome.windows.create({ url: chrome.runtime.getURL('premeet.html') + '?' + premeetParams, type: 'popup', width: 440, height: 360, focused: true })
 
     await chrome.storage.local.set({ lj_last_opened: { ...lj_last_opened, [entry.id]: Date.now() } })

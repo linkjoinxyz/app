@@ -27,6 +27,7 @@ import ConfirmEmail from './pages/ConfirmEmail.jsx'
 import Contact from './pages/Contact.jsx'
 import AuthPage2 from './pages/AuthPage2.jsx'
 import PreMeet from './pages/PreMeet.jsx'
+import ClassLinkRedirect from './pages/ClassLinkRedirect.jsx'
 import DPA from './pages/DPA.jsx'
 import PrivacySchools from './pages/PrivacySchools.jsx'
 import Subprocessors from './pages/Subprocessors.jsx'
@@ -89,7 +90,8 @@ function IvToast() {
 
 function PrivateRoute({ children }) {
   const { token, isOrgAdmin, onboardingDone } = useAuth()
-  if (!token) return <Navigate to="/login" replace />
+  const location = useLocation()
+  if (!token) return <Navigate to={`/login?redirect=${encodeURIComponent(location.pathname + location.search)}`} replace />
   if (isOrgAdmin && !onboardingDone) return <Navigate to="/onboarding" replace />
   return <>{children}<IvToast /></>
 }
@@ -141,6 +143,7 @@ export default function App() {
       <Route path="/addlink" element={<PrivateRoute><AddLink /></PrivateRoute>} />
       <Route path="/confirm" element={<ConfirmEmail />} />
       <Route path="/premeet" element={<PreMeet />} />
+      <Route path="/c/:slug" element={<PrivateRoute><ClassLinkRedirect /></PrivateRoute>} />
       <Route path="/contact" element={<Contact />} />
       <Route path="/status" element={<Status />} />
       <Route path="/api-docs" element={<ApiDocs />} />

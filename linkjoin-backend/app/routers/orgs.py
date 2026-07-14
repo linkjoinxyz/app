@@ -1,5 +1,6 @@
 import re
 import secrets
+from collections import defaultdict
 from datetime import date, datetime, timedelta, timezone
 from typing import Optional
 import httpx
@@ -397,6 +398,7 @@ _DEFAULT_ATTENDANCE_SETTINGS = {
     "tardy_rate_flag": 0.33,
     "attendance_rate_flag": 0.50,
     "min_sessions_to_flag": 3,
+    "leak_rate_flag": 0.15,
 }
 
 
@@ -417,7 +419,7 @@ async def update_attendance_settings(org_id: str, body: dict, user: dict = Depen
     if user.get("org_id") != org_id:
         raise HTTPException(status_code=403, detail="Access denied")
 
-    allowed = {"tardy_threshold_minutes", "tardy_rate_flag", "attendance_rate_flag", "min_sessions_to_flag"}
+    allowed = {"tardy_threshold_minutes", "tardy_rate_flag", "attendance_rate_flag", "min_sessions_to_flag", "leak_rate_flag"}
     updates = {k: v for k, v in body.items() if k in allowed and v is not None}
 
     if "tardy_threshold_minutes" in updates:
@@ -426,7 +428,7 @@ async def update_attendance_settings(org_id: str, body: dict, user: dict = Depen
             raise HTTPException(status_code=422, detail="tardy_threshold_minutes must be 0–60")
         updates["tardy_threshold_minutes"] = int(v)
 
-    for pct_key in ("tardy_rate_flag", "attendance_rate_flag"):
+    for pct_key in ("tardy_rate_flag", "attendance_rate_flag", "leak_rate_flag"):
         if pct_key in updates:
             v = updates[pct_key]
             if not isinstance(v, (int, float)) or v < 0 or v > 1:
@@ -510,3 +512,96 @@ async def get_org_attendance(org_id: str, user: dict = Depends(get_confirmed_use
 
     result.sort(key=lambda r: r["class_name"].lower())
     return {"classes": result}
+
+
+@router.get("/{org_id}/leak-signal")
+async def get_leak_signal(org_id: str, user: dict = Depends(get_confirmed_user)):
+    """Override/leak rate per teacher and per class over the trailing lookback
+    window — surfaces which classes/teachers are bleeding joins outside LinkJoin."""
+    require_school_admin(user)
+    if user.get("org_id") != org_id:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    from app.routers.attendance import _LOOKBACK_DAYS
+
+    org = await motor_db.orgs.find_one({"org_id": org_id}, {"_id": 0, "attendance_settings": 1})
+    org_settings = (org or {}).get("attendance_settings") or {}
+    leak_threshold = float(org_settings.get("leak_rate_flag", _DEFAULT_ATTENDANCE_SETTINGS["leak_rate_flag"]))
+    min_sessions = int(org_settings.get("min_sessions_to_flag", _DEFAULT_ATTENDANCE_SETTINGS["min_sessions_to_flag"]))
+
+    classes = await motor_db.classes.find(
+        {"org_id": org_id}, {"_id": 0, "class_id": 1, "name": 1, "teacher_id": 1}
+    ).to_list(None)
+    if not classes:
+        return {"lookback_days": _LOOKBACK_DAYS, "leak_threshold": leak_threshold, "by_teacher": [], "by_class": []}
+
+    teacher_ids = {c["teacher_id"] for c in classes if c.get("teacher_id")}
+    teacher_names: dict[str, str] = {}
+    for tid in teacher_ids:
+        t = await motor_db.login.find_one({"user_id": tid}, {"username": 1, "name": 1})
+        if t:
+            teacher_names[tid] = t.get("name") or t["username"]
+
+    class_ids = [c["class_id"] for c in classes]
+    cutoff = datetime.now(timezone.utc) - timedelta(days=_LOOKBACK_DAYS)
+
+    pipeline = [
+        {"$match": {
+            "class_id": {"$in": class_ids},
+            "$or": [{"opened_at": {"$gte": cutoff}}, {"recorded_at": {"$gte": cutoff}}],
+        }},
+        {"$group": {
+            "_id": "$class_id",
+            "total_events": {"$sum": 1},
+            "overrides": {"$sum": {"$cond": [{"$eq": ["$source", "manual_override"]}, 1, 0]}},
+            "leaks": {"$sum": {"$cond": [{"$eq": ["$reason_code", "joined_outside_linkjoin"]}, 1, 0]}},
+        }},
+    ]
+    counts_by_class: dict[str, dict] = {}
+    async for row in motor_db.attendance.aggregate(pipeline):
+        counts_by_class[row["_id"]] = row
+
+    by_class = []
+    by_teacher_agg: dict[str, dict] = defaultdict(lambda: {"total_events": 0, "overrides": 0, "leaks": 0})
+    for cls in classes:
+        row = counts_by_class.get(cls["class_id"], {})
+        total = row.get("total_events", 0)
+        overrides = row.get("overrides", 0)
+        leaks = row.get("leaks", 0)
+        leak_rate = leaks / total if total else 0.0
+        override_rate = overrides / total if total else 0.0
+        teacher_id = cls.get("teacher_id", "")
+        by_class.append({
+            "class_id": cls["class_id"],
+            "class_name": cls.get("name", ""),
+            "teacher_name": teacher_names.get(teacher_id, ""),
+            "total_events": total,
+            "override_rate": round(override_rate, 2),
+            "leak_rate": round(leak_rate, 2),
+            "flagged": total >= min_sessions and leak_rate >= leak_threshold,
+        })
+        agg = by_teacher_agg[teacher_id]
+        agg["total_events"] += total
+        agg["overrides"] += overrides
+        agg["leaks"] += leaks
+
+    by_teacher = []
+    for teacher_id, agg in by_teacher_agg.items():
+        total = agg["total_events"]
+        by_teacher.append({
+            "teacher_id": teacher_id,
+            "teacher_name": teacher_names.get(teacher_id, ""),
+            "total_events": total,
+            "override_rate": round(agg["overrides"] / total, 2) if total else 0.0,
+            "leak_rate": round(agg["leaks"] / total, 2) if total else 0.0,
+        })
+
+    by_class.sort(key=lambda r: r["leak_rate"], reverse=True)
+    by_teacher.sort(key=lambda r: r["leak_rate"], reverse=True)
+
+    return {
+        "lookback_days": _LOOKBACK_DAYS,
+        "leak_threshold": leak_threshold,
+        "by_teacher": by_teacher,
+        "by_class": by_class,
+    }

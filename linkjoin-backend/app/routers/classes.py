@@ -5,7 +5,7 @@ from app.auth import get_confirmed_user
 from app.database import motor_db
 from app.models.class_ import CreateClassRequest, UpdateClassRequest, AddStudentsRequest
 from app.roles import require_teacher, require_school_admin, TEACHER_ROLES
-from app.utils import async_next_link_id
+from app.utils import async_next_link_id, ensure_link_slug, _clean_items
 from app.websocket_manager import manager
 from app.utils import configure_data
 
@@ -27,12 +27,13 @@ async def _push_link_to_student(link: dict, student_email: str, class_id: str) -
         return
     new_id = await async_next_link_id()
     sid = _unique_share_id()
-    new_doc = {k: v for k, v in link.items() if k not in ("_id", "username", "share", "share_token")}
+    new_doc = {k: v for k, v in link.items() if k not in ("_id", "username", "share", "share_token", "slug")}
     new_doc["username"] = student_email
     new_doc["id"] = new_id
     new_doc["share_id"] = link["id"]
     new_doc["share_token"] = sid
     new_doc["class_id"] = class_id
+    new_doc["slug"] = _unique_share_id()  # each copy gets its own redirect slug
     new_doc["link"] = link["link"]  # already encrypted in MongoDB
     await motor_db.links.insert_one(new_doc)
     await manager.broadcast(await configure_data(student_email), student_email)
@@ -123,11 +124,10 @@ async def get_class_links(class_id: str, user: dict = Depends(get_confirmed_user
     link_ids = cls.get("link_ids") or []
     if not link_ids:
         return {"links": []}
-    links = await motor_db.links.find(
-        {"id": {"$in": link_ids}},
-        {"_id": 0}
-    ).to_list(None)
-    return {"links": links}
+    links = await motor_db.links.find({"id": {"$in": link_ids}}).to_list(None)
+    for l in links:
+        await ensure_link_slug(l)
+    return {"links": _clean_items(links)}
 
 
 @router.put("/{class_id}")
@@ -230,6 +230,7 @@ async def add_class_link(class_id: str, link_id: int, user: dict = Depends(get_c
     link = await motor_db.links.find_one({"id": link_id, "username": user["username"]})
     if not link:
         raise HTTPException(status_code=404, detail="Link not found")
+    await ensure_link_slug(link)
 
     if link_id in cls.get("link_ids", []):
         return {"message": "Link already in class"}
