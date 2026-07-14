@@ -239,8 +239,7 @@ export default function LinkModal({ visible, editLink, onClose, onSuccess, prefi
                 />
                 <button
                   type="button"
-                  className="modal-submit"
-                  style={{ flex: '0 0 auto', padding: '0 16px' }}
+                  className={`modal-copy-btn${linkCopied === true ? ' modal-copy-btn--done' : ''}`}
                   onClick={() => {
                     navigator.clipboard.writeText(`${window.location.origin}/c/${editLink.slug || ''}`).then(() => {
                       setLinkCopied(true)
