@@ -1,3 +1,4 @@
+import asyncio
 import secrets
 from datetime import datetime, date, timedelta, timezone
 from pymongo import ReturnDocument
@@ -120,23 +121,27 @@ async def configure_data(email: str) -> dict:
 
     if user.get("admin") == "true" and user.get("admin_view") == "true":
         org = user.get("org_name", "")
-        raw = {
-            "links": await motor_db.links.find({"org_name": org}).to_list(None),
-            "pending-links": [],
-            "deleted-links": await motor_db.deleted_links.find().to_list(None),
-            "bookmarks": await motor_db.bookmarks.find().to_list(None),
-            "pending-bookmarks": [],
-            "deleted-bookmarks": await motor_db.deleted_bookmarks.find().to_list(None),
-        }
+        keys = ["links", "deleted-links", "bookmarks", "deleted-bookmarks"]
+        results = await asyncio.gather(
+            motor_db.links.find({"org_name": org}).to_list(None),
+            motor_db.deleted_links.find().to_list(None),
+            motor_db.bookmarks.find().to_list(None),
+            motor_db.deleted_bookmarks.find().to_list(None),
+        )
+        raw = dict(zip(keys, results))
+        raw["pending-links"] = []
+        raw["pending-bookmarks"] = []
     else:
-        raw = {
-            "links": await motor_db.links.find({"username": email}).to_list(None),
-            "pending-links": await motor_db.pending_links.find({"username": email}).to_list(None),
-            "deleted-links": await motor_db.deleted_links.find({"username": email}).to_list(None),
-            "bookmarks": await motor_db.bookmarks.find({"username": email}).to_list(None),
-            "pending-bookmarks": await motor_db.pending_bookmarks.find({"username": email}).to_list(None),
-            "deleted-bookmarks": await motor_db.deleted_bookmarks.find({"username": email}).to_list(None),
-        }
+        keys = ["links", "pending-links", "deleted-links", "bookmarks", "pending-bookmarks", "deleted-bookmarks"]
+        results = await asyncio.gather(
+            motor_db.links.find({"username": email}).to_list(None),
+            motor_db.pending_links.find({"username": email}).to_list(None),
+            motor_db.deleted_links.find({"username": email}).to_list(None),
+            motor_db.bookmarks.find({"username": email}).to_list(None),
+            motor_db.pending_bookmarks.find({"username": email}).to_list(None),
+            motor_db.deleted_bookmarks.find({"username": email}).to_list(None),
+        )
+        raw = dict(zip(keys, results))
 
     for l in raw["links"]:
         await ensure_link_slug(l)
