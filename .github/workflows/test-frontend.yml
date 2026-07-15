@@ -26,7 +26,12 @@ jobs:
           node-version: '22'
 
       - name: Install dependencies
-        run: npm ci
+        # npm ci is stricter than we need here: the lockfile is dirtied by a known
+        # npm bug where unused-platform esbuild optionalDependencies (pulled in by
+        # vitest's own nested vite) get marked "extraneous" instead of properly
+        # platform-scoped, even from a from-scratch npm install. npm install
+        # tolerates this; npm ci's strict validation does not.
+        run: npm install
 
       - name: Run tests
         run: npm test
