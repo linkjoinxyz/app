@@ -70,69 +70,79 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         return response
 
 
+async def _soft_index(*coros) -> None:
+    """Run index-creation coroutines that may legitimately conflict with an
+    existing index (e.g. TTL params changed) — swallow so one bad index
+    doesn't block the others."""
+    try:
+        for coro in coros:
+            await coro
+    except Exception:
+        pass
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Ensure hot-path indexes exist (idempotent)
-    await motor_db.links.create_index("username")
-    await motor_db.links.create_index("share_token", sparse=True)
-    await motor_db.links.create_index([("username", 1), ("id", 1)])
-    await motor_db.links.create_index("share_id", sparse=True)
-    await motor_db.links.create_index("slug", unique=True, sparse=True)
-    await motor_db.login.create_index("username")
-    await motor_db.bookmarks.create_index("username")
-    await motor_db.bookmarks.create_index([("username", 1), ("id", 1)])
-    await motor_db.pending_links.create_index("username")
-    await motor_db.deleted_links.create_index("username")
-    await motor_db.audit_logs.create_index([("user", 1), ("ts", -1)])
-    await motor_db.audit_logs.create_index([("user", 1), ("resource_type", 1), ("ts", -1)])
-    await motor_db.audit_logs.create_index("ts")
-    # TTL: audit logs expire after 730 days (24 months per DPA)
-    try:
-        await motor_db.audit_logs.create_index("ts", expireAfterSeconds=63072000, name="ts_ttl_730d")
-    except Exception:
-        pass
-    # TTL: MFA challenges expire after 10 minutes
-    try:
-        await motor_db.mfa_challenges.create_index("created_at", expireAfterSeconds=600, name="mfa_ttl_10m")
-        await motor_db.mfa_challenges.create_index("user_id")
-    except Exception:
-        pass
-    await motor_db.login.create_index("user_id", unique=True, sparse=True)
-    await motor_db.classes.create_index("class_id", unique=True)
-    await motor_db.classes.create_index("org_id")
-    await motor_db.classes.create_index("teacher_id")
-    await motor_db.orgs.create_index("org_id", unique=True)
-    await motor_db.attendance.create_index([("class_id", 1), ("opened_at", -1)])
-    await motor_db.attendance.create_index("student_email")
-    await motor_db.attendance.create_index([("class_id", 1), ("student_email", 1), ("source", 1), ("opened_at", -1)])
-    await motor_db.interventions.create_index("intervention_id", unique=True)
-    await motor_db.interventions.create_index([("org_id", 1), ("status", 1)])
-    await motor_db.interventions.create_index([("class_id", 1), ("status", 1)])
-    await motor_db.absence_alerts.create_index(
-        [("class_id", 1), ("student_email", 1), ("date", 1)], unique=True
+    # Ensure hot-path indexes exist (idempotent). Independent, so run concurrently
+    # instead of one round-trip at a time — this used to serialize ~46 index
+    # checks on every cold start.
+    await asyncio.gather(
+        motor_db.links.create_index("username"),
+        motor_db.links.create_index("share_token", sparse=True),
+        motor_db.links.create_index([("username", 1), ("id", 1)]),
+        motor_db.links.create_index("share_id", sparse=True),
+        motor_db.links.create_index("slug", unique=True, sparse=True),
+        motor_db.login.create_index("username"),
+        motor_db.bookmarks.create_index("username"),
+        motor_db.bookmarks.create_index([("username", 1), ("id", 1)]),
+        motor_db.pending_links.create_index("username"),
+        motor_db.deleted_links.create_index("username"),
+        motor_db.audit_logs.create_index([("user", 1), ("ts", -1)]),
+        motor_db.audit_logs.create_index([("user", 1), ("resource_type", 1), ("ts", -1)]),
+        motor_db.audit_logs.create_index("ts"),
+        # TTL: audit logs expire after 730 days (24 months per DPA)
+        _soft_index(motor_db.audit_logs.create_index("ts", expireAfterSeconds=63072000, name="ts_ttl_730d")),
+        # TTL: MFA challenges expire after 10 minutes
+        _soft_index(
+            motor_db.mfa_challenges.create_index("created_at", expireAfterSeconds=600, name="mfa_ttl_10m"),
+            motor_db.mfa_challenges.create_index("user_id"),
+        ),
+        motor_db.login.create_index("user_id", unique=True, sparse=True),
+        motor_db.classes.create_index("class_id", unique=True),
+        motor_db.classes.create_index("org_id"),
+        motor_db.classes.create_index("teacher_id"),
+        motor_db.orgs.create_index("org_id", unique=True),
+        motor_db.attendance.create_index([("class_id", 1), ("opened_at", -1)]),
+        motor_db.attendance.create_index("student_email"),
+        motor_db.attendance.create_index([("class_id", 1), ("student_email", 1), ("source", 1), ("opened_at", -1)]),
+        motor_db.interventions.create_index("intervention_id", unique=True),
+        motor_db.interventions.create_index([("org_id", 1), ("status", 1)]),
+        motor_db.interventions.create_index([("class_id", 1), ("status", 1)]),
+        motor_db.absence_alerts.create_index(
+            [("class_id", 1), ("student_email", 1), ("date", 1)], unique=True
+        ),
+        motor_db.open_log.create_index([("username", 1), ("opened_at", -1)]),
+        motor_db.open_log.create_index([("username", 1), ("link_id", 1), ("opened_at", -1)]),
+        motor_db.invites.create_index("token", unique=True),
+        motor_db.invites.create_index([("org_id", 1), ("created_at", -1)]),
+        motor_db.invites.create_index([("class_id", 1), ("type", 1), ("status", 1)]),
+        motor_db.analytics_events.create_index([("event", 1), ("ym", 1)]),
+        motor_db.analytics_events.create_index("ts"),
+        # Missing indexes surfaced by load test analysis
+        motor_db.login.create_index("org_id", sparse=True),
+        motor_db.login.create_index("parental_consent.token", sparse=True),
+        motor_db.parent_links.create_index("parent_user_id"),
+        motor_db.parent_links.create_index("student_user_id"),
+        motor_db.integrations.create_index([("org_id", 1), ("provider", 1)]),
+        motor_db.integrations.create_index([("user_id", 1), ("provider", 1)]),
+        motor_db.classes.create_index("student_ids"),
+        motor_db.incidents.create_index("status"),
+        motor_db.incidents.create_index("started_at"),
+        motor_db.status_checks.create_index("ts"),
+        _soft_index(
+            motor_db.status_checks.create_index("ts", expireAfterSeconds=7948800, name="status_checks_ttl_92d")
+        ),
     )
-    await motor_db.open_log.create_index([("username", 1), ("opened_at", -1)])
-    await motor_db.open_log.create_index([("username", 1), ("link_id", 1), ("opened_at", -1)])
-    await motor_db.invites.create_index("token", unique=True)
-    await motor_db.invites.create_index([("org_id", 1), ("created_at", -1)])
-    await motor_db.invites.create_index([("class_id", 1), ("type", 1), ("status", 1)])
-    await motor_db.analytics_events.create_index([("event", 1), ("ym", 1)])
-    await motor_db.analytics_events.create_index("ts")
-    # Missing indexes surfaced by load test analysis
-    await motor_db.login.create_index("org_id", sparse=True)
-    await motor_db.login.create_index("parental_consent.token", sparse=True)
-    await motor_db.parent_links.create_index("parent_user_id")
-    await motor_db.parent_links.create_index("student_user_id")
-    await motor_db.integrations.create_index([("org_id", 1), ("provider", 1)])
-    await motor_db.integrations.create_index([("user_id", 1), ("provider", 1)])
-    await motor_db.classes.create_index("student_ids")
-    await motor_db.incidents.create_index("status")
-    await motor_db.incidents.create_index("started_at")
-    await motor_db.status_checks.create_index("ts")
-    try:
-        await motor_db.status_checks.create_index("ts", expireAfterSeconds=7948800, name="status_checks_ttl_92d")
-    except Exception:
-        pass
 
     async for u in motor_db.login.find({"user_id": {"$exists": False}}):
         await motor_db.login.update_one(
