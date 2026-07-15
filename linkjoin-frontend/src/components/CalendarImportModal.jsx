@@ -231,7 +231,7 @@ function normalizeUrl(url) {
 
 // ── Component ───────────────────────────────────────────
 
-export default function CalendarImportModal({ provider = 'google', existingLinks = [], onClose, onImport }) {
+export default function CalendarImportModal({ provider = 'google', existingLinks = [], isPremium = true, onClose, onImport }) {
   const [status, setStatus] = useState('loading')
   const [events, setEvents] = useState([])
   const [selected, setSelected] = useState(new Set())
@@ -240,6 +240,7 @@ export default function CalendarImportModal({ provider = 'google', existingLinks
   const authStarted = useRef(false)
 
   useEffect(() => {
+    if (!isPremium) { onClose(); return }
     if (authStarted.current) return
     authStarted.current = true
     if (provider === 'google') startGoogleAuth()

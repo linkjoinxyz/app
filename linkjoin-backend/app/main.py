@@ -21,7 +21,7 @@ from app.utils import configure_data
 from app.websocket_manager import manager
 from app.database import motor_db
 from app.redis_client import get_redis
-from app.routers import auth, links, bookmarks, users, admin, messaging, ai, contact, orgs, classes, attendance, interventions, integrations, invites, parent, consent, mfa, incidents, status
+from app.routers import auth, links, bookmarks, users, admin, messaging, ai, contact, orgs, classes, attendance, interventions, integrations, invites, parent, consent, mfa, incidents, status, billing
 
 _DIST = Path(__file__).resolve().parent.parent.parent / "linkjoin-frontend" / "dist"
 
@@ -188,6 +188,7 @@ app.include_router(consent.router)
 app.include_router(mfa.router)
 app.include_router(incidents.router)
 app.include_router(status.router)
+app.include_router(billing.router)
 
 
 @app.get("/location")

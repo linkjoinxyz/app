@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
-import { useLocation } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext.jsx'
 import { useWebSocket } from '../hooks/useWebSocket.js'
 import { useAutoOpen } from '../hooks/useAutoOpen.js'
@@ -17,6 +17,7 @@ import CalendarImportModal from '../components/CalendarImportModal.jsx'
 import OnboardingCard from '../components/OnboardingCard.jsx'
 import OnboardingChecklist from '../components/OnboardingChecklist.jsx'
 import WhatsNewModal from '../components/WhatsNewModal.jsx'
+import GrandfatheredThanksModal from '../components/GrandfatheredThanksModal.jsx'
 import TeacherSetupModal from '../components/TeacherSetupModal.jsx'
 import '../styles/links.css'
 import '../styles/new_links.css'
@@ -180,7 +181,13 @@ function findNextLinkId(links) {
 }
 
 export default function Links() {
-  const { token, email, confirmed, role, onboardingDone } = useAuth()
+  const { token, email, confirmed, role, onboardingDone, isPremium } = useAuth()
+  const navigate = useNavigate()
+
+  function requirePremiumOrUpsell(fn) {
+    if (isPremium) return fn()
+    navigate('/settings')
+  }
   const location = useLocation()
   const [user, setUser] = useState(null)
   const [links, setLinks] = useState([])
@@ -203,6 +210,7 @@ const [showDeleted, setShowDeleted] = useState(false)
   const [resendState, setResendState] = useState('idle') // idle | sending | sent
   const [tzMismatch, setTzMismatch] = useState(null) // { from, to, newOffset } | null
   const [showWhatsNew, setShowWhatsNew] = useState(false)
+  const [showGrandfatheredThanks, setShowGrandfatheredThanks] = useState(false)
   const [modifiedNames, setModifiedNames] = useState([])
   const [popupBanner, setPopupBanner] = useState(null) // null | 'checking' | 'blocked'
   const [obClasses, setObClasses] = useState([])
@@ -229,13 +237,17 @@ const [showDeleted, setShowDeleted] = useState(false)
   useEffect(() => {
     if (!location.state) return
     if (location.state.showDeleted) setShowDeleted(true)
-    if (location.state.triggerImport) setCalImportProvider(location.state.triggerImport)
+    if (location.state.triggerImport) requirePremiumOrUpsell(() => setCalImportProvider(location.state.triggerImport))
   }, [location.state])
 
   useEffect(() => {
     usersApi.me().then(u => {
       setUser(u)
-      if (u && !u.whats_new_seen) setShowWhatsNew(true)
+      if (u && u.premium_status === 'grandfathered' && !u.grandfathered_note_seen) {
+        setShowGrandfatheredThanks(true)
+      } else if (u && !u.whats_new_seen) {
+        setShowWhatsNew(true)
+      }
       if (u && !u.popup_check_done && window.innerWidth > 768) runPopupCheck()
     }).catch(() => {})
     if (confirmed) syncTimezone()
@@ -529,8 +541,8 @@ const [showDeleted, setShowDeleted] = useState(false)
             {links.length === 0 && !search && !loading && !fetchError && (
               <OnboardingCard
                 onAddManually={() => tryAdd(() => { setEditLink(null); setShowLinkModal(true) })}
-                onImportGoogle={() => tryAdd(() => setCalImportProvider('google'))}
-                onImportOutlook={() => tryAdd(() => setCalImportProvider('microsoft'))}
+                onImportGoogle={() => requirePremiumOrUpsell(() => tryAdd(() => setCalImportProvider('google')))}
+                onImportOutlook={() => requirePremiumOrUpsell(() => tryAdd(() => setCalImportProvider('microsoft')))}
               />
             )}
             {filtered.length === 0 && search && !loading && (
@@ -579,6 +591,7 @@ const [showDeleted, setShowDeleted] = useState(false)
         <CalendarImportModal
           provider={calImportProvider}
           existingLinks={links}
+          isPremium={isPremium}
           onClose={() => setCalImportProvider(null)}
           onImport={refreshLinks}
         />
@@ -622,7 +635,11 @@ const [showDeleted, setShowDeleted] = useState(false)
         />
       )}
 
-{showWhatsNew && !loading && (
+{showGrandfatheredThanks && !loading && (
+        <GrandfatheredThanksModal onClose={() => setShowGrandfatheredThanks(false)} />
+      )}
+
+      {showWhatsNew && !loading && (
         <WhatsNewModal onClose={() => setShowWhatsNew(false)} />
       )}
 

@@ -40,6 +40,9 @@ class Settings(BaseSettings):
     mongo_database: str = "zoom_opener"
     contact_email: str = "seth@linkjoin.xyz"
     sentry_dsn: str = ""
+    stripe_secret_key: str = ""
+    stripe_webhook_secret: str = ""
+    stripe_price_id: str = ""
 
 
 @lru_cache

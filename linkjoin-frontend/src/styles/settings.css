@@ -218,6 +218,42 @@
   color: rgba(255, 255, 255, 0.4);
 }
 
+/* ── Premium-gated rows ── */
+.settings-row-premium {
+  box-shadow: inset 3px 0 0 rgba(232, 169, 76, 0.35);
+  background: rgba(232, 169, 76, 0.04);
+}
+
+.settings-premium-badge {
+  display: inline-block;
+  margin-left: 8px;
+  font: 700 9px Montserrat, sans-serif;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #E8A94C;
+  background: rgba(232, 169, 76, 0.14);
+  border: 1px solid rgba(232, 169, 76, 0.4);
+  border-radius: 20px;
+  padding: 2px 7px;
+  vertical-align: middle;
+}
+
+.settings-row-locked {
+  cursor: pointer;
+  opacity: 0.55;
+  transition: opacity 0.15s;
+}
+
+.settings-row-locked:hover {
+  opacity: 0.8;
+}
+
+.settings-row-locked .settings-select,
+.settings-row-locked .settings-toggle,
+.settings-row-locked .settings-btn {
+  pointer-events: none;
+}
+
 /* ── Select ── */
 .settings-select {
   background: rgba(255, 255, 255, 0.06);
@@ -609,6 +645,8 @@
 [data-theme="light"] .settings-row-label { color: #0f172a; }
 [data-theme="light"] .settings-row-desc { color: rgba(15,23,42,0.45); }
 [data-theme="light"] .settings-row-value { color: rgba(15,23,42,0.5); }
+[data-theme="light"] .settings-row-premium { background: rgba(184, 121, 42, 0.06); }
+[data-theme="light"] .settings-premium-badge { color: #96601F; background: rgba(184, 121, 42, 0.1); border-color: rgba(184, 121, 42, 0.35); }
 [data-theme="light"] .settings-select {
   background: rgba(0,0,0,0.05);
   border-color: rgba(0,0,0,0.12);

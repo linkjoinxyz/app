@@ -101,7 +101,11 @@ async function apiFetch(path, options = {}) {
                 ...(options.headers || {}),
             },
         })
-        if (!res.ok) return null
+        if (!res.ok) {
+            let body = {}
+            try { body = await res.json() } catch {}
+            return { __error: true, status: res.status, body }
+        }
         return await res.json()
     } catch {
         return null
@@ -202,9 +206,14 @@ async function handleScan() {
     const aiResult = await apiFetch('/ai/extract-meeting', {
         method: 'POST',
         body: JSON.stringify({ subject: found.title, body: found.text, user_timezone: timezone }),
-    }) || {}
+    })
 
-    renderAddForm(found.link, aiResult)
+    if (aiResult?.__error && aiResult.status === 403) {
+        renderAddForm(found.link, {}, 'AI meeting detection is a Premium feature. Add the details manually below.')
+        return
+    }
+
+    renderAddForm(found.link, (aiResult && !aiResult.__error) ? aiResult : {})
 }
 
 function renderScanError(msg) {
@@ -226,7 +235,7 @@ function renderScanError(msg) {
 
 // --- Add form (same UI as the Gmail overlay) ---
 
-function renderAddForm(detectedLink, prefilled) {
+function renderAddForm(detectedLink, prefilled, notice) {
     const name = prefilled.name || ''
     const link = prefilled.link || detectedLink || ''
     const t12 = _to12h(prefilled.time || '')
@@ -287,6 +296,12 @@ function renderAddForm(detectedLink, prefilled) {
     `
 
     document.getElementById('back-btn').addEventListener('click', () => renderDashboard())
+
+    if (notice) {
+        const errorEl = el.querySelector('#lj-error')
+        errorEl.textContent = notice
+        errorEl.style.display = ''
+    }
 
     el.querySelector('#lj-repeat').addEventListener('change', () => {
         el.querySelector('#lj-days-section').style.display = el.querySelector('#lj-repeat').value === 'month' ? 'none' : ''
@@ -558,12 +573,19 @@ async function handleLogout() {
 // --- Init ---
 
 async function init() {
+    const { pendingAddLink } = await chrome.storage.local.get('pendingAddLink')
+    if (pendingAddLink) await chrome.storage.local.remove('pendingAddLink')
+
     const auth = await getAuth()
-    if (auth) {
-        await renderDashboard()
-    } else {
+    if (!auth) {
         renderLogin()
+        return
     }
+    if (pendingAddLink) {
+        renderAddForm(pendingAddLink.link, { name: pendingAddLink.name })
+        return
+    }
+    await renderDashboard()
 }
 
 init()

@@ -62,11 +62,15 @@ async def get_current_user(
     return user
 
 
-async def get_confirmed_user(user: dict = Depends(get_current_user)) -> dict:
+def is_confirmed(user: dict) -> bool:
     # Only an explicit "false" (set at signup, cleared on confirmation) means
     # "genuinely needs to confirm." A missing field — accounts predating this
     # feature, or created via a path that never set it — defaults to confirmed
     # rather than being silently locked out.
-    if user.get("confirmed") == "false":
+    return user.get("confirmed") != "false"
+
+
+async def get_confirmed_user(user: dict = Depends(get_current_user)) -> dict:
+    if not is_confirmed(user):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Email not confirmed")
     return user

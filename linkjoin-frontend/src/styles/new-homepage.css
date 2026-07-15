@@ -1864,3 +1864,267 @@ html:has(.nh-root) { scrollbar-color: rgba(255,255,255,0.15) transparent; }
   .nh-schools-card { flex-direction: column; gap: 40px; }
   .nh-schools-stripe { padding-left: 24px; }
 }
+
+/* ═══════════════════════════════════════════════════════════
+   Extension page (/extension) — additive only, reuses nh- tokens
+   ═══════════════════════════════════════════════════════════ */
+
+.ext-hero {
+  padding: calc(var(--nh-nav-h) + 100px) clamp(24px, 6vw, 80px) 64px;
+  max-width: var(--nh-max-w);
+  margin: 0 auto;
+  text-align: center;
+}
+
+.ext-hero-eyebrow {
+  text-align: center;
+}
+
+.ext-hero-h1 {
+  font-size: clamp(38px, 5.5vw, 64px);
+  font-weight: 800;
+  line-height: 1.08;
+  letter-spacing: -0.03em;
+  color: white;
+  margin: 0 0 20px;
+}
+
+.ext-hero-sub {
+  font: 300 18px/1.7 Montserrat, sans-serif;
+  color: var(--nh-dim);
+  max-width: 560px;
+  margin: 0 auto 32px;
+}
+
+.ext-hero-actions {
+  display: flex;
+  gap: 14px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+/* ── Mock: notification + toolbar badge ── */
+.ext-mock-notify-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  align-items: flex-start;
+  width: 100%;
+  max-width: 340px;
+}
+
+.ext-mock-notify {
+  width: 100%;
+  background: #0d2236;
+  border: 1px solid rgba(43, 143, 216, 0.28);
+  border-radius: 12px;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+  padding: 14px 16px;
+  font-family: Montserrat, sans-serif;
+}
+
+.ext-mock-notify-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font: 700 12.5px Montserrat, sans-serif;
+  color: white;
+  margin-bottom: 6px;
+}
+.ext-mock-notify-head img { border-radius: 4px; }
+
+.ext-mock-notify-body {
+  font: 400 12px Montserrat, sans-serif;
+  color: var(--nh-dim);
+  margin: 0 0 12px;
+}
+
+.ext-mock-notify-btns {
+  display: flex;
+  gap: 8px;
+}
+
+.ext-mock-notify-btn {
+  flex: 1;
+  text-align: center;
+  padding: 7px 0;
+  border-radius: 6px;
+  font: 600 11.5px Montserrat, sans-serif;
+  color: rgba(255, 255, 255, 0.7);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.ext-mock-notify-btn-primary {
+  color: white;
+  background: #2B8FD8;
+  border-color: #2B8FD8;
+}
+
+.ext-mock-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+}
+
+.ext-mock-toolbar-icon {
+  position: relative;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.ext-mock-toolbar-icon img { border-radius: 5px; }
+
+.ext-mock-toolbar-badge {
+  position: absolute;
+  bottom: -4px;
+  right: -6px;
+  min-width: 15px;
+  height: 15px;
+  padding: 0 3px;
+  border-radius: 8px;
+  background: #2B8FD8;
+  border: 1.5px solid #0d2236;
+  color: white;
+  font: 700 9px Montserrat, sans-serif;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ext-mock-toolbar-label {
+  font: 500 12px Montserrat, sans-serif;
+  color: var(--nh-dim);
+}
+
+/* ── Mock: right-click context menu ── */
+.ext-mock-ctxmenu-wrap {
+  position: relative;
+  width: 100%;
+  max-width: 360px;
+}
+
+.ext-mock-ctxmenu-link {
+  background: #0d2236;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  padding: 22px 20px;
+  font: 400 13px Montserrat, sans-serif;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.ext-mock-ctxmenu {
+  position: absolute;
+  top: 16px;
+  left: 32px;
+  width: 200px;
+  background: #142539;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.55);
+  padding: 6px;
+  font-family: Montserrat, sans-serif;
+}
+
+.ext-mock-ctxmenu-item {
+  padding: 8px 10px;
+  border-radius: 5px;
+  font: 500 12.5px Montserrat, sans-serif;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.ext-mock-ctxmenu-item-hi {
+  background: #2B8FD8;
+  color: white;
+}
+
+.ext-mock-ctxmenu-item-dim {
+  color: rgba(255, 255, 255, 0.35);
+}
+
+.ext-mock-ctxmenu-sep {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.08);
+  margin: 4px 4px;
+}
+
+/* ── Schools feature grid (reuses .nh-features / .nh-feature-card) ── */
+.ext-schools {
+  text-align: center;
+}
+
+.ext-schools-head {
+  margin-bottom: 48px;
+}
+.ext-schools-head .nh-section-h2 {
+  margin-bottom: 0;
+}
+
+.ext-schools-grid {
+  grid-template-columns: repeat(2, 1fr);
+  gap: 28px;
+  max-width: 920px;
+  margin: 0 auto;
+}
+
+.ext-feature-card {
+  text-align: left;
+  padding: 44px 38px;
+  border-left: 3px solid #2B8FD8;
+}
+.ext-feature-card:hover {
+  border-color: rgba(255, 255, 255, 0.18);
+  border-left-color: #2B8FD8;
+}
+
+.ext-feature-card .nh-feature-title {
+  font-size: 21px;
+}
+
+/* ── Add to Chrome button ── */
+.ext-chrome-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 24px 6px 6px;
+  background: var(--nh-accent);
+  color: white;
+  border-radius: 8px;
+  font: 700 16px Montserrat, sans-serif;
+  text-decoration: none;
+  transition: filter 0.2s, transform 0.15s;
+  white-space: nowrap;
+}
+.ext-chrome-btn:hover {
+  filter: brightness(1.15);
+  transform: translateY(-1px);
+}
+
+.ext-chrome-btn-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  background: white;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
+@media (max-width: 700px) {
+  .ext-schools-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 860px) {
+  .ext-mock-ctxmenu {
+    left: 16px;
+  }
+}

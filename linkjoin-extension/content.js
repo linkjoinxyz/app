@@ -411,7 +411,9 @@ function buildOverlayHTML(data, detectedLink) {
             <select class="lj-select" id="lj-reminder">${REMINDER_OPTIONS.map(o =>
                 `<option value="${o.value}">${o.label}</option>`).join('')}</select>
 
-            <div class="lj-error" id="lj-error" style="display:none"></div>
+            <div class="lj-error" id="lj-error"${data.__premiumRequired ? '' : ' style="display:none"'}>${
+                data.__premiumRequired ? 'AI meeting detection is a Premium feature. Add the details manually below.' : ''
+            }</div>
             <button class="lj-submit" id="lj-submit">Add to LinkJoin</button>
         </div>
     `

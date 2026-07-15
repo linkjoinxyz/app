@@ -21,9 +21,18 @@ export function AuthProvider({ children }) {
   const [onboardingDone, setOnboardingDone] = useState(() => localStorage.getItem('lj_onboarding_done') === 'true')
   const [mustChangePassword, setMustChangePassword] = useState(() => localStorage.getItem('lj_must_change_pw') === 'true')
   const [mfaEnabled, setMfaEnabledState] = useState(() => localStorage.getItem('lj_mfa_enabled') === 'true')
+  const [premiumStatus, setPremiumStatus] = useState(() => localStorage.getItem('lj_premium_status') || null)
+  const [trialEnd, setTrialEnd] = useState(() => localStorage.getItem('lj_trial_end') || null)
 
   const isTeacher = TEACHER_ROLES.has(role)
   const isOrgAdmin = ADMIN_ROLES.has(role)
+  // UX precomputation only — never trusted for real access control, which always
+  // lives server-side via require_premium(). Institutional accounts don't carry
+  // premium_status at all, so accountType covers them here.
+  const isPremium = accountType === 'institutional'
+    || premiumStatus === 'active'
+    || premiumStatus === 'grandfathered'
+    || (premiumStatus === 'trial' && !!trialEnd && new Date(trialEnd) > new Date())
 
   useEffect(() => {
     const storedToken = localStorage.getItem('lj_token')
@@ -37,18 +46,24 @@ export function AuthProvider({ children }) {
       const ob = data.onboarding_done !== false
       const adm = data.admin === 'true'
       const mfa = !!data.mfa_enabled
+      const premStatus = data.premium_status || null
+      const trEnd = data.trial_end || null
       if (r) localStorage.setItem('lj_role', r); else localStorage.removeItem('lj_role')
       if (o) localStorage.setItem('lj_org_id', o); else localStorage.removeItem('lj_org_id')
       localStorage.setItem('lj_account_type', at)
       localStorage.setItem('lj_onboarding_done', ob ? 'true' : 'false')
       if (adm) localStorage.setItem('lj_admin', 'true'); else localStorage.removeItem('lj_admin')
       if (mfa) localStorage.setItem('lj_mfa_enabled', 'true'); else localStorage.removeItem('lj_mfa_enabled')
+      if (premStatus) localStorage.setItem('lj_premium_status', premStatus); else localStorage.removeItem('lj_premium_status')
+      if (trEnd) localStorage.setItem('lj_trial_end', trEnd); else localStorage.removeItem('lj_trial_end')
       setRole(r)
       setOrgId(o)
       setAccountType(at)
       setOnboardingDone(ob)
       setIsAdmin(adm)
       setMfaEnabledState(mfa)
+      setPremiumStatus(premStatus)
+      setTrialEnd(trEnd)
     }).catch(() => {})
   }, [])
 
@@ -119,6 +134,8 @@ export function AuthProvider({ children }) {
     localStorage.removeItem('lj_onboarding_done')
     localStorage.removeItem('lj_must_change_pw')
     localStorage.removeItem('lj_mfa_enabled')
+    localStorage.removeItem('lj_premium_status')
+    localStorage.removeItem('lj_trial_end')
     setToken(null)
     setEmail(null)
     setConfirmed(false)
@@ -129,6 +146,8 @@ export function AuthProvider({ children }) {
     setOnboardingDone(false)
     setMustChangePassword(false)
     setMfaEnabledState(false)
+    setPremiumStatus(null)
+    setTrialEnd(null)
     window.postMessage({ type: 'lj:logout' }, window.location.origin)
   }, [])
 
@@ -145,6 +164,7 @@ export function AuthProvider({ children }) {
       onboardingDone, markOnboardingDone,
       mustChangePassword, clearMustChangePassword,
       mfaEnabled, setMfaEnabled,
+      premiumStatus, trialEnd, isPremium,
       login, logout, refreshAuth,
     }}>
       {children}

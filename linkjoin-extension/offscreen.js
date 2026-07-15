@@ -15,7 +15,9 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                 body: JSON.stringify({ subject: msg.subject, body: msg.body, user_timezone: msg.user_timezone }),
             })
-            sendResponse(res.ok ? await res.json() : null)
+            if (res.ok) { sendResponse(await res.json()); return }
+            if (res.status === 403) { sendResponse({ __premiumRequired: true }); return }
+            sendResponse(null)
         } catch (e) {
             console.error('[LJ offscreen] error:', e)
             sendResponse(null)

@@ -186,6 +186,63 @@
   flex-shrink: 0;
 }
 
+.sn-account-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.sn-collapsed .sn-account-row {
+  flex-direction: column;
+  gap: 6px;
+}
+
+.sn-avatar-wrap {
+  position: relative;
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  text-decoration: none;
+}
+
+.sn-avatar-img,
+.sn-avatar-initials {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.sn-avatar-initials {
+  font: 700 13px Montserrat, sans-serif;
+  color: rgba(255,255,255,0.9);
+}
+
+.sn-avatar-crown {
+  position: absolute;
+  bottom: -3px;
+  right: -3px;
+  width: 16px;
+  height: 16px;
+  padding: 2px;
+  background: #0B1524;
+  border-radius: 50%;
+  box-shadow: 0 0 0 1.5px #0B1524;
+}
+
+.sn-logout-item {
+  flex: 1;
+  min-width: 0;
+}
+.sn-collapsed .sn-logout-item {
+  width: 40px;
+  justify-content: center;
+  padding: 9px 0;
+}
+
 /* ── Collapse toggle button ──────────────────────────────────────────────────── */
 .sn-toggle {
   position: absolute;

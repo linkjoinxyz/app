@@ -9,6 +9,7 @@ from fastapi.responses import Response
 from pydantic import BaseModel
 from app.auth import get_confirmed_user, get_current_user
 from app.database import motor_db
+from app.roles import require_premium
 from app.models.user import (
     UpdateTimezoneRequest, AddNumberRequest,
     SortRequest, OpenEarlyRequest, NoteRequest, AutoDeleteRequest, VacationModeRequest,
@@ -122,6 +123,8 @@ async def sort_links(body: SortRequest, user: dict = Depends(get_confirmed_user)
 
 @router.patch("/open-early")
 async def open_early(body: OpenEarlyRequest, user: dict = Depends(get_confirmed_user)):
+    if body.open:
+        require_premium(user)
     await motor_db.login.update_one({"username": user["username"]}, {"$set": {"open_early": body.open}})
     return {"message": "Updated"}
 
@@ -177,6 +180,15 @@ async def mark_whats_new_seen(user: dict = Depends(get_current_user)):
     await motor_db.login.update_one(
         {"username": user["username"]},
         {"$set": {"whats_new_seen": "v2"}},
+    )
+    return {"message": "Updated"}
+
+
+@router.patch("/grandfathered-note-seen")
+async def mark_grandfathered_note_seen(user: dict = Depends(get_current_user)):
+    await motor_db.login.update_one(
+        {"username": user["username"]},
+        {"$set": {"grandfathered_note_seen": True}},
     )
     return {"message": "Updated"}
 

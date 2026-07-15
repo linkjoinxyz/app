@@ -18,6 +18,7 @@ import Signup from './pages/Signup.jsx'
 import Links from './pages/Links.jsx'
 import Bookmarks from './pages/Bookmarks.jsx'
 import Pricing from './pages/Pricing.jsx'
+import Extension from './pages/Extension.jsx'
 import Privacy from './pages/Privacy.jsx'
 import Terms from './pages/Terms.jsx'
 import ForgotPassword from './pages/ForgotPassword.jsx'
@@ -132,6 +133,7 @@ export default function App() {
       <Route path="/login" element={<AuthPage2 defaultTab="login" />} />
       <Route path="/signup" element={<AuthPage2 defaultTab="signup" />} />
       <Route path="/pricing" element={<Pricing />} />
+      <Route path="/extension" element={<Extension />} />
       <Route path="/privacy" element={<Privacy />} />
       <Route path="/tos" element={<Terms />} />
       <Route path="/forgot-password" element={<ForgotPassword />} />
