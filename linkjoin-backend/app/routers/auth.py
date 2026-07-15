@@ -1,5 +1,5 @@
 import secrets
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks, Request
 from google.oauth2 import id_token
 from google.auth.transport import requests as google_requests
@@ -8,7 +8,7 @@ from argon2.exceptions import VerifyMismatchError, InvalidHashError
 from pydantic import BaseModel
 import httpx
 from app.database import motor_db
-from app.auth import create_token, decode_token, get_confirmed_user, get_current_user
+from app.auth import create_token, decode_token, get_confirmed_user, get_current_user, is_confirmed
 from app.limiter import limiter
 from app.models.user import RegisterRequest, LoginRequest, ResetPasswordRequest, TokenResponse
 from app.config import get_settings
@@ -71,11 +71,15 @@ async def register(request: Request, body: RegisterRequest, background_tasks: Ba
     if await motor_db.login.find_one({"username": email}):
         raise HTTPException(status_code=409, detail="email_in_use")
 
+    _trial_start = datetime.now(timezone.utc)
     account: dict = {
         "username": email,
         "user_id": secrets.token_urlsafe(16),
         "account_type": "personal",
         "premium": "false",
+        "premium_status": "trial",
+        "trial_start": _trial_start,
+        "trial_end": _trial_start + timedelta(days=14),
         "refer": gen_id(),
         "onboarding_done": False,
         "popup_check_done": False,
@@ -153,7 +157,7 @@ async def confirm_email(token: str):
     user = await motor_db.login.find_one({"username": email})
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    if user.get("confirmed") == "true":
+    if is_confirmed(user):
         await _blacklist_token(payload)
         return {"message": "Already confirmed"}
 
@@ -175,7 +179,7 @@ async def confirm_email(token: str):
 @router.post("/resend-confirmation")
 @limiter.limit("3/minute")
 async def resend_confirmation(request: Request, background_tasks: BackgroundTasks, user: dict = Depends(get_current_user)):
-    if user.get("confirmed") == "true":
+    if is_confirmed(user):
         return {"message": "Already confirmed"}
     email = user["username"]
     confirm_token = create_token(
@@ -251,7 +255,7 @@ async def login(request: Request, body: LoginRequest):
         return {"mfa_required": True, "mfa_session": mfa_session}
 
     access_token = create_token(email)
-    confirmed = user.get("confirmed") == "true"
+    confirmed = is_confirmed(user)
     return {
         "access_token": access_token, "token_type": "bearer", "email": email, "confirmed": confirmed,
         "account_type": user.get("account_type", "personal"),
@@ -324,11 +328,15 @@ async def google_code_exchange(request: Request, body: GoogleCodeRequest):
 
     user = await motor_db.login.find_one({"username": email})
     if not user:
+        _trial_start = datetime.now(timezone.utc)
         account = {
             "username": email,
             "user_id": secrets.token_urlsafe(16),
             "account_type": "personal",
             "premium": "false",
+            "premium_status": "trial",
+            "trial_start": _trial_start,
+            "trial_end": _trial_start + timedelta(days=14),
             "refer": gen_id(),
             "onboarding_done": False,
             "popup_check_done": False,
@@ -351,7 +359,7 @@ async def google_code_exchange(request: Request, body: GoogleCodeRequest):
         return {"mfa_required": True, "mfa_session": mfa_session}
 
     access_token = create_token(email)
-    confirmed = user.get("confirmed") == "true"
+    confirmed = is_confirmed(user)
     return {
         "access_token": access_token, "token_type": "bearer", "email": email, "confirmed": confirmed,
         "account_type": user.get("account_type", "personal"),
@@ -387,11 +395,15 @@ async def google_token_auth(request: Request, body: dict):
 
     user = await motor_db.login.find_one({"username": email})
     if not user:
+        _trial_start = datetime.now(timezone.utc)
         account = {
             "username": email,
             "user_id": secrets.token_urlsafe(16),
             "account_type": "personal",
             "premium": "false",
+            "premium_status": "trial",
+            "trial_start": _trial_start,
+            "trial_end": _trial_start + timedelta(days=14),
             "refer": gen_id(),
             "onboarding_done": False,
             "popup_check_done": False,
@@ -414,7 +426,7 @@ async def google_token_auth(request: Request, body: dict):
         return {"mfa_required": True, "mfa_session": mfa_session}
 
     access_token_jwt = create_token(email)
-    confirmed = user.get("confirmed") == "true"
+    confirmed = is_confirmed(user)
     return {
         "access_token": access_token_jwt, "token_type": "bearer", "email": email, "confirmed": confirmed,
         "account_type": user.get("account_type", "personal"),
