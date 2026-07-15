@@ -1,0 +1,32 @@
+name: Test Frontend
+
+"on":
+  pull_request:
+    paths:
+      - 'linkjoin-frontend/**'
+      - 'linkjoin-extension/lib/scheduling.js'
+  push:
+    branches: [main, dev]
+    paths:
+      - 'linkjoin-frontend/**'
+      - 'linkjoin-extension/lib/scheduling.js'
+  workflow_dispatch:
+
+jobs:
+  vitest:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: linkjoin-frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm test

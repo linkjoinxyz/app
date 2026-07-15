@@ -1,0 +1,38 @@
+name: Test Backend
+
+"on":
+  pull_request:
+    paths:
+      - 'linkjoin-backend/**'
+  push:
+    branches: [main, dev]
+    paths:
+      - 'linkjoin-backend/**'
+  workflow_dispatch:
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: linkjoin-backend
+    env:
+      MONGO_URI: ${{ secrets.MONGO_URI }}
+      MONGO_DATABASE: linkjoin_test
+      JWT_SECRET: ${{ secrets.JWT_SECRET }}
+      ENCRYPT_KEY: ${{ secrets.ENCRYPT_KEY }}
+      GMAIL_PWD: ${{ secrets.GMAIL_PWD }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
+
+      - name: Run pytest
+        run: pytest

@@ -4,6 +4,8 @@ import { useAuth } from '../context/AuthContext.jsx'
 import { apiFetch, apiGet, apiPost, apiDelete, apiPatch } from '../api/client.js'
 import { usersApi } from '../api/users.js'
 import { authApi } from '../api/auth.js'
+import UpgradeModal from '../components/UpgradeModal.jsx'
+import BillingSection from '../components/SettingsBilling.jsx'
 import SideNav from '../components/SideNav.jsx'
 import countryCodes from '../../public/country_codes.json'
 import '../styles/settings.css'
@@ -188,12 +190,13 @@ function MfaSection({ user, showToast }) {
 }
 
 export default function Settings() {
-  const { email: authEmail, logout, role, orgId } = useAuth()
+  const { email: authEmail, logout, role, orgId, isPremium } = useAuth()
   const navigate = useNavigate()
   const fileRef = useRef()
 
   const [user, setUser] = useState(null)
   const [toast, setToast] = useState(null)
+  const [upgradeFeature, setUpgradeFeature] = useState(null)
   const [showDeleted, setShowDeleted] = useState(false)
   const [deletedLinks, setDeletedLinks] = useState([])
 
@@ -247,6 +250,16 @@ export default function Settings() {
       setParentPhoneCountry(u.parent_phone_country || '1')
       setParentEmail(u.parent_email || '')
     }).catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const billing = params.get('billing')
+    if (billing === 'success' || billing === 'cancel') {
+      setToast(billing === 'success' ? 'billing-success' : 'billing-cancel')
+      setTimeout(() => setToast(null), 3000)
+      window.history.replaceState(null, '', window.location.pathname)
+    }
   }, [])
 
   function flash(ok = true) {
@@ -363,8 +376,11 @@ export default function Settings() {
       <div className="sn-content">
 
       {toast && (
-        <div className={`settings-toast ${toast}`}>
-          {toast === 'saved' ? '✓ Saved' : '✕ Failed to save'}
+        <div className={`settings-toast ${toast === 'billing-success' ? 'saved' : toast === 'billing-cancel' ? 'error' : toast}`}>
+          {toast === 'saved' ? '✓ Saved'
+            : toast === 'billing-success' ? '✓ Subscribed to Premium'
+            : toast === 'billing-cancel' ? 'Checkout canceled'
+            : '✕ Failed to save'}
         </div>
       )}
 
@@ -502,16 +518,29 @@ export default function Settings() {
               </select>
             </div>
 
-            <div className="settings-row">
-              <div className="settings-row-label">Open Early</div>
-              <select className="settings-select" value={openEarly} onChange={e => saveOpenEarly(e.target.value)}>
+            <div
+              className={`settings-row settings-row-premium${!isPremium ? ' settings-row-locked' : ''}`}
+              onClick={!isPremium ? () => setUpgradeFeature('Open Early') : undefined}
+            >
+              <div>
+                <div className="settings-row-label">Open Early<span className="settings-premium-badge">Premium</span></div>
+                <div className="settings-row-desc">Open meetings a few minutes before they start</div>
+              </div>
+              <select
+                className="settings-select"
+                value={openEarly}
+                onChange={e => saveOpenEarly(e.target.value)}
+              >
                 {OPEN_EARLY_OPTIONS.map(o => <option key={o} value={o}>{o} min</option>)}
               </select>
             </div>
 
-            <div className="settings-row">
+            <div
+              className={`settings-row settings-row-premium${!isPremium ? ' settings-row-locked' : ''}`}
+              onClick={!isPremium ? () => setUpgradeFeature('Vacation Mode') : undefined}
+            >
               <div>
-                <div className="settings-row-label">Vacation Mode</div>
+                <div className="settings-row-label">Vacation Mode<span className="settings-premium-badge">Premium</span></div>
                 <div className="settings-row-desc">Temporarily pause all auto-opens</div>
               </div>
               <input
@@ -535,9 +564,12 @@ export default function Settings() {
               />
             </div>
 
-            <div className="settings-row settings-row--last">
+            <div
+              className={`settings-row settings-row--last settings-row-premium${!isPremium ? ' settings-row-locked' : ''}`}
+              onClick={!isPremium ? () => setUpgradeFeature('Auto-Delete Past Meetings') : undefined}
+            >
               <div>
-                <div className="settings-row-label">Auto-Delete Past Meetings</div>
+                <div className="settings-row-label">Auto-Delete Past Meetings<span className="settings-premium-badge">Premium</span></div>
                 <div className="settings-row-desc">Automatically remove one-off meetings after they occur</div>
               </div>
               <input
@@ -553,9 +585,12 @@ export default function Settings() {
           {role !== 'student' && <section className="settings-section">
             <div className="settings-section-title">Integrations</div>
 
-            <div className="settings-row">
+            <div
+              className={`settings-row settings-row-premium${!isPremium ? ' settings-row-locked' : ''}`}
+              onClick={!isPremium ? () => setUpgradeFeature('Calendar import') : undefined}
+            >
               <div>
-                <div className="settings-row-label">Google Calendar</div>
+                <div className="settings-row-label">Google Calendar<span className="settings-premium-badge">Premium</span></div>
                 <div className="settings-row-desc">Import recurring meetings from Google Calendar</div>
               </div>
               <button className="settings-btn" onClick={() => navigate('/meetings', { state: { triggerImport: 'google' } })}>
@@ -563,9 +598,12 @@ export default function Settings() {
               </button>
             </div>
 
-            <div className="settings-row settings-row--last">
+            <div
+              className={`settings-row settings-row--last settings-row-premium${!isPremium ? ' settings-row-locked' : ''}`}
+              onClick={!isPremium ? () => setUpgradeFeature('Calendar import') : undefined}
+            >
               <div>
-                <div className="settings-row-label">Outlook Calendar</div>
+                <div className="settings-row-label">Outlook Calendar<span className="settings-premium-badge">Premium</span></div>
                 <div className="settings-row-desc">Import recurring meetings from Outlook</div>
               </div>
               <button className="settings-btn" onClick={() => navigate('/meetings', { state: { triggerImport: 'microsoft' } })}>
@@ -649,6 +687,11 @@ export default function Settings() {
             )}
           </section>
 
+          {/* BILLING (institutional accounts are on the School plan, billed separately) */}
+          {user?.account_type !== 'institutional' && (
+            <BillingSection user={user} showToast={flash} />
+          )}
+
           {/* SITE ADMIN (site admins only) */}
           {user?.admin === 'true' && (
             <section className="settings-section">
@@ -698,6 +741,10 @@ export default function Settings() {
         </div>
       </div>
       </div>
+
+    {upgradeFeature && (
+      <UpgradeModal feature={upgradeFeature} onClose={() => setUpgradeFeature(null)} />
+    )}
 
     {showDeleted && (
       <div className="modal-overlay" onClick={() => setShowDeleted(false)}>

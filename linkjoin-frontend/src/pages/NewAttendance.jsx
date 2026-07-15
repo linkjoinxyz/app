@@ -293,7 +293,7 @@ export default function NewAttendance() {
         <div data-rid="s1c" className={rc('s1c', 'sc-hl sc-hl--flip')}>
           <div className="sc-hl-text">
             <span className="sc-eyebrow">Verified identity</span>
-            <h2 className="sc-h2">Record attendance with 100% confidence.</h2>
+            <h2 className="sc-h2">Record attendance with identity verification.</h2>
             <p className="sc-body">
               Instead of tracking attendance by meeting username, records are created from the student's roster account,
               so the record is correct from the moment it's created.

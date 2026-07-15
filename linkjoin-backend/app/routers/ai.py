@@ -8,6 +8,7 @@ from pydantic import BaseModel
 from app.auth import get_confirmed_user
 from app.limiter import limiter
 from app.config import get_settings
+from app.roles import require_premium
 
 _VALID_TIMEZONES = zoneinfo.available_timezones()
 
@@ -27,6 +28,7 @@ async def extract_meeting(
     body: MeetingExtractRequest,
     user: dict = Depends(get_confirmed_user),
 ):
+    require_premium(user)
     settings = get_settings()
     if not settings.anthropic_api_key:
         raise HTTPException(status_code=503, detail="AI not configured")

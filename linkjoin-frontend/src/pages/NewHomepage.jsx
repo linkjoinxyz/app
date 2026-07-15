@@ -277,14 +277,17 @@ export default function NewHomepage() {
               <li>Reads time, recurrence, and meeting name automatically</li>
               <li>Skips meetings already in your LinkJoin</li>
             </ul>
-            <a
-              href="https://chromewebstore.google.com/detail/add-to-linkjoin/mhncphjlaeeglmjpgdmclklebdfomele"
-              target="_blank" rel="noreferrer"
-              className="nh-hl-link"
-            >
-              <img src="/images/logos/chrome-logo.svg" height="16" width="16" alt="" />
-              Add to Chrome
-            </a>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 20, flexWrap: 'wrap' }}>
+              <a
+                href="https://chromewebstore.google.com/detail/add-to-linkjoin/mhncphjlaeeglmjpgdmclklebdfomele"
+                target="_blank" rel="noreferrer"
+                className="nh-hl-link"
+              >
+                <img src="/images/logos/chrome-logo.svg" height="16" width="16" alt="" />
+                Add to Chrome
+              </a>
+              <Link to="/extension" className="nh-link">See all extension features</Link>
+            </div>
           </div>
           <div className="nh-hl-visual">
             <div className="nh-mock-email-ctx">
@@ -600,6 +603,7 @@ export default function NewHomepage() {
           <div className="nh-footer-col">
             <p className="nh-footer-col-title">Company</p>
             <Link to="/demo">Demo</Link>
+            <Link to="/extension">Chrome Extension</Link>
             <Link to="/privacy">Privacy Policy</Link>
             <Link to="/tos">Terms of Service</Link>
             <Link to="/contact">Contact</Link>

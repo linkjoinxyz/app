@@ -3,9 +3,21 @@ import { Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext.jsx'
 import { useDarkMode } from '../hooks/useDarkMode.js'
 import { useExtDetection } from '../hooks/useExtDetection.js'
+import { usersApi } from '../api/users.js'
 import '../styles/side-nav.css'
 
 const TEACHER_ROLES = new Set(['teacher', 'school_admin', 'district_admin'])
+
+const AVATAR_PALETTES = [
+  { bg: 'rgba(43,143,216,0.35)',  border: 'rgba(43,143,216,0.6)' },
+  { bg: 'rgba(72,197,120,0.3)',   border: 'rgba(72,197,120,0.55)' },
+  { bg: 'rgba(255,160,50,0.3)',   border: 'rgba(255,160,50,0.55)' },
+  { bg: 'rgba(180,100,220,0.3)',  border: 'rgba(180,100,220,0.55)' },
+  { bg: 'rgba(50,180,180,0.3)',   border: 'rgba(50,180,180,0.55)' },
+]
+function avatarPalette(seed) {
+  return AVATAR_PALETTES[(seed || '?').charCodeAt(0) % AVATAR_PALETTES.length]
+}
 
 const ICONS = {
   meetings: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>,
@@ -34,7 +46,7 @@ function NavItem({ to, icon, label, active, collapsed, onClick }) {
 }
 
 export default function SideNav({ onAdd, page, search, onSearch, searchPlaceholder }) {
-  const { logout, role, isAdmin } = useAuth()
+  const { logout, role, isAdmin, isPremium, email } = useAuth()
   const isTeacher = TEACHER_ROLES.has(role)
   const { isDark, toggle: toggleDark } = useDarkMode()
   const { installed, checked, browser, installUrl } = useExtDetection()
@@ -45,6 +57,15 @@ export default function SideNav({ onAdd, page, search, onSearch, searchPlacehold
   const [extDismissed, setExtDismissed] = useState(
     () => sessionStorage.getItem('lj_ext_dismissed') === '1'
   )
+  const [profile, setProfile] = useState(null)
+
+  useEffect(() => {
+    usersApi.me().then(setProfile).catch(() => {})
+  }, [])
+
+  const avatarSeed = profile?.name || profile?.username || email
+  const initials = (profile?.name?.trim()?.[0] || profile?.username?.[0] || email?.[0] || '?').toUpperCase()
+  const pal = avatarPalette(avatarSeed)
 
   const showExtBanner = checked && !installed && !extDismissed && browser !== 'other'
 
@@ -137,10 +158,19 @@ export default function SideNav({ onAdd, page, search, onSearch, searchPlacehold
         </nav>
 
         <div className="sn-bottom">
-          <button className="sn-item" onClick={() => { closeMobile(); handleLogout() }}>
-            <span className="sn-item-icon">{ICONS.logout}</span>
-            <span className="sn-item-label">Log Out</span>
-          </button>
+          <div className="sn-account-row">
+            <Link to="/settings" className="sn-avatar-wrap" onClick={closeMobile} aria-label="Profile">
+              {profile?.avatar
+                ? <img src={profile.avatar} className="sn-avatar-img" alt="" />
+                : <span className="sn-avatar-initials" style={{ background: pal.bg, border: `1.5px solid ${pal.border}` }}>{initials}</span>
+              }
+              {isPremium && <img src="/images/crown.svg" className="sn-avatar-crown" alt="Premium" title="Premium" />}
+            </Link>
+            <button className="sn-item sn-logout-item" onClick={() => { closeMobile(); handleLogout() }}>
+              <span className="sn-item-icon">{ICONS.logout}</span>
+              <span className="sn-item-label">Log Out</span>
+            </button>
+          </div>
         </div>
         </div>{/* sn-inner */}
 

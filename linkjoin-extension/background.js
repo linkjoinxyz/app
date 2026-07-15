@@ -1,6 +1,8 @@
+import { computeAlarmSchedule, buildPremeetParams } from './lib/scheduling.js'
+
 const BASE_URL = 'https://linkjoin.azurewebsites.net'
 const BASE_WS_URL = 'wss://linkjoin.azurewebsites.net'
-const PRE_MEET_MS = 5000
+const APP_URL = 'https://linkjoin.xyz'
 
 let webSocket = null
 let reconnectTimer = null
@@ -27,7 +29,7 @@ async function apiFetch(path, options = {}) {
         if (!res.ok) {
             const body = await res.text().catch(() => '')
             console.error('[LJ] apiFetch', path, 'status:', res.status, body.slice(0, 200))
-            return null
+            return { __error: true, status: res.status }
         }
         return await res.json()
     } catch (e) {
@@ -72,222 +74,53 @@ function scheduleReconnect() {
 
 // --- Alarms ---
 
-async function recreateAlarms(links) {
+export async function recreateAlarms(links) {
     await chrome.alarms.clearAll()
     chrome.alarms.create('resetWebsocket', { delayInMinutes: 60, periodInMinutes: 60 })
 
-    const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
     const alarmData = {}
-
-    function firstBizDay(year, month) {
-        const dow = new Date(year, month, 1).getDay()
-        return dow === 0 ? 2 : dow === 6 ? 3 : 1
-    }
-
-    function isPastEndDate(link) {
-        if (!link.end_date) return false
-        try {
-            const [m, d, y] = link.end_date.split('/').map(Number)
-            return new Date() > new Date(y, m - 1, d, 23, 59, 59)
-        } catch { return false }
-    }
-
-    for (const link of links) {
-        // Class-linked meetings have their raw URL redacted server-side (see
-        // attendance-integrity brief) — they carry a `slug` instead, resolved
-        // via /links/c/:slug at open time. Personal links still carry `link`.
-        if (link.active === 'false' || (!link.link && !link.slug)) continue
-        if (isPastEndDate(link)) continue
-
-        if (link.repeat === 'same_weekday') {
-            const info = changeTime([], link.time, 0)
-            const today = new Date()
-            for (let i = 0; i <= 62; i++) {
-                const check = new Date(today)
-                check.setDate(today.getDate() + i)
-                check.setHours(info.hour, info.minute, 0, 0)
-                if (check.getDate() === firstBizDay(check.getFullYear(), check.getMonth()) && check.getTime() > Date.now()) {
-                    const alarmName = `lj-${link.id}-fbm`
-                    chrome.alarms.create(alarmName, { when: check.getTime() - PRE_MEET_MS })
-                    alarmData[alarmName] = { id: link.id, link: link.link, slug: link.slug || null, repeat: link.repeat, name: link.name, password: link.password || null }
-                    const notifyWhen = check.getTime() - 2 * 60 * 1000
-                    if (notifyWhen > Date.now()) {
-                        const notifyName = `lj-notify-${link.id}-fbm`
-                        chrome.alarms.create(notifyName, { when: notifyWhen })
-                        alarmData[notifyName] = { notify: true, name: link.name }
-                    }
-                    break
-                }
-            }
-            continue
-        }
-
-        if (/^day \d+$/.test(link.repeat)) {
-            const dayNum = parseInt(link.repeat.split(' ')[1])
-            const info = changeTime([], link.time, 0)
-            const today = new Date()
-
-            function effectiveDomDate(year, month, n) {
-                const d = new Date(year, month, n)
-                if (d.getMonth() !== month) return null
-                const dow = d.getDay()
-                if (dow === 6) d.setDate(d.getDate() + 2)
-                if (dow === 0) d.setDate(d.getDate() + 1)
-                return d
-            }
-
-            let target = null
-            for (let offset = 0; offset <= 2; offset++) {
-                const totalMonth = today.getMonth() + offset
-                const yr = totalMonth > 11 ? today.getFullYear() + 1 : today.getFullYear()
-                const mo = totalMonth % 12
-                const candidate = effectiveDomDate(yr, mo, dayNum)
-                if (!candidate) continue
-                candidate.setHours(info.hour, info.minute, 0, 0)
-                if (candidate.getTime() > Date.now()) { target = candidate; break }
-            }
-
-            if (target) {
-                const alarmName = `lj-${link.id}-dom`
-                chrome.alarms.create(alarmName, { when: target.getTime() - PRE_MEET_MS })
-                alarmData[alarmName] = { id: link.id, link: link.link, slug: link.slug || null, repeat: link.repeat, name: link.name, password: link.password || null }
-                const notifyWhen = target.getTime() - 2 * 60 * 1000
-                if (notifyWhen > Date.now()) {
-                    const notifyName = `lj-notify-${link.id}-dom`
-                    chrome.alarms.create(notifyName, { when: notifyWhen })
-                    alarmData[notifyName] = { notify: true, name: link.name }
-                }
-            }
-            continue
-        }
-
-        if (link.repeat === 'month') {
-            const info = changeTime([...link.days], link.time, 0)
-            const today = new Date()
-            const parts = (link.date || '').split('/')
-            const refDay = parts.length === 3 ? parseInt(parts[1], 10) : NaN
-            const weekNum = (!isNaN(refDay) && refDay >= 1) ? Math.ceil(refDay / 7) : 1
-
-            function nthWeekdayInMonth(year, month, dayOfWeek, n) {
-                const firstDay = new Date(year, month, 1)
-                const diff = (dayOfWeek - firstDay.getDay() + 7) % 7
-                const d = new Date(year, month, 1 + diff + (n - 1) * 7)
-                d.setHours(info.hour, info.minute, 0, 0)
-                return d.getMonth() === month ? d : null
-            }
-
-            for (const day of info.days) {
-                const dayIndex = DAYS.indexOf(day)
-                let target = nthWeekdayInMonth(today.getFullYear(), today.getMonth(), dayIndex, weekNum)
-                if (!target || target.getTime() <= Date.now()) {
-                    const nm = today.getMonth() === 11 ? 0 : today.getMonth() + 1
-                    const ny = today.getMonth() === 11 ? today.getFullYear() + 1 : today.getFullYear()
-                    target = nthWeekdayInMonth(ny, nm, dayIndex, weekNum)
-                }
-                if (target && target.getTime() > Date.now()) {
-                    const alarmName = `lj-${link.id}-${day}`
-                    chrome.alarms.create(alarmName, { when: target.getTime() - PRE_MEET_MS })
-                    alarmData[alarmName] = { id: link.id, link: link.link, slug: link.slug || null, repeat: link.repeat, name: link.name, password: link.password || null }
-                    const notifyWhen = target.getTime() - 2 * 60 * 1000
-                    if (notifyWhen > Date.now()) {
-                        const notifyName = `lj-notify-${link.id}-${day}`
-                        chrome.alarms.create(notifyName, { when: notifyWhen })
-                        alarmData[notifyName] = { notify: true, name: link.name }
-                    }
-                }
-            }
-            continue
-        }
-
-        if (!link.days?.length) continue
-
-        const info = changeTime([...link.days], link.time, 0)
-
-        for (const day of info.days) {
-            const today = new Date()
-            const linkDay = new Date(today)
-            const daysUntil = (7 - (today.getDay() - DAYS.indexOf(day))) % 7
-            linkDay.setDate(linkDay.getDate() + daysUntil)
-
-            const alreadyPassed =
-                (info.hour < today.getHours() ||
-                    (info.hour === today.getHours() && info.minute <= today.getMinutes())) &&
-                daysUntil === 0
-            if (alreadyPassed) linkDay.setDate(linkDay.getDate() + 7)
-
-            linkDay.setHours(info.hour, info.minute, 0, 0)
-
-            let delayMs = 0
-            if (/^\d/.test(link.repeat)) {
-                delayMs = 10080 * parseInt(link.repeat) * 60000
-            }
-            if (link.date) {
-                const [_m, _d, _y] = link.date.split('/').map(Number)
-                const diff = dateDiffInDays(today, new Date(_y, _m - 1, _d))
-                if (diff < 0 || (diff === 0 && today.getTime() > linkDay.getTime())) continue
-                delayMs += 1440 * diff * 60000
-            }
-
-            const when = linkDay.getTime() + delayMs
-            if (when > Date.now()) {
-                const alarmName = `lj-${link.id}-${day}`
-                chrome.alarms.create(alarmName, { when: when - PRE_MEET_MS })
-                alarmData[alarmName] = { id: link.id, link: link.link, slug: link.slug || null, repeat: link.repeat, name: link.name, password: link.password || null }
-
-                const notifyWhen = when - 2 * 60 * 1000
-                if (notifyWhen > Date.now()) {
-                    const notifyName = `lj-notify-${link.id}-${day}`
-                    chrome.alarms.create(notifyName, { when: notifyWhen })
-                    alarmData[notifyName] = { notify: true, name: link.name }
-                }
-            }
-        }
+    for (const entry of computeAlarmSchedule(links, new Date())) {
+        chrome.alarms.create(entry.name, { when: entry.whenMs })
+        alarmData[entry.name] = entry.data
     }
 
     await chrome.storage.local.set({ alarmData })
+    await updateBadge()
+}
+
+function isLocalToday(ms) {
+    return localDateKey(new Date(ms)) === localDateKey()
+}
+
+async function updateBadge() {
+    const alarms = await chrome.alarms.getAll()
+    const { alarmData = {} } = await chrome.storage.local.get('alarmData')
+    const count = alarms.filter(a => {
+        const d = alarmData[a.name]
+        return d && !d.notify && isLocalToday(a.scheduledTime)
+    }).length
+    await chrome.action.setBadgeText({ text: count ? String(count) : '' })
+    await chrome.action.setBadgeBackgroundColor({ color: '#2B8FD8' })
 }
 
 // --- Chrome event listeners ---
 
-chrome.alarms.onAlarm.addListener(async (alarm) => {
-    if (alarm.name === 'resetWebsocket') {
-        if (webSocket) webSocket.close()
-        await createWebsocket()
-        return
-    }
+function localDateKey(d = new Date()) {
+    return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`
+}
 
-    if (!alarm.name.startsWith('lj-')) return
-
-    const { alarmData = {}, lj_last_opened = {} } = await chrome.storage.local.get(['alarmData', 'lj_last_opened'])
-    const entry = alarmData[alarm.name]
-    if (!entry) return
-
-    if (entry.notify) {
-        chrome.notifications.create(alarm.name, {
-            type: 'basic',
-            iconUrl: '/icons/logo-rounded.png',
-            title: 'Meeting starting in 2 minutes',
-            message: entry.name || 'Your meeting is about to start',
-        })
-        return
-    }
-
-    // Skip if web app already opened this meeting in the last 2 minutes
+// Shared by: the open-alarm firing naturally, a "Join now" notification button
+// click, and a notification-body click. Deliberately includes the one-time
+// (repeat === 'never') deactivation so joining via any of the three paths
+// behaves identically.
+export async function openMeetingWindow(entry) {
+    const { lj_last_opened = {} } = await chrome.storage.local.get('lj_last_opened')
+    // Skip if web app (or a previous button click) already opened this meeting
+    // in the last 2 minutes
     if (lj_last_opened[entry.id] && Date.now() - lj_last_opened[entry.id] < 2 * 60 * 1000) return
 
-    let premeetParams
-    if (entry.slug) {
-        // Class-linked meeting: premeet.js resolves the slug itself via
-        // /links/c/:slug (logs attendance), so just hand it the slug + name.
-        premeetParams = new URLSearchParams({ name: entry.name || '', slug: entry.slug })
-    } else {
-        try {
-            const proto = new URL(entry.link).protocol
-            if (proto !== 'http:' && proto !== 'https:') return
-        } catch { return }
-        premeetParams = new URLSearchParams({ name: entry.name || '', link: entry.link })
-        if (entry.password) premeetParams.set('pw', entry.password)
-    }
+    const premeetParams = buildPremeetParams(entry)
+    if (!premeetParams) return
     await chrome.windows.create({ url: chrome.runtime.getURL('premeet.html') + '?' + premeetParams, type: 'popup', width: 440, height: 360, focused: true })
 
     await chrome.storage.local.set({ lj_last_opened: { ...lj_last_opened, [entry.id]: Date.now() } })
@@ -298,12 +131,150 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
             body: JSON.stringify({ id: entry.id, active: 'false' }),
         })
     }
+}
+
+chrome.alarms.onAlarm.addListener(async (alarm) => {
+    if (alarm.name === 'resetWebsocket') {
+        if (webSocket) webSocket.close()
+        await createWebsocket()
+        return
+    }
+
+    if (!alarm.name.startsWith('lj-')) return
+
+    const { alarmData = {} } = await chrome.storage.local.get('alarmData')
+    const entry = alarmData[alarm.name]
+    if (!entry) return
+
+    if (entry.notify) {
+        chrome.notifications.create(alarm.name, {
+            type: 'basic',
+            iconUrl: '/icons/logo-rounded.png',
+            title: 'Meeting starting in 2 minutes',
+            message: entry.name || 'Your meeting is about to start',
+            buttons: [{ title: 'Join now' }, { title: 'Skip today' }],
+        })
+        return
+    }
+
+    // "Skip today" only suppresses the natural alarm firing. A deliberate
+    // "Join now" click (openMeetingWindow called directly) always works
+    // regardless of an earlier skip for this meeting.
+    const { lj_skipped = {} } = await chrome.storage.local.get('lj_skipped')
+    if (lj_skipped[entry.id] === localDateKey()) {
+        await updateBadge()
+        return
+    }
+
+    await openMeetingWindow(entry)
+    await updateBadge()
 })
 
-chrome.runtime.onInstalled.addListener(async () => {
+chrome.notifications.onButtonClicked.addListener(async (notificationId, buttonIndex) => {
+    const { alarmData = {} } = await chrome.storage.local.get('alarmData')
+    const entry = alarmData[notificationId]
+    if (!entry) return
+
+    if (buttonIndex === 0) {
+        await openMeetingWindow(entry)
+    } else if (buttonIndex === 1) {
+        const { lj_skipped = {} } = await chrome.storage.local.get('lj_skipped')
+        await chrome.storage.local.set({ lj_skipped: { ...lj_skipped, [entry.id]: localDateKey() } })
+    }
+    chrome.notifications.clear(notificationId)
+})
+
+chrome.notifications.onClicked.addListener(async (notificationId) => {
+    const { alarmData = {} } = await chrome.storage.local.get('alarmData')
+    const entry = alarmData[notificationId]
+    if (!entry) return
+    await openMeetingWindow(entry)
+    chrome.notifications.clear(notificationId)
+})
+
+// Silent Google sign-in for managed/Workspace Chromebooks: uses Chrome's
+// built-in identity API against the browser's already-signed-in profile, so
+// it works even with zero open tabs and zero prior browsing (the common
+// freshly-provisioned-Chromebook case). Never called with interactive:true.
+// an unprompted consent popup during a background-triggered install flow is
+// worse than the existing branded login-tab fallback for ordinary users.
+export async function zeroTouchGoogleLogin() {
+    if (!chrome.identity) return false
+    try {
+        const result = await chrome.identity.getAuthToken({ interactive: false })
+        const accessToken = typeof result === 'string' ? result : result?.token
+        if (!accessToken) return false
+
+        const res = await fetch(`${BASE_URL}/auth/google-token`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ access_token: accessToken }),
+        })
+        const data = await res.json().catch(() => null)
+
+        if (data?.mfa_required) {
+            // No UI surface in the background context to collect an MFA code.
+            // Discard the cached token so a later manual login isn't blocked by
+            // a stuck silent token, and let the caller fall through.
+            await chrome.identity.removeCachedAuthToken({ token: accessToken }).catch(() => {})
+            return false
+        }
+        if (data?.access_token) {
+            await chrome.storage.local.set({ token: data.access_token, email: data.email })
+            createWebsocket()
+            return true
+        }
+        return false
+    } catch (e) {
+        console.warn('[LJ] zero-touch google login failed', e?.message)
+        return false
+    }
+}
+
+// On fresh install: try zero-touch Google sign-in first, then check if the
+// user is already logged into linkjoin.xyz in an open tab (pulling that
+// session in directly rather than waiting for lj-auth-sync.js to fire on a
+// future page load). Otherwise, open the login page so they're never left
+// with a silently-signed-out popup and no indication why.
+export async function autoLoginOrPrompt() {
+    const { token } = await chrome.storage.local.get('token')
+    if (token) return
+
+    if (await zeroTouchGoogleLogin()) return
+
+    try {
+        const tabs = await chrome.tabs.query({ url: `${APP_URL}/*` })
+        for (const tab of tabs) {
+            if (!tab.id) continue
+            try {
+                const results = await chrome.scripting.executeScript({
+                    target: { tabId: tab.id },
+                    func: () => ({ token: localStorage.getItem('lj_token'), email: localStorage.getItem('lj_email') }),
+                })
+                const result = results?.[0]?.result
+                if (result?.token && result?.email) {
+                    await chrome.storage.local.set({ token: result.token, email: result.email })
+                    createWebsocket()
+                    return
+                }
+            } catch (e) {
+                console.warn('[LJ] auto-login: could not read session from tab', tab.id, e.message)
+            }
+        }
+    } catch (e) {
+        console.warn('[LJ] auto-login: tab query failed', e.message)
+    }
+
+    chrome.tabs.create({ url: `${APP_URL}/login` })
+}
+
+chrome.runtime.onInstalled.addListener(async (details) => {
     await createOffscreen()
     await setupContextMenu()
     await createWebsocket()
+    if (details.reason === 'install') {
+        await autoLoginOrPrompt()
+    }
 })
 
 chrome.runtime.onStartup.addListener(async () => {
@@ -339,7 +310,11 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
             method: 'POST',
             body: JSON.stringify({ subject: msg.subject, body: msg.body, user_timezone: msg.timezone }),
         }).then(result => {
-            sendResponse(result || null)
+            if (result?.__error && result.status === 403) {
+                sendResponse({ __premiumRequired: true })
+            } else {
+                sendResponse((result && !result.__error) ? result : null)
+            }
         })
         return true
     }
@@ -347,7 +322,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
         apiFetch('/links', {
             method: 'POST',
             body: JSON.stringify(msg.data),
-        }).then(result => sendResponse({ ok: result !== null, result }))
+        }).then(result => sendResponse({ ok: !!result && !result.__error, result }))
         return true
     }
     if (msg.type === 'resetDismissed') {
@@ -357,13 +332,38 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     }
 })
 
-chrome.contextMenus.onClicked.addListener(async (e) => {
+function deriveClickTarget(e) {
     const url = e.linkUrl || e.pageUrl
     const name = e.selectionText || url.replace(/^https?:\/\//, '').split('/')[0]
+    return { url, name }
+}
+
+async function handleBookmarkClick(e) {
+    const { url, name } = deriveClickTarget(e)
     await apiFetch('/bookmarks', {
         method: 'POST',
         body: JSON.stringify({ name, link: url }),
     })
+}
+
+async function handleAddToLinkJoinClick(e) {
+    const { url, name } = deriveClickTarget(e)
+    try {
+        if (typeof chrome.action.openPopup !== 'function') throw new Error('openPopup unavailable')
+        chrome.storage.local.set({ pendingAddLink: { link: url, name } })
+        await chrome.action.openPopup()
+    } catch (err) {
+        console.warn('[LJ] openPopup failed, falling back to bookmark', err?.message)
+        await apiFetch('/bookmarks', {
+            method: 'POST',
+            body: JSON.stringify({ name, link: url }),
+        })
+    }
+}
+
+chrome.contextMenus.onClicked.addListener(async (e) => {
+    if (e.menuItemId === 'bookmark-to-linkjoin') return handleBookmarkClick(e)
+    if (e.menuItemId === 'add-to-linkjoin') return handleAddToLinkJoinClick(e)
 })
 
 // --- Utilities ---
@@ -373,6 +373,12 @@ async function setupContextMenu() {
     chrome.contextMenus.create({
         title: 'Add to LinkJoin',
         id: 'add-to-linkjoin',
+        visible: true,
+        contexts: ['all'],
+    })
+    chrome.contextMenus.create({
+        title: 'Bookmark this link',
+        id: 'bookmark-to-linkjoin',
         visible: true,
         contexts: ['all'],
     })
@@ -386,26 +392,3 @@ async function createOffscreen() {
         justification: 'keep service worker running',
     })
 }
-
-function changeTime(days, time, before) {
-    const daysList = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
-    let hour = parseInt(time.split(':')[0])
-    let minute = parseInt(time.split(':')[1])
-    if (before) {
-        minute -= before
-        if (minute < 0) { hour--; minute += 60 }
-        if (hour < 0) {
-            hour += 24
-            days = days.map(d => daysList[(daysList.indexOf(d) + 6) % 7])
-        }
-    }
-    return { hour, minute, days }
-}
-
-function dateDiffInDays(a, b) {
-    const MS_PER_DAY = 1000 * 60 * 60 * 24
-    const utc1 = Date.UTC(a.getFullYear(), a.getMonth(), a.getDate())
-    const utc2 = Date.UTC(b.getFullYear(), b.getMonth(), b.getDate())
-    return Math.floor((utc2 - utc1) / MS_PER_DAY)
-}
-

@@ -5,9 +5,14 @@
   "version": "0.3.3",
   "manifest_version": 3,
   "background": {
-    "service_worker": "background.js"
+    "service_worker": "background.js",
+    "type": "module"
   },
-  "permissions": ["alarms", "storage", "windows", "offscreen", "contextMenus", "notifications", "scripting", "activeTab"],
+  "permissions": ["alarms", "storage", "windows", "offscreen", "contextMenus", "notifications", "scripting", "activeTab", "identity"],
+  "oauth2": {
+    "client_id": "REPLACE_WITH_CHROME_EXTENSION_OAUTH_CLIENT_ID.apps.googleusercontent.com",
+    "scopes": ["https://www.googleapis.com/auth/userinfo.email"]
+  },
   "content_scripts": [
     {
       "matches": ["https://mail.google.com/*", "https://outlook.live.com/*", "https://outlook.office.com/*", "https://outlook.office365.com/*"],

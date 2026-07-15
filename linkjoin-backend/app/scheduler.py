@@ -39,6 +39,15 @@ async def _send_sms(job_data: dict) -> None:
             pass
 
     user = await motor_db.login.find_one({"username": link["username"]})
+    if user and user.get("vacation_mode"):
+        from app.roles import require_premium
+        try:
+            require_premium(user)
+        except Exception:
+            pass  # toggle set but owner not entitled — ignore, SMS still sends
+        else:
+            log.info("[SMS] skipping — vacation_mode enabled for user %s", link.get("username"))
+            return
     number = user.get("number") if user else None
     if not number:
         log.warning("[SMS] no phone number for user %s - skipping", link.get("username"))
@@ -335,6 +344,53 @@ async def purge_old_audit_logs() -> None:
     log.info("[scheduler] audit-log-purge: deleted %d entries older than %s", result.deleted_count, cutoff.date())
 
 
+async def auto_delete_past_links() -> None:
+    """Daily job: delete one-off ('never'-repeat) links whose single occurrence has
+    passed, for premium-entitled owners with auto_delete_past enabled."""
+    from app.roles import require_premium
+
+    now_utc = datetime.now(timezone.utc)
+    deleted = 0
+    async for link in motor_db.links.find({"repeat": "never"}):
+        date_str = link.get("date", "")
+        time_str = link.get("time", "0:00")
+        if not date_str:
+            continue
+        try:
+            mo, dy, yr = (int(x) for x in date_str.split("/"))
+            h, m = (int(x) for x in time_str.split(":"))
+        except (ValueError, TypeError):
+            continue
+
+        owner = await motor_db.login.find_one({"username": link["username"]})
+        if not owner or not owner.get("auto_delete_past"):
+            continue
+        try:
+            require_premium(owner)
+        except Exception:
+            continue  # toggle set but owner not entitled — no-op
+
+        tz_name = owner.get("timezone") or "UTC"
+        try:
+            tz = pytz_timezone(tz_name)
+        except Exception:
+            tz = utc
+        try:
+            occurrence_utc = tz.localize(datetime(yr, mo, dy, h, m, 0)).astimezone(utc)
+        except ValueError:
+            continue
+
+        # 6-hour grace window so this never races useAutoOpen.js's client-side
+        # delete-on-open, which already handles the "tab was open at the right
+        # moment" case — this job only cleans up what that path misses.
+        if now_utc - occurrence_utc < timedelta(hours=6):
+            continue
+
+        await motor_db.links.delete_one({"username": link["username"], "id": link["id"]})
+        deleted += 1
+    log.info("[scheduler] auto-delete-past-links: deleted %d one-off links", deleted)
+
+
 async def run_backup_health_check() -> None:
     """Weekly job: verify MongoDB is reachable and core collections are non-empty."""
     import time as _time
@@ -438,3 +494,14 @@ def load_all_text_jobs() -> None:
         misfire_grace_time=86400,
     )
     log.info("[scheduler] added audit-log-purge monthly job (1st of month 03:00 UTC)")
+
+    scheduler.add_job(
+        auto_delete_past_links,
+        "cron",
+        hour=4,
+        minute=0,
+        id="auto-delete-past-links",
+        replace_existing=True,
+        misfire_grace_time=3600,
+    )
+    log.info("[scheduler] added auto-delete-past-links daily job (04:00 UTC)")

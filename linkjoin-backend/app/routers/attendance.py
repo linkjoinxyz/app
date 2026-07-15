@@ -10,7 +10,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from app.auth import get_confirmed_user
 from app.database import motor_db
-from app.roles import require_teacher
+from app.roles import require_teacher, require_premium
 from app.utils import get_blackout_set, compute_session_start_utc
 from app.audit import log_audit
 
@@ -141,6 +141,7 @@ async def log_attendance(body: dict, background_tasks: BackgroundTasks, user: di
 
 @router.get("/me/rewards")
 async def get_my_rewards(user: dict = Depends(get_confirmed_user)):
+    require_premium(user)
     email = user["username"]
 
     org_id = user.get("org_id")

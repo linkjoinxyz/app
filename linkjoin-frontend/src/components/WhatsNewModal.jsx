@@ -10,22 +10,22 @@ const FEATURES = [
   },
   {
     icon: '⬆️',
-    name: 'Calendar import',
+    name: 'Calendar import (Premium)',
     desc: 'Pull meetings directly from Google Calendar or Outlook instead of adding them one by one.',
   },
   {
     icon: '✉️',
-    name: 'Email meeting detection',
+    name: 'Email meeting detection (Premium)',
     desc: 'LinkJoin can scan your inbox and automatically find meeting links to import.',
   },
   {
     icon: '🗑️',
-    name: 'Auto-delete old meetings',
+    name: 'Auto-delete old meetings (Premium)',
     desc: 'One-time meetings that have passed get cleaned up automatically. Turn it on in Settings.',
   },
   {
     icon: '🏖️',
-    name: 'Vacation mode',
+    name: 'Vacation mode (Premium)',
     desc: 'Pause all automatic meeting opens while you\'re away. One toggle in Settings.',
   },
 ]

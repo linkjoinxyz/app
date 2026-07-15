@@ -48,7 +48,7 @@ const AWARD_META = {
 const ALL_AWARDS = ['first_steps', 'on_point', 'perfect_week', 'streak_5', 'streak_10', 'monthly_champion']
 
 export default function StudentProfile() {
-  const { email: authEmail, role } = useAuth()
+  const { email: authEmail, role, isPremium } = useAuth()
   const navigate = useNavigate()
   const fileRef = useRef()
 
@@ -72,8 +72,11 @@ export default function StudentProfile() {
       setAvatar(u.avatar || '')
     }).catch(() => {})
 
-    getMyRewards().then(setRewards).catch(() => {})
   }, [])
+
+  useEffect(() => {
+    if (isPremium) getMyRewards().then(setRewards).catch(() => {})
+  }, [isPremium])
 
   function flash(ok = true) {
     setToast(ok ? 'saved' : 'error')
@@ -198,7 +201,14 @@ export default function StudentProfile() {
           <section className="settings-section">
             <div className="settings-section-title">Rewards</div>
 
-            {rewards && (
+            {!isPremium && (
+              <div className="settings-row-desc" style={{ marginBottom: 12 }}>
+                Attendance history and streaks are a Premium feature. Ask a parent or your school
+                to upgrade to see your streak, on-time rate, and earned awards here.
+              </div>
+            )}
+
+            {isPremium && rewards && (
               <div className="sp-stats-row">
                 <div className="sp-stat-cell sp-stat-cell--accent">
                   <div className="sp-stat-num">{rewards.current_streak}</div>
@@ -219,7 +229,7 @@ export default function StudentProfile() {
               </div>
             )}
 
-            <div className="sp-awards-list">
+            {isPremium && <div className="sp-awards-list">
               {ALL_AWARDS.map(key => {
                 const meta = AWARD_META[key]
                 const unlocked = earned.has(key)
@@ -238,7 +248,7 @@ export default function StudentProfile() {
                   </div>
                 )
               })}
-            </div>
+            </div>}
           </section>
 
         </div>
