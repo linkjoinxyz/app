@@ -123,6 +123,19 @@ function AppInner() {
 }
 
 export default function App() {
+  // schools.linkjoin.xyz renders the Schools product page directly (no
+  // redirect to /schools) so it reads as a dedicated site when shared with
+  // administrators, while linkjoin.xyz/schools keeps working normally.
+  const isSchoolDomain = window.location.hostname === 'schools.linkjoin.xyz'
+  if (isSchoolDomain) {
+    return (
+      <ToastProvider>
+        <AppInner />
+        <School />
+      </ToastProvider>
+    )
+  }
+
   return (
     <ToastProvider>
       <AppInner />
