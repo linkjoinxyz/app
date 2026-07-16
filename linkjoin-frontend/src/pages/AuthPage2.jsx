@@ -12,6 +12,7 @@ const ERROR_MESSAGES = {
   'Invalid credentials': 'Incorrect email or password.',
   email_in_use: 'An account with this email already exists. Try logging in.',
   no_password: 'This account was created with Google. Use "Continue with Google" to sign in.',
+  no_google_account: 'No account found for that email. Try signing up instead.',
   not_confirmed: 'Please confirm your email before signing in.',
   invalid_email: 'Please enter a valid email address.',
   password_too_short: 'Password must be at least 8 characters.',
@@ -206,7 +207,7 @@ export default function AuthPage2({ defaultTab = 'login' }) {
           setLoading(true)
           setError('')
           try {
-            const data = await authApi.googleTokenLogin(response.access_token)
+            const data = await authApi.googleTokenLogin(response.access_token, tabRef.current)
             if (data.mfa_required) {
               setMfaSession(data.mfa_session)
               return

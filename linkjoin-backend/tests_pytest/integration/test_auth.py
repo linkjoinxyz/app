@@ -65,3 +65,28 @@ async def test_existing_institutional_account_matched_not_duplicated(client, fak
 
     count = await motor_db.login.count_documents({"username": institutional_teacher_user["username"]})
     assert count == 1
+
+
+async def test_login_intent_rejects_unknown_email_without_creating_account(client, fake_google_userinfo):
+    """Regression: "Continue with Google" on the Login tab used to silently
+    provision a brand-new empty account for any email with no existing
+    account - indistinguishable from account deletion silently failing.
+    intent="login" must reject instead of auto-provisioning."""
+    email = "never-signed-up@test.lincoln.edu"
+    fake_google_userinfo(email)
+
+    resp = await client.post("/auth/google-token", json={"access_token": "fake-token", "intent": "login"})
+    assert resp.status_code == 401
+    assert resp.json()["detail"] == "no_google_account"
+
+    doc = await motor_db.login.find_one({"username": email})
+    assert doc is None
+
+
+async def test_login_intent_still_succeeds_for_existing_account(client, fake_google_userinfo, institutional_teacher_user):
+    """intent="login" must not break sign-in for accounts that do exist."""
+    fake_google_userinfo(institutional_teacher_user["username"])
+
+    resp = await client.post("/auth/google-token", json={"access_token": "fake-token", "intent": "login"})
+    assert resp.status_code == 200
+    assert resp.json()["email"] == institutional_teacher_user["username"]
