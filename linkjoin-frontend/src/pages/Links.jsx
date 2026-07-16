@@ -546,6 +546,7 @@ const [showDeleted, setShowDeleted] = useState(false)
           <div id="insert">
             {links.length === 0 && !search && !loading && !fetchError && (
               <OnboardingCard
+                isPremium={isPremium}
                 onAddManually={() => tryAdd(() => { setEditLink(null); setShowLinkModal(true) })}
                 onImportGoogle={() => requirePremiumOrUpsell(() => tryAdd(() => setCalImportProvider('google')))}
                 onImportOutlook={() => requirePremiumOrUpsell(() => tryAdd(() => setCalImportProvider('microsoft')))}

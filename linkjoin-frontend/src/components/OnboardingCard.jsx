@@ -10,7 +10,7 @@ function getBrowser() {
   return 'other'
 }
 
-export default function OnboardingCard({ onAddManually, onImportGoogle, onImportOutlook }) {
+export default function OnboardingCard({ onAddManually, onImportGoogle, onImportOutlook, isPremium }) {
   const [extInstalled, setExtInstalled] = useState(false)
   const [checking, setChecking] = useState(true)
   const browser = getBrowser()
@@ -75,12 +75,16 @@ export default function OnboardingCard({ onAddManually, onImportGoogle, onImport
 
       <div className="ob-section">
         <div className="ob-section-label">Add Your First Meeting</div>
-        <button className="ob-action-btn ob-import" onClick={onImportGoogle}>
-          Import Google Calendar
-        </button>
-        <button className="ob-action-btn ob-import" onClick={onImportOutlook}>
-          Import Outlook Calendar
-        </button>
+        {isPremium && (
+          <>
+            <button className="ob-action-btn ob-import" onClick={onImportGoogle}>
+              Import Google Calendar
+            </button>
+            <button className="ob-action-btn ob-import" onClick={onImportOutlook}>
+              Import Outlook Calendar
+            </button>
+          </>
+        )}
         <button className="ob-action-btn ob-manual" onClick={onAddManually}>
           + Add Manually
         </button>

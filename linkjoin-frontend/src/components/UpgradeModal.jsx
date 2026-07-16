@@ -23,7 +23,9 @@ export default function UpgradeModal({ feature, onClose }) {
   return (
     <div className={`modal-overlay sn-page-overlay${closing ? ' closing' : ''}`} onClick={handleClose}>
       <div className="modal-card whats-new-card upgrade-modal-card" onClick={e => e.stopPropagation()}>
-        <div className="upgrade-modal-icon">👑</div>
+        <div className="upgrade-modal-icon">
+          <img src="/images/crown.svg" alt="" width="22" height="22" />
+        </div>
         <div className="whats-new-header">
           <div className="upgrade-modal-eyebrow">Premium feature</div>
           <div className="modal-title" style={{ margin: 0, paddingLeft: 0 }}>

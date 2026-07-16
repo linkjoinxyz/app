@@ -3,12 +3,12 @@ import { usersApi } from '../api/users.js'
 import '../styles/modal.css'
 
 const TRIAL_FEATURES = [
-  'Attendance history & streaks',
   'Calendar import (Google & Outlook)',
   'AI email meeting detection',
   'Auto-delete past meetings',
   'Vacation mode',
   'Open early',
+  'Attendance history & streaks',
 ]
 
 function daysRemaining(trialEnd) {
@@ -33,7 +33,9 @@ export default function TrialWelcomeModal({ trialEnd, onClose }) {
   return (
     <div className={`modal-overlay sn-page-overlay${closing ? ' closing' : ''}`} onClick={dismiss}>
       <div className="modal-card whats-new-card upgrade-modal-card" onClick={e => e.stopPropagation()}>
-        <div className="upgrade-modal-icon">✨</div>
+        <div className="upgrade-modal-icon">
+          <img src="/images/crown.svg" alt="" width="22" height="22" />
+        </div>
         <div className="whats-new-header">
           <div className="upgrade-modal-eyebrow">Welcome to LinkJoin</div>
           <div className="modal-title" style={{ margin: 0, paddingLeft: 0 }}>
