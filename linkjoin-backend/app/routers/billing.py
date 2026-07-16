@@ -37,6 +37,8 @@ async def create_checkout_session(user: dict = Depends(get_confirmed_user)):
         success_url=f"{_settings.frontend_url}/settings?billing=success",
         cancel_url=f"{_settings.frontend_url}/settings?billing=cancel",
         client_reference_id=user.get("user_id", ""),
+        automatic_tax={"enabled": True},
+        customer_update={"address": "auto"},
     )
     return {"url": session.url}
 
@@ -64,7 +66,8 @@ async def stripe_webhook(request: Request):
     except (ValueError, stripe.SignatureVerificationError):
         raise HTTPException(status_code=403, detail="Invalid signature")
 
-    data = event["data"]["object"]
+    raw_data = event["data"]["object"]
+    data = raw_data.to_dict() if hasattr(raw_data, "to_dict") else raw_data
     event_type = event["type"]
 
     if event_type == "checkout.session.completed":

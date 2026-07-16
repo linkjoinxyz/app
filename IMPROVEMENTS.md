@@ -2,7 +2,7 @@
 
 ## Biggest Barriers to Adoption
 
-- **Payment flow** — Pricing page exists but no Stripe integration. Users cannot upgrade even if they want to. Highest priority for revenue.
+- **Payment flow** — Stripe Checkout/Portal/webhook integration is built and tested (`linkjoin-backend/app/routers/billing.py`) but not yet wired to a real Stripe account (no price/keys/webhook configured) or deployed to `main`.
 
 ## Friction That Hurts Retention
 
