@@ -396,6 +396,8 @@ async def google_token_auth(request: Request, body: dict):
         raise HTTPException(status_code=400, detail="google_login_failed")
 
     user = await motor_db.login.find_one({"username": email})
+    if not user and body.get("intent") == "login":
+        raise HTTPException(status_code=401, detail="no_google_account")
     if not user:
         _trial_start = datetime.now(timezone.utc)
         account = {
