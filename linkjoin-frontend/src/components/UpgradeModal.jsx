@@ -22,9 +22,10 @@ export default function UpgradeModal({ feature, onClose }) {
 
   return (
     <div className={`modal-overlay sn-page-overlay${closing ? ' closing' : ''}`} onClick={handleClose}>
-      <div className="modal-card whats-new-card" onClick={e => e.stopPropagation()}>
+      <div className="modal-card whats-new-card upgrade-modal-card" onClick={e => e.stopPropagation()}>
+        <div className="upgrade-modal-icon">👑</div>
         <div className="whats-new-header">
-          <div className="whats-new-eyebrow">Premium feature</div>
+          <div className="upgrade-modal-eyebrow">Premium feature</div>
           <div className="modal-title" style={{ margin: 0, paddingLeft: 0 }}>
             {feature ? `${feature} is part of Premium` : 'Upgrade to Premium'}
           </div>
@@ -35,9 +36,9 @@ export default function UpgradeModal({ feature, onClose }) {
           vacation mode, and open early for $5/month.
         </p>
 
-        {error && <div className="settings-error" style={{ marginBottom: 10 }}>{error}</div>}
+        {error && <div className="modal-error">{error}</div>}
 
-        <button className="modal-submit" onClick={upgrade} disabled={loading}>
+        <button className="modal-submit upgrade-modal-submit" onClick={upgrade} disabled={loading}>
           {loading ? 'Loading…' : 'Upgrade now'}
         </button>
         <button className="modal-cancel-btn" onClick={handleClose}>Maybe later</button>

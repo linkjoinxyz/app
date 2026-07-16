@@ -18,6 +18,7 @@ import OnboardingCard from '../components/OnboardingCard.jsx'
 import OnboardingChecklist from '../components/OnboardingChecklist.jsx'
 import WhatsNewModal from '../components/WhatsNewModal.jsx'
 import GrandfatheredThanksModal from '../components/GrandfatheredThanksModal.jsx'
+import TrialWelcomeModal from '../components/TrialWelcomeModal.jsx'
 import TeacherSetupModal from '../components/TeacherSetupModal.jsx'
 import '../styles/links.css'
 import '../styles/new_links.css'
@@ -211,6 +212,8 @@ const [showDeleted, setShowDeleted] = useState(false)
   const [tzMismatch, setTzMismatch] = useState(null) // { from, to, newOffset } | null
   const [showWhatsNew, setShowWhatsNew] = useState(false)
   const [showGrandfatheredThanks, setShowGrandfatheredThanks] = useState(false)
+  const [showTrialWelcome, setShowTrialWelcome] = useState(false)
+  const [trialEnd, setTrialEnd] = useState(null)
   const [modifiedNames, setModifiedNames] = useState([])
   const [popupBanner, setPopupBanner] = useState(null) // null | 'checking' | 'blocked'
   const [obClasses, setObClasses] = useState([])
@@ -243,7 +246,10 @@ const [showDeleted, setShowDeleted] = useState(false)
   useEffect(() => {
     usersApi.me().then(u => {
       setUser(u)
-      if (u && u.premium_status === 'grandfathered' && !u.grandfathered_note_seen) {
+      if (u && u.premium_status === 'trial' && !u.trial_welcome_seen) {
+        setTrialEnd(u.trial_end || null)
+        setShowTrialWelcome(true)
+      } else if (u && u.premium_status === 'grandfathered' && !u.grandfathered_note_seen) {
         setShowGrandfatheredThanks(true)
       } else if (u && !u.whats_new_seen) {
         setShowWhatsNew(true)
@@ -635,7 +641,11 @@ const [showDeleted, setShowDeleted] = useState(false)
         />
       )}
 
-{showGrandfatheredThanks && !loading && (
+{showTrialWelcome && !loading && (
+        <TrialWelcomeModal trialEnd={trialEnd} onClose={() => setShowTrialWelcome(false)} />
+      )}
+
+      {showGrandfatheredThanks && !loading && (
         <GrandfatheredThanksModal onClose={() => setShowGrandfatheredThanks(false)} />
       )}
 

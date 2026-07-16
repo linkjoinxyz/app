@@ -26,13 +26,17 @@ export function AuthProvider({ children }) {
 
   const isTeacher = TEACHER_ROLES.has(role)
   const isOrgAdmin = ADMIN_ROLES.has(role)
+  // Backend serializes Mongo-read datetimes without a timezone suffix (naive),
+  // even though they're stored as UTC — force UTC interpretation here so this
+  // doesn't drift by the user's UTC offset.
+  const trialEndIso = trialEnd && !/[zZ]|[+-]\d\d:\d\d$/.test(trialEnd) ? `${trialEnd}Z` : trialEnd
   // UX precomputation only — never trusted for real access control, which always
   // lives server-side via require_premium(). Institutional accounts don't carry
   // premium_status at all, so accountType covers them here.
   const isPremium = accountType === 'institutional'
     || premiumStatus === 'active'
     || premiumStatus === 'grandfathered'
-    || (premiumStatus === 'trial' && !!trialEnd && new Date(trialEnd) > new Date())
+    || (premiumStatus === 'trial' && !!trialEndIso && new Date(trialEndIso) > new Date())
 
   useEffect(() => {
     const storedToken = localStorage.getItem('lj_token')
@@ -65,7 +69,7 @@ export function AuthProvider({ children }) {
       setPremiumStatus(premStatus)
       setTrialEnd(trEnd)
     }).catch(() => {})
-  }, [])
+  }, [token])
 
   const login = useCallback((accessToken, userEmail, isConfirmed = false, meta = {}) => {
     localStorage.setItem('lj_token', accessToken)
