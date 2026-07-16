@@ -131,12 +131,16 @@ async def open_early(body: OpenEarlyRequest, user: dict = Depends(get_confirmed_
 
 @router.patch("/auto-delete")
 async def set_auto_delete(body: AutoDeleteRequest, user: dict = Depends(get_confirmed_user)):
+    if body.enabled:
+        require_premium(user)
     await motor_db.login.update_one({"username": user["username"]}, {"$set": {"auto_delete_past": body.enabled}})
     return {"message": "Updated"}
 
 
 @router.patch("/vacation-mode")
 async def set_vacation_mode(body: VacationModeRequest, user: dict = Depends(get_confirmed_user)):
+    if body.enabled:
+        require_premium(user)
     await motor_db.login.update_one({"username": user["username"]}, {"$set": {"vacation_mode": body.enabled}})
     return {"message": "Updated"}
 
