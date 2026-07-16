@@ -18,6 +18,7 @@ export const usersApi = {
   markdownToHtml: (markdown) => apiPost('/users/markdown', { markdown }),
   markWhatsNewSeen: () => apiPatch('/users/whats-new-seen', {}),
   markGrandfatheredNoteSeen: () => apiPatch('/users/grandfathered-note-seen', {}),
+  markTrialWelcomeSeen: () => apiPatch('/users/trial-welcome-seen', {}),
   deleteAccount: () => apiFetch('/users/me', { method: 'DELETE' }),
   setupMfa: (enabled, phone) => apiPatch('/users/mfa', { enabled, phone }),
   verifyMfaSetup: (code, phone) => apiPost('/auth/mfa/setup-verify', { code, phone }),

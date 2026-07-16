@@ -3,7 +3,11 @@ import { billingApi } from '../api/billing.js'
 
 function daysRemaining(trialEnd) {
   if (!trialEnd) return 0
-  const ms = new Date(trialEnd).getTime() - Date.now()
+  // Backend serializes Mongo-read datetimes without a timezone suffix (naive),
+  // even though they're stored as UTC — force UTC interpretation here so this
+  // doesn't drift by the user's UTC offset.
+  const iso = /[zZ]|[+-]\d\d:\d\d$/.test(trialEnd) ? trialEnd : `${trialEnd}Z`
+  const ms = new Date(iso).getTime() - Date.now()
   return Math.max(0, Math.ceil(ms / (24 * 60 * 60 * 1000)))
 }
 

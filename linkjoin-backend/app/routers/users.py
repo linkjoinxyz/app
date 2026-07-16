@@ -193,6 +193,17 @@ async def mark_grandfathered_note_seen(user: dict = Depends(get_current_user)):
     return {"message": "Updated"}
 
 
+@router.patch("/trial-welcome-seen")
+async def mark_trial_welcome_seen(user: dict = Depends(get_current_user)):
+    # New trial users get the trial-welcome modal instead of What's New on their
+    # first visit, so mark both seen together to avoid immediately double-popping.
+    await motor_db.login.update_one(
+        {"username": user["username"]},
+        {"$set": {"trial_welcome_seen": True, "whats_new_seen": "v2"}},
+    )
+    return {"message": "Updated"}
+
+
 @router.post("/markdown")
 async def markdown_to_html(body: dict, user: dict = Depends(get_confirmed_user)):
     md = body.get("markdown", "")
