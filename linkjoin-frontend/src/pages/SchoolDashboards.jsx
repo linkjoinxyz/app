@@ -535,7 +535,7 @@ export default function SchoolDashboards() {
                   'All attendance across the school',
                   'Every open intervention case',
                   'Search and filter across all data',
-                  'Export to PowerSchool / CSV',
+                  'CSV export for PowerSchool / Infinite Campus import',
                 ],
               },
               {

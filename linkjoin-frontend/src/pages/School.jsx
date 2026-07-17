@@ -186,7 +186,7 @@ export default function School() {
             <ul className="sc-bullets">
               <li>Auto-opens class links for students at the right time</li>
               <li>Live join times and late-arrival flags, per student</li>
-              <li>One-click export to PowerSchool and Infinite Campus</li>
+              <li>CSV export ready to import into PowerSchool or Infinite Campus</li>
               <li>Historical records always available, no extra setup</li>
             </ul>
           </div>
