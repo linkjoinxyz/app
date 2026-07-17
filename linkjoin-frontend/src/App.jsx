@@ -123,25 +123,20 @@ function AppInner() {
 }
 
 export default function App() {
-  // schools.linkjoin.xyz renders the Schools product page directly (no
-  // redirect to /schools) so it reads as a dedicated site when shared with
-  // administrators, while linkjoin.xyz/schools keeps working normally.
+  // schools.linkjoin.xyz serves the Schools product page at "/" (no redirect
+  // to /schools) so it reads as a dedicated site when shared with
+  // administrators. Its own sub-pages (attendance, dashboards) render
+  // directly at their un-prefixed paths instead of /schools/*, since the
+  // subdomain itself is the "schools" namespace. linkjoin.xyz/schools/*
+  // keeps working unchanged.
   const isSchoolDomain = window.location.hostname === 'schools.linkjoin.xyz'
-  if (isSchoolDomain) {
-    return (
-      <ToastProvider>
-        <AppInner />
-        <School />
-      </ToastProvider>
-    )
-  }
 
   return (
     <ToastProvider>
       <AppInner />
       <ScrollToTop />
       <Routes>
-      <Route path="/" element={<NewHomepage />} />
+      <Route path="/" element={isSchoolDomain ? <School /> : <NewHomepage />} />
       <Route path="/old-homepage" element={<Home />} />
       <Route path="/login" element={<AuthPage2 defaultTab="login" />} />
       <Route path="/signup" element={<AuthPage2 defaultTab="signup" />} />
@@ -169,7 +164,8 @@ export default function App() {
       <Route path="/breach-policy" element={<BreachPolicy />} />
       <Route path="/schools" element={<School />} />
       <Route path="/schools/attendance" element={<NewAttendance />} />
-      <Route path="/attendance" element={<Navigate to="/schools/attendance" replace />} />
+      <Route path="/attendance" element={isSchoolDomain ? <NewAttendance /> : <Navigate to="/schools/attendance" replace />} />
+      <Route path="/dashboards" element={isSchoolDomain ? <SchoolDashboards /> : <Navigate to="/schools/dashboards" replace />} />
       <Route path="/schools/new-attendance" element={<Navigate to="/schools/attendance" replace />} />
       <Route path="/schools/dashboards" element={<SchoolDashboards />} />
       <Route path="/demo" element={<Demo />} />

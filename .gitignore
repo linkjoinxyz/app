@@ -18,3 +18,4 @@ linkjoin-extension/node_modules/
 linkjoin-backend/__pycache__/
 linkjoin-backend/venv/
 linkjoin-backend/jobs.sqlite
+.vercel

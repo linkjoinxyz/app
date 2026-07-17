@@ -13,6 +13,10 @@ const LMS_BRANDS = [
 ]
 
 export default function School() {
+  // On schools.linkjoin.xyz the /schools prefix doesn't exist - the subdomain
+  // itself is the schools namespace, so internal links drop it.
+  const isSchoolDomain = window.location.hostname === 'schools.linkjoin.xyz'
+  const schoolsBase = isSchoolDomain ? '' : '/schools'
   const [scrolled, setScrolled] = useState(false)
   const [visSet, setVisSet] = useState(new Set())
   const [statCount, setStatCount] = useState(0)
@@ -128,7 +132,7 @@ export default function School() {
                   <span className="nh-nav-menu-sub">Plans for every team size</span>
                 </span>
               </Link>
-              <Link to="/schools" className="nh-nav-menu-item">
+              <Link to={isSchoolDomain ? '/' : '/schools'} className="nh-nav-menu-item">
                 <span className="nh-nav-menu-icon"><img src="/images/school.svg" width="14" height="14" alt="" aria-hidden="true" /></span>
                 <span>
                   <span className="nh-nav-menu-label">Schools</span>
@@ -226,7 +230,7 @@ export default function School() {
                 </tbody>
               </table>
             </div>
-            <Link to="/schools/attendance" className="sc-learn-more">See how it works →</Link>
+            <Link to={`${schoolsBase}/attendance`} className="sc-learn-more">See how it works →</Link>
           </div>
         </div>
       </section>
@@ -329,7 +333,7 @@ export default function School() {
                   </div>
                 </div>
               </div>
-              <Link to="/schools/dashboards" className="sc-learn-more" style={{position:'relative', zIndex:2, marginTop:'-16px'}}>See how it works →</Link>
+              <Link to={`${schoolsBase}/dashboards`} className="sc-learn-more" style={{position:'relative', zIndex:2, marginTop:'-16px'}}>See how it works →</Link>
           </div>
         </div>
       </section>
