@@ -6,7 +6,7 @@ from typing import Optional
 import httpx
 from argon2 import PasswordHasher as _PH
 from icalendar import Calendar
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Header
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Header, Query
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jose import JWTError, jwt
 from app.auth import get_confirmed_user
@@ -14,7 +14,8 @@ from app.database import motor_db
 from app.config import get_settings
 from app.models.org import CreateOrgRequest, UpdateOrgRequest
 from app.roles import require_school_admin
-from app.utils import track_event
+from app.utils import track_event, get_school_year_start
+from app.routers.attendance import compute_student_session_counts, _LOOKBACK_DAYS, _TARDY_THRESHOLD_MINUTES
 from app.email_service import send_email
 
 _hasher = _PH()
@@ -452,7 +453,7 @@ async def update_attendance_settings(org_id: str, body: dict, user: dict = Depen
 
 
 @router.get("/{org_id}/attendance")
-async def get_org_attendance(org_id: str, user: dict = Depends(get_confirmed_user)):
+async def get_org_attendance(org_id: str, window: str = Query(default="28d"), user: dict = Depends(get_confirmed_user)):
     require_school_admin(user)
     if user.get("org_id") != org_id:
         raise HTTPException(status_code=403, detail="Access denied")
@@ -462,56 +463,31 @@ async def get_org_attendance(org_id: str, user: dict = Depends(get_confirmed_use
         classes.append(cls)
 
     if not classes:
-        return {"classes": []}
+        return {"classes": [], "window": window}
 
-    class_ids = [c["class_id"] for c in classes]
-    class_map = {c["class_id"]: c for c in classes}
-
-    pipeline = [
-        {"$match": {"class_id": {"$in": class_ids}}},
-        {"$group": {
-            "_id": "$class_id",
-            "total": {"$sum": 1},
-            "on_time": {"$sum": {"$cond": [{"$lte": ["$minutes_late", 5]}, 1, 0]}},
-            "late": {"$sum": {"$cond": [{"$gt": ["$minutes_late", 5]}, 1, 0]}},
-            "last_record": {"$max": "$opened_at"},
-        }},
-    ]
+    org = await motor_db.orgs.find_one({"org_id": org_id}, {"attendance_settings": 1, "summer_end": 1})
+    tardy_threshold = int((org or {}).get("attendance_settings", {}).get("tardy_threshold_minutes", _TARDY_THRESHOLD_MINUTES))
+    now = datetime.now(timezone.utc)
+    cutoff = get_school_year_start(org or {}, now) if window == "school_year" else now - timedelta(days=_LOOKBACK_DAYS)
 
     result = []
-    async for row in motor_db.attendance.aggregate(pipeline):
-        cid = row["_id"]
-        cls = class_map.get(cid, {})
-        total = row["total"]
+    for cls in classes:
+        counts = (await compute_student_session_counts(cls["class_id"], cutoff, tardy_threshold)).values()
+        total = sum(c["sessions"] for c in counts)
+        on_time = sum(c["on_time"] for c in counts)
+        late = sum(c["late"] for c in counts)
         result.append({
-            "class_id": cid,
+            "class_id": cls["class_id"],
             "class_name": cls.get("name", ""),
             "teacher_name": cls.get("teacher_name", ""),
             "total_records": total,
-            "on_time": row["on_time"],
-            "late": row["late"],
-            "attendance_rate": round(row["on_time"] / total * 100) if total else 0,
-            "last_record": row["last_record"].isoformat() if isinstance(row.get("last_record"), datetime) else row.get("last_record"),
+            "on_time": on_time,
+            "late": late,
+            "attendance_rate": round(on_time / total * 100) if total else 0,
         })
 
-    # Include classes with zero records
-    seen = {r["class_id"] for r in result}
-    for cls in classes:
-        if cls["class_id"] not in seen:
-            result.append({
-                "class_id": cls["class_id"],
-                "class_name": cls.get("name", ""),
-                "teacher_name": cls.get("teacher_name", ""),
-                "total_records": 0,
-                "on_time": 0,
-                "late": 0,
-                "absent": 0,
-                "attendance_rate": 0,
-                "last_record": None,
-            })
-
     result.sort(key=lambda r: r["class_name"].lower())
-    return {"classes": result}
+    return {"classes": result, "window": window}
 
 
 @router.get("/{org_id}/leak-signal")

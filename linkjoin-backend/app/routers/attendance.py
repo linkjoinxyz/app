@@ -11,7 +11,7 @@ from pydantic import BaseModel
 from app.auth import get_confirmed_user
 from app.database import motor_db
 from app.roles import require_teacher, require_premium
-from app.utils import get_blackout_set, compute_session_start_utc
+from app.utils import get_blackout_set, get_school_year_start, compute_session_start_utc
 from app.audit import log_audit
 
 log = logging.getLogger(__name__)
@@ -73,6 +73,80 @@ def _resolve_latest_records(records: list[dict]) -> dict[tuple[str, str], dict]:
         if existing is None or (ts(r) and (not ts(existing) or ts(r) >= ts(existing))):
             latest[key] = r
     return latest
+
+
+async def compute_student_session_counts(
+    class_id: str, cutoff: datetime, tardy_threshold: int, student_email: str | None = None
+) -> dict[str, dict]:
+    """Per-student sessions/on_time/late within [cutoff, now), de-duped by calendar
+    day (an override supersedes the original join) and using the org's tardy
+    threshold — the same counting rules get_class_patterns uses for flagging."""
+    by_student: dict[str, list] = defaultdict(list)
+    async for r in motor_db.attendance.find({
+        "class_id": class_id,
+        "$or": [{"opened_at": {"$gte": cutoff}}, {"recorded_at": {"$gte": cutoff}}],
+    }):
+        if student_email and r["student_email"] != student_email:
+            continue
+        by_student[r["student_email"]].append(r)
+
+    results = {}
+    for email, records in by_student.items():
+        current_records = list(_resolve_latest_records(records).values())
+        attended = [r for r in current_records if isinstance(r.get("opened_at"), datetime)]
+        total = len(attended)
+        tardy = sum(1 for r in attended if (r.get("minutes_late") or 0) > tardy_threshold and not r.get("excused"))
+        results[email] = {"sessions": total, "on_time": total - tardy, "late": tardy}
+    return results
+
+
+async def compute_student_attendance_rate(
+    class_id: str, cls: dict, student_email: str, cutoff: datetime, lookback_days: int, tardy_threshold: int
+) -> dict:
+    """Single-student sessions/tardy/expected/attendance_rate over [cutoff, now) —
+    same excused-absence-aware math as get_class_patterns, factored out so other
+    surfaces (e.g. the parent portal) show the same numbers teachers see."""
+    class_days = cls.get("days") or []
+    scheduled_weekdays = {_DAY_TO_WEEKDAY[d] for d in class_days if d in _DAY_TO_WEEKDAY}
+    expected_dates = [
+        (cutoff + timedelta(days=i)).strftime("%Y-%m-%d")
+        for i in range(lookback_days)
+        if (cutoff + timedelta(days=i)).weekday() in scheduled_weekdays
+    ]
+    expected_count = len(expected_dates)
+    expected_dates_set = set(expected_dates)
+
+    records = await motor_db.attendance.find({
+        "class_id": class_id,
+        "student_email": student_email,
+        "$or": [{"opened_at": {"$gte": cutoff}}, {"recorded_at": {"$gte": cutoff}}],
+    }).to_list(None)
+    current_records = list(_resolve_latest_records(records).values())
+    attended = [r for r in current_records if isinstance(r.get("opened_at"), datetime)]
+    total = len(attended)
+    tardy = sum(1 for r in attended if (r.get("minutes_late") or 0) > tardy_threshold and not r.get("excused"))
+    on_time = total - tardy
+
+    override_excused_dates = {
+        _record_date_str(r) for r in current_records
+        if not isinstance(r.get("opened_at"), datetime) and r.get("excused")
+    }
+    class_excused_absences = cls.get("excused_absences") or []
+    student_excused_dates = ({
+        e["date"] for e in class_excused_absences
+        if e.get("student_email") == student_email and e.get("date") in expected_dates_set
+    } | (override_excused_dates & expected_dates_set))
+    effective_expected = max(expected_count - len(student_excused_dates), 0)
+    attendance_rate = min(total / effective_expected, 1.0) if effective_expected > 0 else 1.0
+
+    return {
+        "sessions": total,
+        "on_time": on_time,
+        "tardy": tardy,
+        "expected_count": expected_count,
+        "effective_expected": effective_expected,
+        "attendance_rate": round(attendance_rate, 2),
+    }
 
 
 async def compute_leak_rate(class_id: str, cutoff: datetime) -> tuple[float, int]:
@@ -681,6 +755,53 @@ async def get_class_patterns(class_id: str, student_email: str | None = Query(de
         "data_quality": {"leak_rate": round(leak_rate, 2), "flagged": data_quality_flagged},
         "students": results,
     }
+
+
+@router.get("/class/{class_id}/summary")
+async def get_class_attendance_summary(
+    class_id: str, window: str = Query(default="28d"), user: dict = Depends(get_confirmed_user)
+):
+    """Plain sessions/on_time/late per student for a class — used by the org
+    Attendance tab. Unlike /patterns, has no 'expected'/flagging logic, and
+    supports a 'school_year' window in addition to the usual 28-day lookback."""
+    require_teacher(user)
+
+    cls = await motor_db.classes.find_one({"class_id": class_id})
+    if not cls:
+        raise HTTPException(status_code=404, detail="Class not found")
+    if user.get("role") == "teacher" and cls["teacher_id"] != user["user_id"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+    if user.get("role") in ("school_admin", "district_admin") and cls["org_id"] != user.get("org_id"):
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    org = await motor_db.orgs.find_one(
+        {"org_id": cls.get("org_id", "")}, {"attendance_settings": 1, "summer_end": 1}
+    )
+    tardy_threshold = int((org or {}).get("attendance_settings", {}).get("tardy_threshold_minutes", _TARDY_THRESHOLD_MINUTES))
+    now = datetime.now(timezone.utc)
+    cutoff = get_school_year_start(org or {}, now) if window == "school_year" else now - timedelta(days=_LOOKBACK_DAYS)
+
+    counts = await compute_student_session_counts(class_id, cutoff, tardy_threshold)
+
+    email_to_user_id: dict[str, str] = {}
+    for uid in cls.get("student_ids") or []:
+        u = await motor_db.login.find_one({"user_id": uid}, {"_id": 0, "username": 1, "user_id": 1})
+        if u:
+            email_to_user_id[u["username"]] = u["user_id"]
+
+    students = [
+        {
+            "student_email": email,
+            "student_user_id": email_to_user_id.get(email),
+            "sessions": c["sessions"],
+            "on_time": c["on_time"],
+            "late": c["late"],
+            "attendance_rate": round(c["on_time"] / c["sessions"] * 100) if c["sessions"] else 0,
+        }
+        for email, c in counts.items()
+    ]
+    students.sort(key=lambda s: s["student_email"])
+    return {"window": window, "students": students}
 
 
 @router.get("/class/{class_id}/export")

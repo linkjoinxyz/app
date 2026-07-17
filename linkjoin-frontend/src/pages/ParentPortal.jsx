@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext.jsx'
 import { useNavigate } from 'react-router-dom'
-import { apiGet, apiPost } from '../api/client.js'
+import { apiGet, apiPost, apiPatch } from '../api/client.js'
 import { usersApi } from '../api/users.js'
 import SideNav from '../components/SideNav.jsx'
+import countryCodes from '../../public/country_codes.json'
 import '../styles/parent-portal.css'
+import '../styles/settings.css'
 import '../styles/globals.css'
 
 const FLAG_LABELS = {
@@ -352,6 +354,98 @@ function AttendanceTab({ student }) {
   )
 }
 
+function NotificationsTab() {
+  const [settings, setSettings] = useState(null)
+  const [country, setCountry] = useState('1')
+  const [phone, setPhone] = useState('')
+  const [savingPhone, setSavingPhone] = useState(false)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    apiGet('/parent/settings')
+      .then(setSettings)
+      .catch(() => setSettings({ sms_enabled: false, email_enabled: false, has_phone: false }))
+  }, [])
+
+  async function toggle(key) {
+    if (key === 'sms_enabled' && !settings.sms_enabled && !settings.has_phone) {
+      setError('Add a phone number below before enabling text reminders.')
+      return
+    }
+    setError('')
+    const next = { sms_enabled: settings.sms_enabled, email_enabled: settings.email_enabled, [key]: !settings[key] }
+    setSettings(s => ({ ...s, ...next }))
+    try {
+      await apiPatch('/parent/settings', next)
+    } catch {
+      setSettings(s => ({ ...s, [key]: !next[key] }))
+      setError('Failed to update. Please try again.')
+    }
+  }
+
+  async function savePhone() {
+    if (!phone.trim()) return
+    setSavingPhone(true)
+    setError('')
+    try {
+      await usersApi.addNumber(phone.trim(), country)
+      setSettings(s => ({ ...s, has_phone: true }))
+      setPhone('')
+    } catch {
+      setError('Failed to save phone number. Please try again.')
+    } finally {
+      setSavingPhone(false)
+    }
+  }
+
+  if (!settings) return <div className="pp-loading">Loading...</div>
+
+  return (
+    <section className="settings-section" style={{ maxWidth: 520 }}>
+      <div className="settings-section-title">Class reminders</div>
+      <div className="settings-row">
+        <div>
+          <div className="settings-row-label">Email reminders</div>
+          <div className="settings-row-desc">An email about 10 minutes before your child's class starts.</div>
+        </div>
+        <input type="checkbox" className="settings-toggle" checked={settings.email_enabled} onChange={() => toggle('email_enabled')} />
+      </div>
+      <div className="settings-row settings-row--last">
+        <div>
+          <div className="settings-row-label">Text reminders</div>
+          <div className="settings-row-desc">A text message about 10 minutes before your child's class starts.</div>
+        </div>
+        <input type="checkbox" className="settings-toggle" checked={settings.sms_enabled} onChange={() => toggle('sms_enabled')} />
+      </div>
+
+      {!settings.has_phone && (
+        <div className="settings-mfa-setup">
+          {error && <div className="settings-error">{error}</div>}
+          <div className="settings-row-desc" style={{ marginBottom: 10 }}>Add a phone number to enable text reminders.</div>
+          <div className="modal-phone-row">
+            <select className="modal-country-select" value={country} onChange={e => setCountry(e.target.value)}>
+              {Object.entries(countryCodes).map(([c, v]) => (
+                <option key={c} value={v}>{c} +{v}</option>
+              ))}
+            </select>
+            <input
+              className="modal-phone-input"
+              type="tel"
+              placeholder="555 000 0000"
+              value={phone}
+              onChange={e => setPhone(e.target.value)}
+            />
+          </div>
+          <button className="settings-save-btn" onClick={savePhone} disabled={savingPhone || !phone.trim()}>
+            {savingPhone ? 'Saving...' : 'Save phone number'}
+          </button>
+        </div>
+      )}
+      {settings.has_phone && error && <div className="settings-error" style={{ marginTop: 8 }}>{error}</div>}
+    </section>
+  )
+}
+
 export default function ParentPortal() {
   const { role, token, onboardingDone, markOnboardingDone } = useAuth()
   const navigate = useNavigate()
@@ -462,9 +556,11 @@ export default function ParentPortal() {
                 <div className="admin-tabs" style={{ marginBottom: 20 }}>
                   <button className={`admin-tab${tab === 'classes' ? ' admin-tab--active' : ''}`} onClick={() => setTab('classes')}>Classes</button>
                   <button className={`admin-tab${tab === 'attendance' ? ' admin-tab--active' : ''}`} onClick={() => setTab('attendance')}>Attendance</button>
+                  <button className={`admin-tab${tab === 'notifications' ? ' admin-tab--active' : ''}`} onClick={() => setTab('notifications')}>Notifications</button>
                 </div>
                 {tab === 'classes' && <ClassesTab student={selectedChild} />}
                 {tab === 'attendance' && <AttendanceTab student={selectedChild} />}
+                {tab === 'notifications' && <NotificationsTab />}
               </div>
             )}
           </div>
