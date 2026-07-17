@@ -2132,7 +2132,7 @@ function CleverRosterCard({ orgId }) {
 const ADMIN_SEARCH_INDEX = [
   { label: 'Teachers', hint: 'View and manage teacher classes', tab: 'teachers', scroll: null, keywords: ['staff', 'class', 'roster'] },
   { label: 'Interventions', hint: 'At-risk students and open cases', tab: 'interventions', scroll: null, keywords: ['at-risk', 'flag', 'case', 'counselor'] },
-  { label: 'Meeting Open Log', hint: 'History of all meeting opens', tab: 'log', scroll: null, keywords: ['history', 'log', 'meeting', 'open'] },
+  { label: 'Meeting Log', hint: 'History of all meeting opens', tab: 'log', scroll: null, keywords: ['history', 'log', 'meeting', 'open'] },
   { label: 'Organization Settings', hint: 'School name, alerts, academic calendar', tab: 'org', scroll: null, keywords: ['settings', 'school', 'config'] },
   { label: 'Notification Display Name', hint: 'School name shown in absence alert texts and emails', tab: 'org', scroll: 'admin-section-display-name', keywords: ['brand', 'school name', 'sms', 'email', 'text'] },
   { label: 'Alert Settings', hint: 'Tardy threshold, attendance rate flags, minimum sessions', tab: 'org', scroll: 'admin-section-alerts', keywords: ['tardy', 'threshold', 'flag', 'absent', 'rate', 'minutes', 'sessions'] },
@@ -2971,14 +2971,16 @@ function OrgAttendanceTab({ orgId }) {
   const [sort, setSort] = useState({ key: 'class_name', dir: 1 })
   const [expanded, setExpanded] = useState(null)
   const [classDetails, setClassDetails] = useState({})
+  const [window_, setWindow] = useState('28d')
 
   useEffect(() => {
     if (!orgId) return
     setLoading(true)
-    apiGet(`/orgs/${orgId}/attendance`)
+    setClassDetails({})
+    apiGet(`/orgs/${orgId}/attendance?window=${window_}`)
       .then(d => { setRows(d.classes); setLoading(false) })
       .catch(() => { setError('Failed to load attendance data.'); setLoading(false) })
-  }, [orgId])
+  }, [orgId, window_])
 
   function toggleSort(key) {
     setSort(s => s.key === key ? { key, dir: s.dir * -1 } : { key, dir: 1 })
@@ -2989,24 +2991,8 @@ function OrgAttendanceTab({ orgId }) {
     setExpanded(opening ? classId : null)
     if (opening && !classDetails[classId]) {
       setClassDetails(d => ({ ...d, [classId]: { loading: true, students: [] } }))
-      Promise.all([
-        apiGet(`/attendance/class/${classId}`),
-        apiGet(`/classes/${classId}`),
-      ])
-        .then(([{ records }, cls]) => {
-          const emailToUserId = {}
-          for (const s of cls.students ?? []) {
-            emailToUserId[s.username] = s.user_id
-          }
-          const byStudent = {}
-          for (const r of records) {
-            const e = r.student_email
-            if (!byStudent[e]) byStudent[e] = { email: e, user_id: emailToUserId[e] ?? null, total: 0, on_time: 0, late: 0 }
-            byStudent[e].total++
-            if ((r.minutes_late ?? 0) <= 5) byStudent[e].on_time++
-            else byStudent[e].late++
-          }
-          const students = Object.values(byStudent).sort((a, b) => a.email.localeCompare(b.email))
+      apiGet(`/attendance/class/${classId}/summary?window=${window_}`)
+        .then(({ students }) => {
           setClassDetails(d => ({ ...d, [classId]: { loading: false, students } }))
         })
         .catch(() => setClassDetails(d => ({ ...d, [classId]: { loading: false, students: [], error: true } })))
@@ -3055,6 +3041,17 @@ function OrgAttendanceTab({ orgId }) {
           {rows.length} classes &middot; org average{' '}
           <span style={{ color: rateColor(orgRate), fontWeight: 600 }}>{orgRate}%</span>
         </span>
+        <select className="admin-input" style={{
+          marginLeft: 'auto', flex: '0 0 auto', width: 'auto',
+          appearance: 'none', paddingRight: 28,
+          backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6' fill='none'%3E%3Cpath d='M1 1L5 5L9 1' stroke='%23ffffff' stroke-opacity='0.5' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")`,
+          backgroundRepeat: 'no-repeat',
+          backgroundPosition: 'right 10px center',
+        }}
+          value={window_} onChange={e => setWindow(e.target.value)}>
+          <option value="28d">Last 28 days</option>
+          <option value="school_year">This school year</option>
+        </select>
       </div>
 
       {rows.length === 0 ? (
@@ -3117,25 +3114,22 @@ function OrgAttendanceTab({ orgId }) {
                                     </tr>
                                   </thead>
                                   <tbody>
-                                    {detail.students.map(s => {
-                                      const sRate = s.total > 0 ? Math.round(s.on_time / s.total * 100) : 0
-                                      return (
-                                        <tr key={s.email}>
-                                          <td style={{ padding: '8px 12px' }}>
-                                            {s.user_id
-                                              ? <button className="sp-student-link" style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: 'rgba(255,255,255,0.75)', textAlign: 'left', fontSize: 'inherit' }} onClick={e => { e.stopPropagation(); navigate(`/admin/students/${s.user_id}`) }}>{s.email}</button>
-                                              : <span style={{ color: 'rgba(255,255,255,0.75)' }}>{s.email}</span>
-                                            }
-                                          </td>
-                                          <td style={{ textAlign: 'center', padding: '8px 12px' }}>{s.total}</td>
-                                          <td style={{ textAlign: 'center', padding: '8px 12px', color: '#4ade80' }}>{s.on_time}</td>
-                                          <td style={{ textAlign: 'center', padding: '8px 12px', color: '#facc15' }}>{s.late}</td>
-                                          <td style={{ textAlign: 'center', padding: '8px 12px' }}>
-                                            <span style={{ color: rateColor(sRate), fontWeight: 600 }}>{sRate}%</span>
-                                          </td>
-                                        </tr>
-                                      )
-                                    })}
+                                    {detail.students.map(s => (
+                                      <tr key={s.student_email}>
+                                        <td style={{ padding: '8px 12px' }}>
+                                          {s.student_user_id
+                                            ? <button className="sp-student-link" style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: 'rgba(255,255,255,0.75)', textAlign: 'left', fontSize: 'inherit' }} onClick={e => { e.stopPropagation(); navigate(`/admin/students/${s.student_user_id}`) }}>{s.student_email}</button>
+                                            : <span style={{ color: 'rgba(255,255,255,0.75)' }}>{s.student_email}</span>
+                                          }
+                                        </td>
+                                        <td style={{ textAlign: 'center', padding: '8px 12px' }}>{s.sessions}</td>
+                                        <td style={{ textAlign: 'center', padding: '8px 12px', color: '#4ade80' }}>{s.on_time}</td>
+                                        <td style={{ textAlign: 'center', padding: '8px 12px', color: '#facc15' }}>{s.late}</td>
+                                        <td style={{ textAlign: 'center', padding: '8px 12px' }}>
+                                          <span style={{ color: rateColor(s.attendance_rate), fontWeight: 600 }}>{s.attendance_rate}%</span>
+                                        </td>
+                                      </tr>
+                                    ))}
                                   </tbody>
                                 </table>
                           )}
@@ -3324,9 +3318,9 @@ function OrgInterventionList({ onBack, initialExpanded = null }) {
     setCreatingCases(p => ({ ...p, [key]: false }))
   }
 
-  // Load full student profiles + attendance stats when a mine-tab card is expanded
+  // Load full student profiles + attendance stats when a case card is expanded
   useEffect(() => {
-    if (filter !== 'mine' || !expandedCase) return
+    if (!expandedCase) return
     const iv = interventions.find(x => x.intervention_id === expandedCase)
     if (!iv) return
     const uid = iv.student_user_id
@@ -3344,7 +3338,7 @@ function OrgInterventionList({ onBack, initialExpanded = null }) {
       const studentRow = (patterns?.students || []).find(s => s.student_email === iv.student_email) || null
       setStudentProfiles(p => ({ ...p, [uid]: { ...profile, _attendanceRow: studentRow } }))
     })
-  }, [expandedCase, filter, interventions, studentProfiles])
+  }, [expandedCase, interventions, studentProfiles])
 
   async function updateCase(ivId, updates) {
     try {
@@ -3505,7 +3499,7 @@ function OrgInterventionList({ onBack, initialExpanded = null }) {
                 </div>
               </button>
               {expandedCase === iv.intervention_id && (
-                <IvDetailPanel iv={iv} {...detailProps} parentContact={null} />
+                <IvDetailPanel iv={iv} {...detailProps} parentContact={null} studentProfile={studentProfiles[iv.student_user_id]} />
               )}
             </div>
           ))}
@@ -3811,7 +3805,7 @@ function SchoolAdminView() {
         </button>
         <button className={`admin-tab${activeTab === 'attendance' ? ' admin-tab--active' : ''}`} onClick={() => setActiveTab('attendance')}>Attendance</button>
         <button className={`admin-tab${activeTab === 'leak-signal' ? ' admin-tab--active' : ''}`} onClick={() => setActiveTab('leak-signal')}>Data Quality</button>
-        <button className={`admin-tab${activeTab === 'log' ? ' admin-tab--active' : ''}`} onClick={() => setActiveTab('log')}>Meeting Open Log</button>
+        <button className={`admin-tab${activeTab === 'log' ? ' admin-tab--active' : ''}`} onClick={() => setActiveTab('log')}>Meeting Log</button>
         <button className={`admin-tab${activeTab === 'org' ? ' admin-tab--active' : ''}`} onClick={() => setActiveTab('org')}>Organization</button>
         <button className={`admin-tab${activeTab === 'integrations' ? ' admin-tab--active' : ''}`} onClick={() => setActiveTab('integrations')}>Integrations</button>
         <button className="admin-tab admin-search-trigger" onClick={() => setSearchOpen(true)} title="Search (⌘K)">

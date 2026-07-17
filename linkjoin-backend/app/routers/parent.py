@@ -3,6 +3,11 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from app.auth import get_confirmed_user
 from app.database import motor_db
+from app.routers.attendance import (
+    compute_student_attendance_rate,
+    _LOOKBACK_DAYS as _RATE_LOOKBACK_DAYS,
+    _TARDY_THRESHOLD_MINUTES,
+)
 
 router = APIRouter(prefix="/parent", tags=["parent"])
 
@@ -28,6 +33,39 @@ async def _parent_student_ids(parent_user_id: str) -> list[str]:
         {"parent_user_id": parent_user_id}, {"student_user_id": 1}
     ).to_list(None)
     return [lnk["student_user_id"] for lnk in links]
+
+
+class ReminderSettingsRequest(BaseModel):
+    sms_enabled: bool
+    email_enabled: bool
+
+
+@router.get("/settings")
+async def get_reminder_settings(user: dict = Depends(get_confirmed_user)):
+    _require_parent(user)
+    doc = await motor_db.login.find_one(
+        {"username": user["username"]},
+        {"number": 1, "parent_reminders_sms": 1, "parent_reminders_email": 1, "_id": 0},
+    )
+    return {
+        "sms_enabled": bool((doc or {}).get("parent_reminders_sms")),
+        "email_enabled": bool((doc or {}).get("parent_reminders_email")),
+        "has_phone": bool((doc or {}).get("number")),
+    }
+
+
+@router.patch("/settings")
+async def update_reminder_settings(body: ReminderSettingsRequest, user: dict = Depends(get_confirmed_user)):
+    _require_parent(user)
+    if body.sms_enabled:
+        doc = await motor_db.login.find_one({"username": user["username"]}, {"number": 1, "_id": 0})
+        if not (doc or {}).get("number"):
+            raise HTTPException(status_code=422, detail="Add a phone number before enabling text reminders")
+    await motor_db.login.update_one(
+        {"username": user["username"]},
+        {"$set": {"parent_reminders_sms": body.sms_enabled, "parent_reminders_email": body.email_enabled}},
+    )
+    return {"message": "Updated"}
 
 
 @router.get("/children")
@@ -62,27 +100,22 @@ async def get_child_classes(student_id: str, user: dict = Depends(get_confirmed_
     student_email = student["username"]
 
     now = datetime.now(timezone.utc)
-    cutoff = now - timedelta(days=_LOOKBACK_DAYS)
+    cutoff = now - timedelta(days=_RATE_LOOKBACK_DAYS)
 
     result = []
     async for cls in motor_db.classes.find({"student_ids": student_id}, {"_id": 0}):
         class_id = cls["class_id"]
-
-        records = await motor_db.attendance.find(
-            {"class_id": class_id, "student_email": student_email, "opened_at": {"$gte": cutoff}},
-            {"_id": 0, "minutes_late": 1, "opened_at": 1},
-        ).to_list(None)
-
         class_days = cls.get("days") or []
-        scheduled_weekdays = {_DAY_TO_WEEKDAY[d] for d in class_days if d in _DAY_TO_WEEKDAY}
-        expected = (
-            sum(1 for i in range(_LOOKBACK_DAYS) if (cutoff + timedelta(days=i)).weekday() in scheduled_weekdays)
-            if scheduled_weekdays else None
-        )
 
-        attended = len(records)
-        tardy = sum(1 for r in records if (r.get("minutes_late") or 0) > 5)
-        attendance_rate = round(attended / expected, 2) if expected else None
+        org = await motor_db.orgs.find_one({"org_id": cls.get("org_id", "")}, {"attendance_settings": 1})
+        tardy_threshold = int((org or {}).get("attendance_settings", {}).get("tardy_threshold_minutes", _TARDY_THRESHOLD_MINUTES))
+        stats = await compute_student_attendance_rate(
+            class_id, cls, student_email, cutoff, _RATE_LOOKBACK_DAYS, tardy_threshold
+        )
+        attended = stats["sessions"]
+        tardy = stats["tardy"]
+        expected = stats["effective_expected"] if class_days else None
+        attendance_rate = stats["attendance_rate"] if class_days else None
 
         open_iv = await motor_db.interventions.find_one(
             {"class_id": class_id, "student_email": student_email, "status": {"$ne": "resolved"}},

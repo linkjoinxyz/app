@@ -192,6 +192,26 @@ def get_blackout_set(org: dict) -> set[str]:
     return dates
 
 
+def get_school_year_start(org: dict, now: datetime) -> datetime:
+    """Start of the current school year, for 'this school year' attendance windows.
+
+    Uses the org's configured summer_end (when the most recent break ended) if it's
+    already in the past; otherwise falls back to Aug 1, since school_year_start is a
+    free-text display field (e.g. "August 15") and not reliably parseable as a date.
+    """
+    summer_end = org.get("summer_end") or ""
+    if summer_end:
+        try:
+            d = date.fromisoformat(summer_end)
+            candidate = datetime(d.year, d.month, d.day, tzinfo=timezone.utc)
+            if candidate <= now:
+                return candidate
+        except ValueError:
+            pass
+    year = now.year if now.month >= 8 else now.year - 1
+    return datetime(year, 8, 1, tzinfo=timezone.utc)
+
+
 def get_text_time(days: list, time: str, before: int) -> dict:
     weekdays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
     hour = int(float(time.split(":")[0]))

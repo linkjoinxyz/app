@@ -317,6 +317,96 @@ async def check_absences() -> None:
             log.info("[absence] alert sent for student %s in class %s", student_email, cls["class_id"])
 
 
+async def send_class_reminders() -> None:
+    """Every-5-min job: text/email parents who opted in, ~10 min before their child's class."""
+    from datetime import datetime, timezone, timedelta
+    from app.database import motor_db
+
+    now_utc = datetime.now(timezone.utc)
+    today_date = now_utc.strftime("%Y-%m-%d")
+
+    async for cls in motor_db.classes.find({"family_alerts": True}):
+        class_days = cls.get("days") or []
+        class_time_str = cls.get("time", "")
+        if not class_days or not class_time_str:
+            continue
+
+        teacher = await motor_db.login.find_one({"user_id": cls.get("teacher_id", "")}, {"timezone": 1})
+        tz_name = (teacher or {}).get("timezone") or "UTC"
+
+        class_start_utc = compute_session_start_utc(class_time_str, class_days, tz_name, now_utc)
+        if class_start_utc is None:
+            continue
+        minutes_until = (class_start_utc.replace(tzinfo=None) - now_utc.replace(tzinfo=None)).total_seconds() / 60
+        if not (8 <= minutes_until <= 13):
+            continue
+
+        org = await motor_db.orgs.find_one({"org_id": cls.get("org_id", "")}, {"blackout_dates": 1, "summer_start": 1, "summer_end": 1, "brand_name": 1, "name": 1})
+        if today_date in get_blackout_set(org or {}):
+            continue
+
+        brand_name = (org or {}).get("brand_name") or (org or {}).get("name") or "LinkJoin"
+        class_name = cls.get("name", "class")
+
+        for uid in cls.get("student_ids") or []:
+            student = await motor_db.login.find_one({"user_id": uid}, {"username": 1, "name": 1, "_id": 0})
+            if not student:
+                continue
+            student_name = student.get("name") or student.get("username", "").split("@")[0]
+
+            async for plink in motor_db.parent_links.find({"student_user_id": uid}, {"parent_user_id": 1, "_id": 0}):
+                parent_id = plink["parent_user_id"]
+                parent = await motor_db.login.find_one(
+                    {"user_id": parent_id},
+                    {"username": 1, "number": 1, "parent_reminders_sms": 1, "parent_reminders_email": 1, "_id": 0},
+                )
+                if not parent:
+                    continue
+                sms_on = bool(parent.get("parent_reminders_sms")) and bool(parent.get("number"))
+                email_on = bool(parent.get("parent_reminders_email")) and bool(parent.get("username"))
+                if not sms_on and not email_on:
+                    continue
+
+                dedup_key = {"class_id": cls["class_id"], "student_user_id": uid, "parent_user_id": parent_id, "date": today_date}
+                if await motor_db.parent_reminder_log.find_one(dedup_key):
+                    continue
+
+                sms_sent = email_sent = False
+
+                if sms_on:
+                    sms_body = f"{brand_name}: {class_name} for {student_name} starts in 10 minutes."
+                    def _twilio_send(body=sms_body, to=parent["number"]):
+                        from twilio.rest import Client
+                        Client(_settings.twilio_sid, _settings.twilio_token).messages.create(
+                            from_=_settings.twilio_from_number, body=body, to=f"+{to}"
+                        )
+                    try:
+                        await asyncio.get_running_loop().run_in_executor(None, _twilio_send)
+                        sms_sent = True
+                    except Exception as e:
+                        log.error("[class-reminder] SMS failed for parent %s: %s", parent_id, e)
+
+                if email_on:
+                    html = (
+                        f"<p><strong>{class_name}</strong> for {student_name} starts in 10 minutes.</p>"
+                        f"<p>— {brand_name}</p>"
+                    )
+                    def _email_send(h=html, pe=parent["username"], bn=brand_name, cn=class_name):
+                        from app.email_service import send_email
+                        send_email(h, f"{cn} starts in 10 minutes", pe, from_name=bn)
+                    try:
+                        await asyncio.get_running_loop().run_in_executor(None, _email_send)
+                        email_sent = True
+                    except Exception as e:
+                        log.error("[class-reminder] email failed for parent %s: %s", parent_id, e)
+
+                if sms_sent or email_sent:
+                    await motor_db.parent_reminder_log.insert_one({
+                        **dedup_key, "sms_sent": sms_sent, "email_sent": email_sent, "sent_at": now_utc,
+                    })
+                    log.info("[class-reminder] sent to parent %s for student %s in class %s", parent_id, uid, cls["class_id"])
+
+
 async def record_status_check() -> None:
     """Every-5-min job: ping MongoDB and record uptime for the public status page."""
     import time as _time
@@ -460,6 +550,16 @@ def load_all_text_jobs() -> None:
         misfire_grace_time=3600,
     )
     log.info("[scheduler] added absence-check interval job (every 5 min)")
+
+    scheduler.add_job(
+        send_class_reminders,
+        "interval",
+        minutes=5,
+        id="parent-reminder-check",
+        replace_existing=True,
+        misfire_grace_time=3600,
+    )
+    log.info("[scheduler] added parent-reminder-check interval job (every 5 min)")
 
     scheduler.add_job(
         run_backup_health_check,

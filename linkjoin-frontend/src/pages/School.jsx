@@ -426,7 +426,6 @@ export default function School() {
             <ul className="sc-bullets">
               <li>Automatic streaks for consecutive on-time joins</li>
               <li>Awards for perfect weeks, months, and milestones</li>
-              <li>Teachers can grant custom recognition</li>
               <li>Students see their own progress in real time</li>
             </ul>
           </div>
