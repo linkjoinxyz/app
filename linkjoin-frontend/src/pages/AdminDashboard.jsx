@@ -1249,7 +1249,7 @@ function ClassDetail({ cls, onBack, onUpdate, onViewStudent }) {
               className="detail-export-btn"
               onClick={handleExportCsv}
               disabled={exporting}
-              title="Export CSV"
+              title="Export CSV — columns (student email, name, class, date, status, minutes late) map directly into PowerSchool's Quick Import or Infinite Campus's Positive Attendance Import Wizard. Note: those tools match students by their SIS student ID, not email, so your first import will need a one-time manual mapping step."
             >
               {exporting ? 'Exporting…' : '↓ Export CSV'}
             </button>
@@ -2140,7 +2140,7 @@ const ADMIN_SEARCH_INDEX = [
   { label: 'Import Calendar URL', hint: 'Auto-import holidays from iCal / Google Calendar', tab: 'org', scroll: 'admin-section-ical', keywords: ['ical', 'ics', 'google calendar', 'import', 'url', 'subscribe'] },
   { label: 'Summer Break', hint: 'Set summer start and end dates', tab: 'org', scroll: 'admin-section-summer', keywords: ['summer', 'break', 'vacation', 'end of year', 'start of year'] },
   { label: 'Clever', hint: 'Connect Clever to import student rosters', tab: 'integrations', scroll: 'admin-section-roster', keywords: ['clever', 'roster', 'sync', 'students', 'sis'] },
-  { label: 'OneRoster', hint: 'Connect PowerSchool, Infinite Campus, or Skyward via OneRoster', tab: 'integrations', scroll: 'admin-section-oneroster', keywords: ['oneroster', 'one roster', 'powerschool', 'infinite campus', 'skyward', 'sis', 'roster'] },
+  { label: 'OneRoster', hint: 'Connect PowerSchool, Infinite Campus, Skyward, or ClassLink via OneRoster', tab: 'integrations', scroll: 'admin-section-oneroster', keywords: ['oneroster', 'one roster', 'powerschool', 'infinite campus', 'skyward', 'classlink', 'class link', 'sis', 'roster'] },
   { label: 'Schoology', hint: 'Connect Schoology to sync class rosters', tab: 'integrations', scroll: 'admin-section-schoology', keywords: ['schoology', 'lms', 'roster', 'sync', 'students'] },
   { label: 'Canvas', hint: 'Configure Canvas gradebook sync for teachers', tab: 'integrations', scroll: 'admin-section-canvas', keywords: ['canvas', 'lms', 'gradebook', 'instructure', 'grades', 'lms sync'] },
 ]
@@ -2280,7 +2280,11 @@ function OneRosterCard({ orgId }) {
       <div className="alert-settings-body">
         {!status.connected ? (
           <>
-            <p className="clever-connect-desc">Connect your district's OneRoster-compatible SIS (PowerSchool, Infinite Campus, Skyward) to auto-populate class rosters.</p>
+            <div className="clever-row" style={{ marginBottom: 8 }}>
+              <img src="/images/lms/oneroster.png" alt="" className="clever-logo-sm" />
+              <img src="/images/lms/classlink.png" alt="" className="clever-logo-sm" />
+            </div>
+            <p className="clever-connect-desc">Connect your district's OneRoster-compatible SIS or rostering provider (PowerSchool, Infinite Campus, Skyward, ClassLink Roster Server) to auto-populate class rosters.</p>
             <form className="or-connect-form" onSubmit={handleConnect}>
               <div className="or-field">
                 <label className="or-label">API Base URL</label>
