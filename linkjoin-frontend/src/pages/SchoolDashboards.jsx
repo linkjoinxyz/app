@@ -17,6 +17,8 @@ const CLASS_CARDS = [
 const DETAIL_TABS = ['Links', 'Students', 'Attendance', 'Patterns', 'Interventions', 'Integrations']
 
 export default function SchoolDashboards() {
+  const isSchoolDomain = window.location.hostname === 'schools.linkjoin.xyz'
+  const schoolsHome = isSchoolDomain ? '/' : '/schools'
   const [scrolled, setScrolled]   = useState(false)
   const [visSet,   setVisSet]     = useState(new Set())
   const [expanded, setExpanded]   = useState(0)
@@ -59,7 +61,7 @@ export default function SchoolDashboards() {
           <Link to="/" className="sc-nav-logo">
             <img src="/images/logo-text.svg" height="32" alt="LinkJoin" />
           </Link>
-          <Link to="/schools" className="sc-nav-breadcrumb">← School features</Link>
+          <Link to={schoolsHome} className="sc-nav-breadcrumb">← School features</Link>
         </div>
         <div className="sc-nav-right">
           <Link to="/login" className="sc-nav-login">Log in</Link>
@@ -596,7 +598,7 @@ export default function SchoolDashboards() {
         <div className="sc-footer-cols">
           <div className="sc-footer-col">
             <p className="sc-footer-col-title">Schools</p>
-            <Link to="/schools">← All school features</Link>
+            <Link to={schoolsHome}>← All school features</Link>
             <Link to="/privacy-schools">Privacy for Schools</Link>
             <Link to="/dpa">DPA</Link>
             <Link to="/subprocessors">Subprocessors</Link>
