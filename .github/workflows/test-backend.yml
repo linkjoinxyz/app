@@ -36,6 +36,14 @@ jobs:
       ENCRYPT_KEY: ${{ secrets.ENCRYPT_KEY }}
       GMAIL_PWD: ${{ secrets.GMAIL_PWD }}
       REDIS_URL: redis://127.0.0.1:6379
+      # Non-secret placeholders. Several endpoints short-circuit when these are
+      # unset (google-token rejects every audience, /billing/checkout returns 503
+      # "not configured"), which masks the behaviour the tests actually assert.
+      # No network call is made with them — Stripe and Google are both mocked.
+      GOOGLE_CLIENT_ID: test-web-client.apps.googleusercontent.com
+      GOOGLE_CHROME_CLIENT_ID: test-chrome-client.apps.googleusercontent.com
+      STRIPE_SECRET_KEY: sk_test_dummy
+      STRIPE_PRICE_ID: price_test_dummy
     steps:
       - uses: actions/checkout@v4
 
