@@ -190,9 +190,12 @@ function MfaSection({ user, showToast }) {
 }
 
 export default function Settings() {
-  const { email: authEmail, logout, role, orgId, isPremium } = useAuth()
+  const { email: authEmail, logout, role, orgId, isPremium, accountType } = useAuth()
   const navigate = useNavigate()
   const fileRef = useRef()
+  // Institutional accounts get these features bundled with their school's plan —
+  // there's no individual premium relationship to advertise, so skip the badge/accent.
+  const showPremiumBranding = accountType !== 'institutional'
 
   const [user, setUser] = useState(null)
   const [toast, setToast] = useState(null)
@@ -519,11 +522,11 @@ export default function Settings() {
             </div>
 
             <div
-              className={`settings-row settings-row-premium${!isPremium ? ' settings-row-locked' : ''}`}
+              className={`settings-row${showPremiumBranding ? ' settings-row-premium' : ''}${!isPremium ? ' settings-row-locked' : ''}`}
               onClick={!isPremium ? () => setUpgradeFeature('Open Early') : undefined}
             >
               <div>
-                <div className="settings-row-label">Open Early<span className="settings-premium-badge">Premium</span></div>
+                <div className="settings-row-label">Open Early{showPremiumBranding && <span className="settings-premium-badge">Premium</span>}</div>
                 <div className="settings-row-desc">Open meetings a few minutes before they start</div>
               </div>
               <select
@@ -536,11 +539,11 @@ export default function Settings() {
             </div>
 
             <div
-              className={`settings-row settings-row-premium${!isPremium ? ' settings-row-locked' : ''}`}
+              className={`settings-row${showPremiumBranding ? ' settings-row-premium' : ''}${!isPremium ? ' settings-row-locked' : ''}`}
               onClick={!isPremium ? () => setUpgradeFeature('Vacation Mode') : undefined}
             >
               <div>
-                <div className="settings-row-label">Vacation Mode<span className="settings-premium-badge">Premium</span></div>
+                <div className="settings-row-label">Vacation Mode{showPremiumBranding && <span className="settings-premium-badge">Premium</span>}</div>
                 <div className="settings-row-desc">Temporarily pause all auto-opens</div>
               </div>
               <input
@@ -565,11 +568,11 @@ export default function Settings() {
             </div>
 
             <div
-              className={`settings-row settings-row--last settings-row-premium${!isPremium ? ' settings-row-locked' : ''}`}
+              className={`settings-row settings-row--last${showPremiumBranding ? ' settings-row-premium' : ''}${!isPremium ? ' settings-row-locked' : ''}`}
               onClick={!isPremium ? () => setUpgradeFeature('Auto-Delete Past Meetings') : undefined}
             >
               <div>
-                <div className="settings-row-label">Auto-Delete Past Meetings<span className="settings-premium-badge">Premium</span></div>
+                <div className="settings-row-label">Auto-Delete Past Meetings{showPremiumBranding && <span className="settings-premium-badge">Premium</span>}</div>
                 <div className="settings-row-desc">Automatically remove one-off meetings after they occur</div>
               </div>
               <input
@@ -586,11 +589,11 @@ export default function Settings() {
             <div className="settings-section-title">Integrations</div>
 
             <div
-              className={`settings-row settings-row-premium${!isPremium ? ' settings-row-locked' : ''}`}
+              className={`settings-row${showPremiumBranding ? ' settings-row-premium' : ''}${!isPremium ? ' settings-row-locked' : ''}`}
               onClick={!isPremium ? () => setUpgradeFeature('Calendar import') : undefined}
             >
               <div>
-                <div className="settings-row-label">Google Calendar<span className="settings-premium-badge">Premium</span></div>
+                <div className="settings-row-label">Google Calendar{showPremiumBranding && <span className="settings-premium-badge">Premium</span>}</div>
                 <div className="settings-row-desc">Import recurring meetings from Google Calendar</div>
               </div>
               <button className="settings-btn" onClick={() => navigate('/meetings', { state: { triggerImport: 'google' } })}>
@@ -599,11 +602,11 @@ export default function Settings() {
             </div>
 
             <div
-              className={`settings-row settings-row--last settings-row-premium${!isPremium ? ' settings-row-locked' : ''}`}
+              className={`settings-row settings-row--last${showPremiumBranding ? ' settings-row-premium' : ''}${!isPremium ? ' settings-row-locked' : ''}`}
               onClick={!isPremium ? () => setUpgradeFeature('Calendar import') : undefined}
             >
               <div>
-                <div className="settings-row-label">Outlook Calendar<span className="settings-premium-badge">Premium</span></div>
+                <div className="settings-row-label">Outlook Calendar{showPremiumBranding && <span className="settings-premium-badge">Premium</span>}</div>
                 <div className="settings-row-desc">Import recurring meetings from Outlook</div>
               </div>
               <button className="settings-btn" onClick={() => navigate('/meetings', { state: { triggerImport: 'microsoft' } })}>
