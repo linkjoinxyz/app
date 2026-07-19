@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from app.auth import create_token, decode_token, get_confirmed_user
 from app.database import motor_db
 from app.config import get_settings
+from app.limiter import limiter
 from app.audit import log_audit
 
 router = APIRouter(prefix="/auth/mfa", tags=["mfa"])
@@ -45,6 +46,7 @@ async def _send_mfa_code(user: dict) -> str:
 
 
 @router.post("/verify")
+@limiter.limit("10/hour")
 async def verify_mfa(body: dict, request: Request):
     mfa_session = body.get("mfa_session")
     code = (body.get("code") or "").strip()

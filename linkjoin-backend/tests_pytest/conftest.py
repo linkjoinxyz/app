@@ -30,7 +30,7 @@ from httpx import AsyncClient, ASGITransport
 
 from app.main import app
 from app.database import motor_db
-from app.auth import get_confirmed_user
+from app.auth import get_confirmed_user, get_current_user
 
 
 @pytest.fixture(scope="session")
@@ -43,7 +43,13 @@ async def client():
 
 def _make_client_factory(client):
     def _for(user: dict):
+        # Both dependencies, because endpoints are split between them — /users/me
+        # and DELETE /users/me take get_current_user, most others take
+        # get_confirmed_user. Overriding only one silently 401s half the surface,
+        # and an assertion like `assert "field" not in body` then passes against
+        # the error payload rather than the real response.
         app.dependency_overrides[get_confirmed_user] = lambda: user
+        app.dependency_overrides[get_current_user] = lambda: user
         return client
     return _for
 
@@ -51,11 +57,12 @@ def _make_client_factory(client):
 @pytest.fixture
 def as_user(client):
     """Usage: resp = await as_user(some_user_dict).get('/foo')
-    Sets the get_confirmed_user override for the given user dict and returns
-    the shared client; supports switching identity more than once per test."""
+    Sets the auth overrides for the given user dict and returns the shared
+    client; supports switching identity more than once per test."""
     factory = _make_client_factory(client)
     yield factory
     app.dependency_overrides.pop(get_confirmed_user, None)
+    app.dependency_overrides.pop(get_current_user, None)
 
 
 # ── Per-role user fixtures ──────────────────────────────────────────────────

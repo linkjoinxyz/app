@@ -2,6 +2,7 @@
 real HMAC verification is Stripe's library code, not ours — monkeypatched to a
 passthrough so tests focus on our own event-handling branches."""
 import json
+import uuid
 
 import pytest
 
@@ -18,8 +19,12 @@ def _bypass_stripe_signature(monkeypatch):
     monkeypatch.setattr(stripe.Webhook, "construct_event", _fake_construct_event)
 
 
-def _event(event_type: str, data_object: dict) -> bytes:
-    return json.dumps({"type": event_type, "data": {"object": data_object}}).encode()
+def _event(event_type: str, data_object: dict, event_id: str | None = None) -> bytes:
+    return json.dumps({
+        "id": event_id or f"evt_test_{uuid.uuid4().hex}",
+        "type": event_type,
+        "data": {"object": data_object},
+    }).encode()
 
 
 async def test_checkout_completed_activates_matched_customer(client, premium_trial_active_user):
@@ -60,15 +65,14 @@ async def test_checkout_completed_falls_back_to_client_reference_id(client, prem
     assert doc["stripe_customer_id"] == "cus_test_new_customer"
 
 
-async def test_checkout_completed_unknown_customer_is_noop(client):
+async def test_checkout_completed_unknown_customer_errors_for_retry(client):
     payload = _event("checkout.session.completed", {
         "customer": "cus_does_not_exist",
         "subscription": "sub_test_3",
         "client_reference_id": "user_does_not_exist",
     })
     resp = await client.post("/billing/webhook", content=payload, headers={"Stripe-Signature": "t=1,v1=fake"})
-    assert resp.status_code == 200
-    assert resp.json() == {"received": True}
+    assert resp.status_code == 500
 
 
 async def test_subscription_deleted_expires_matched_customer(client, premium_active_user):
@@ -106,6 +110,52 @@ async def test_subscription_updated_active_status_is_noop(client, premium_active
 
     doc = await motor_db.login.find_one({"username": premium_active_user["username"]})
     assert doc["premium_status"] == "active"
+
+
+async def test_subscription_updated_active_status_reactivates_expired_user(client, premium_active_user):
+    await motor_db.login.update_one(
+        {"username": premium_active_user["username"]},
+        {"$set": {"premium_status": "expired", "stripe_subscription_id": None}},
+    )
+    payload = _event("customer.subscription.updated", {
+        "id": "sub_reactivated_1",
+        "customer": premium_active_user["stripe_customer_id"],
+        "status": "active",
+    })
+    resp = await client.post("/billing/webhook", content=payload, headers={"Stripe-Signature": "t=1,v1=fake"})
+    assert resp.status_code == 200
+
+    doc = await motor_db.login.find_one({"username": premium_active_user["username"]})
+    assert doc["premium_status"] == "active"
+    assert doc["stripe_subscription_id"] == "sub_reactivated_1"
+
+
+async def test_duplicate_event_id_is_not_reprocessed(client, premium_active_user):
+    await motor_db.login.update_one(
+        {"username": premium_active_user["username"]},
+        {"$set": {"premium_status": "expired", "stripe_subscription_id": None}},
+    )
+    event_id = f"evt_dup_{premium_active_user['user_id']}"
+    payload = _event("customer.subscription.updated", {
+        "id": "sub_dup_1",
+        "customer": premium_active_user["stripe_customer_id"],
+        "status": "active",
+    }, event_id=event_id)
+
+    first = await client.post("/billing/webhook", content=payload, headers={"Stripe-Signature": "t=1,v1=fake"})
+    assert first.status_code == 200
+    doc = await motor_db.login.find_one({"username": premium_active_user["username"]})
+    assert doc["premium_status"] == "active"
+
+    await motor_db.login.update_one(
+        {"username": premium_active_user["username"]},
+        {"$set": {"premium_status": "expired"}},
+    )
+    second = await client.post("/billing/webhook", content=payload, headers={"Stripe-Signature": "t=1,v1=fake"})
+    assert second.status_code == 200
+
+    doc = await motor_db.login.find_one({"username": premium_active_user["username"]})
+    assert doc["premium_status"] == "expired"
 
 
 async def test_invalid_signature_rejected(client, monkeypatch):

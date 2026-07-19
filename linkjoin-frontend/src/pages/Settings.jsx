@@ -661,6 +661,7 @@ export default function Settings() {
                 </div>
                 <div className="settings-delete-msg">
                   This will permanently delete your account, all your meetings, bookmarks, and settings.
+                  Any active subscription is cancelled immediately, with no refund for the current period.
                   <strong> This cannot be undone.</strong>
                 </div>
                 {deleteError && <div className="settings-error">{deleteError}</div>}

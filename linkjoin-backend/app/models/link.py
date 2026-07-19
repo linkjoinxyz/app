@@ -1,7 +1,7 @@
 import re
 from datetime import datetime as _dt
-from pydantic import BaseModel, field_validator
-from typing import Optional
+from pydantic import BaseModel, EmailStr, field_validator, model_validator
+from typing import Literal, Optional
 
 VALID_DAYS = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"}
 VALID_REPEATS = {"never", "week", "month", "2 times", "3 times", "4 times", "same_weekday"}
@@ -142,10 +142,43 @@ class ToggleLinkRequest(BaseModel):
     active: Optional[str] = None
 
 
+MAX_SHARE_RECIPIENTS = 10
+
+
 class ShareLinkRequest(BaseModel):
-    link: dict
-    emails: list[str]
-    type: Optional[str] = "link"
+    """Only the link *id* is ever taken from the client.
+
+    This used to accept the whole link document and trust it wholesale, which let
+    a caller share links they did not own and hand-craft the row inserted into the
+    recipient's account. `link` is retained so an older frontend bundle keeps
+    working, but the validator strips it down to its id and blanks it, so the
+    handler physically cannot regress into trusting the payload.
+    """
+    link_id: Optional[int] = None
+    link: Optional[dict] = None  # deprecated, id only
+    emails: list[EmailStr]
+    type: Literal["link", "bookmark"] = "link"
+
+    @field_validator("emails")
+    @classmethod
+    def dedupe_and_cap(cls, v):
+        # Dedupe before the cap so the limit counts distinct recipients.
+        seen = list(dict.fromkeys(e.lower().strip() for e in v))
+        if not seen:
+            raise ValueError("at least one recipient required")
+        if len(seen) > MAX_SHARE_RECIPIENTS:
+            raise ValueError(f"at most {MAX_SHARE_RECIPIENTS} recipients per share")
+        return seen
+
+    @model_validator(mode="after")
+    def resolve_link_id(self):
+        if self.link_id is None:
+            if isinstance(self.link, dict) and isinstance(self.link.get("id"), int):
+                self.link_id = self.link["id"]
+            else:
+                raise ValueError("link_id is required")
+        self.link = None
+        return self
 
 
 class AcceptLinkRequest(BaseModel):

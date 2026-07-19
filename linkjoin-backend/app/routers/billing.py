@@ -1,6 +1,7 @@
 import logging
 from datetime import datetime, timezone
 import stripe
+from pymongo.errors import DuplicateKeyError
 from fastapi import APIRouter, Depends, HTTPException, Request
 from app.auth import get_confirmed_user
 from app.database import motor_db
@@ -17,7 +18,9 @@ stripe.api_key = _settings.stripe_secret_key
 async def create_checkout_session(user: dict = Depends(get_confirmed_user)):
     if not _settings.stripe_secret_key or not _settings.stripe_price_id:
         raise HTTPException(status_code=503, detail="Billing not configured")
-    if user.get("premium_status") == "active":
+    if user.get("account_type") == "institutional":
+        raise HTTPException(status_code=400, detail="Already covered by your school's plan")
+    if user.get("premium_status") in ("active", "grandfathered"):
         raise HTTPException(status_code=400, detail="Already subscribed")
 
     customer_id = user.get("stripe_customer_id")
@@ -66,46 +69,43 @@ async def stripe_webhook(request: Request):
     except (ValueError, stripe.SignatureVerificationError):
         raise HTTPException(status_code=403, detail="Invalid signature")
 
-    raw_data = event["data"]["object"]
-    data = raw_data.to_dict() if hasattr(raw_data, "to_dict") else raw_data
-    event_type = event["type"]
+    try:
+        await motor_db.stripe_webhook_events.insert_one(
+            {"_id": event["id"], "inserted_at": datetime.now(timezone.utc)}
+        )
+    except DuplicateKeyError:
+        return {"received": True}
 
-    if event_type == "checkout.session.completed":
-        customer_id = data.get("customer")
-        subscription_id = data.get("subscription")
-        user = await motor_db.login.find_one({"stripe_customer_id": customer_id})
-        if not user:
-            client_ref = data.get("client_reference_id")
-            user = await motor_db.login.find_one({"user_id": client_ref}) if client_ref else None
-        if user:
-            await motor_db.login.update_one(
-                {"username": user["username"]},
-                {"$set": {
-                    "premium_status": "active",
-                    "stripe_customer_id": customer_id,
-                    "stripe_subscription_id": subscription_id,
-                    "premium_since": datetime.now(timezone.utc),
-                    "trial_start": None,
-                    "trial_end": None,
-                }},
-            )
-            await log_audit(user["username"], "billing.subscribed")
-        else:
-            log.warning("[billing] checkout.session.completed for unknown customer %s", customer_id)
+    try:
+        raw_data = event["data"]["object"]
+        data = raw_data.to_dict() if hasattr(raw_data, "to_dict") else raw_data
+        event_type = event["type"]
 
-    elif event_type == "customer.subscription.deleted":
-        customer_id = data.get("customer")
-        user = await motor_db.login.find_one({"stripe_customer_id": customer_id})
-        if user:
-            await motor_db.login.update_one(
-                {"username": user["username"]},
-                {"$set": {"premium_status": "expired", "stripe_subscription_id": None}},
-            )
-            await log_audit(user["username"], "billing.canceled")
+        if event_type == "checkout.session.completed":
+            customer_id = data.get("customer")
+            subscription_id = data.get("subscription")
+            user = await motor_db.login.find_one({"stripe_customer_id": customer_id})
+            if not user:
+                client_ref = data.get("client_reference_id")
+                user = await motor_db.login.find_one({"user_id": client_ref}) if client_ref else None
+            if user:
+                await motor_db.login.update_one(
+                    {"username": user["username"]},
+                    {"$set": {
+                        "premium_status": "active",
+                        "stripe_customer_id": customer_id,
+                        "stripe_subscription_id": subscription_id,
+                        "premium_since": datetime.now(timezone.utc),
+                        "trial_start": None,
+                        "trial_end": None,
+                    }},
+                )
+                await log_audit(user["username"], "billing.subscribed")
+            else:
+                log.warning("[billing] checkout.session.completed for unknown customer %s", customer_id)
+                raise HTTPException(status_code=500, detail="Unknown customer, retry")
 
-    elif event_type == "customer.subscription.updated":
-        status = data.get("status")
-        if status in ("canceled", "unpaid"):
+        elif event_type == "customer.subscription.deleted":
             customer_id = data.get("customer")
             user = await motor_db.login.find_one({"stripe_customer_id": customer_id})
             if user:
@@ -114,5 +114,31 @@ async def stripe_webhook(request: Request):
                     {"$set": {"premium_status": "expired", "stripe_subscription_id": None}},
                 )
                 await log_audit(user["username"], "billing.canceled")
+
+        elif event_type == "customer.subscription.updated":
+            status = data.get("status")
+            customer_id = data.get("customer")
+            if status in ("canceled", "unpaid"):
+                user = await motor_db.login.find_one({"stripe_customer_id": customer_id})
+                if user:
+                    await motor_db.login.update_one(
+                        {"username": user["username"]},
+                        {"$set": {"premium_status": "expired", "stripe_subscription_id": None}},
+                    )
+                    await log_audit(user["username"], "billing.canceled")
+            elif status == "active":
+                user = await motor_db.login.find_one({"stripe_customer_id": customer_id})
+                if user and user.get("premium_status") != "active":
+                    await motor_db.login.update_one(
+                        {"username": user["username"]},
+                        {"$set": {
+                            "premium_status": "active",
+                            "stripe_subscription_id": data.get("id"),
+                        }},
+                    )
+                    await log_audit(user["username"], "billing.reactivated")
+    except HTTPException:
+        await motor_db.stripe_webhook_events.delete_one({"_id": event["id"]})
+        raise
 
     return {"received": True}
