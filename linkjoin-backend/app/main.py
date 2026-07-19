@@ -142,6 +142,13 @@ async def lifespan(app: FastAPI):
         _soft_index(
             motor_db.status_checks.create_index("ts", expireAfterSeconds=7948800, name="status_checks_ttl_92d")
         ),
+        motor_db.login.create_index("stripe_customer_id", sparse=True),
+        # TTL: processed Stripe webhook event ids expire after 92 days (dedupe window)
+        _soft_index(
+            motor_db.stripe_webhook_events.create_index(
+                "inserted_at", expireAfterSeconds=7948800, name="stripe_webhook_events_ttl_92d"
+            )
+        ),
     )
 
     async for u in motor_db.login.find({"user_id": {"$exists": False}}):
@@ -209,6 +216,28 @@ async def location(cf_ipcountry: str | None = None):
 @app.get("/health")
 async def health():
     return {"status": "ok"}
+
+
+@app.get("/health/client-ip")
+async def health_client_ip(request: Request):
+    """TEMPORARY — remove once proxy trust is configured.
+
+    Client IPs are currently wrong everywhere: gunicorn only trusts forwarded
+    headers from 127.0.0.1, so request.client.host is Azure's front end, not the
+    caller. That means rate limits bucket every user together and audit logs
+    record the load balancer's address.
+
+    Fixing it needs --forwarded-allow-ips, but the correct parsing depends on the
+    exact header Azure sends (it is known to append a :port to the client entry,
+    which naive parsers mishandle). Hit this endpoint on prod, read the values,
+    then configure startup.sh accordingly and delete this.
+    """
+    return {
+        "x_forwarded_for": request.headers.get("x-forwarded-for"),
+        "x_client_ip": request.headers.get("x-client-ip"),
+        "x_forwarded_proto": request.headers.get("x-forwarded-proto"),
+        "request_client_host": request.client.host if request.client else None,
+    }
 
 
 @app.get("/health/ready")

@@ -14,10 +14,11 @@ from app.models.link import (
     RestoreLinkRequest, ToggleLinkRequest, ShareLinkRequest,
     AcceptLinkRequest,
 )
+from app.limiter import limiter
 from app.scheduler import create_text_job, delete_text_job
 from app.utils import configure_data, track_event, async_next_link_id, gen_slug, compute_session_start_utc
 from app.websocket_manager import manager
-from app.email_service import send_email
+from app.email_service import send_email_batch
 from app.config import get_settings
 
 log = logging.getLogger(__name__)
@@ -416,66 +417,88 @@ async def toggle_link(link_id: int, body: ToggleLinkRequest, user: dict = Depend
 
 
 @router.post("/share")
-async def share_link(body: ShareLinkRequest, user: dict = Depends(get_confirmed_user)):
+@limiter.limit("5/hour")
+async def share_link(
+    request: Request,
+    body: ShareLinkRequest,
+    background_tasks: BackgroundTasks,
+    user: dict = Depends(get_confirmed_user),
+):
     email = user["username"]
-    link = body.link
+    coll = motor_db.bookmarks if body.type == "bookmark" else motor_db.links
 
-    for recipient_email in body.emails:
+    # Load the row server-side, scoped to the caller. The client only ever supplies
+    # an integer id — everything else about the shared document comes from the DB.
+    link = await coll.find_one({"username": email, "id": body.link_id})
+    if not link:
+        raise HTTPException(status_code=404, detail="Link not found")
+
+    # Class links carry the org's meeting URL, which _clean_items() deliberately
+    # redacts from every read path so students/teachers only ever get the /c/:slug
+    # redirect. Sharing one would hand the raw URL to an arbitrary recipient and
+    # defeat the attendance-integrity guarantee.
+    if link.get("class_id"):
+        raise HTTPException(status_code=403, detail="Class links cannot be shared")
+
+    recipients = [e for e in body.emails if e != email.lower()]
+    if not recipients:
+        raise HTTPException(status_code=422, detail="Cannot share a link only with yourself")
+
+    safe_sender = _html.escape(email)
+    safe_name = _html.escape(link.get("name", ""))
+    messages: list[dict] = []
+
+    for recipient_email in recipients:
         sid = await _unique_share_id()
         share_url = f"{_settings.app_base_url}/addlink?id={sid}"
         new_link_id = await async_next_link_id()
 
-        new_doc: dict = {k: v for k, v in link.items() if k not in ("_id", "username", "share", "share_token", "link", "password")}
+        new_doc: dict = {k: v for k, v in link.items() if k not in ("_id", "username", "share", "share_token", "slug", "id")}
         new_doc["username"] = recipient_email
         new_doc["share_id"] = link["id"]
         new_doc["id"] = new_link_id
-        new_doc["link"] = encrypt(link["link"])
         new_doc["share"] = encrypt(share_url)
         new_doc["share_token"] = sid
-        if "password" in link:
-            new_doc["password"] = encrypt(link["password"])
+        # `link` and `password` are already encrypted at rest — copy the ciphertext
+        # straight across rather than decrypting and re-encrypting.
 
         if body.type == "bookmark":
             await motor_db.pending_bookmarks.insert_one(new_doc)
         else:
             await motor_db.pending_links.insert_one(new_doc)
 
-        # Send email notification
-        recipient_user = await motor_db.login.find_one({"username": recipient_email})
-        template = "existing" if recipient_user else "new"
-        safe_email = _html.escape(email)
-        safe_name = _html.escape(link.get('name', ''))
+        recipient_user = await motor_db.login.find_one({"username": recipient_email}, {"_id": 1})
         html = (
-            f"<p>{safe_email} shared the link <strong>{safe_name}</strong> with you on LinkJoin.</p>"
-            if template == "existing"
-            else f"<p>{safe_email} shared a link with you on LinkJoin. <a href='{_settings.frontend_url}/signup'>Sign up</a> to see it.</p>"
+            f"<p>{safe_sender} shared the link <strong>{safe_name}</strong> with you on LinkJoin.</p>"
+            if recipient_user
+            else f"<p>{safe_sender} shared a link with you on LinkJoin. <a href='{_settings.frontend_url}/signup'>Sign up</a> to see it.</p>"
         )
-        try:
-            send_email(html, f"LinkJoin - {link.get('name', '')} shared with you", recipient_email)
-        except Exception:
-            pass
-
+        messages.append({
+            "html_content": html,
+            "subject": f"LinkJoin - {link.get('name', '')} shared with you",
+            "to": recipient_email,
+        })
+        # configure_data is a 6-collection gather, so broadcasting per recipient
+        # inside this loop was ~6 extra queries each. Still per-recipient because
+        # each one gets their own payload, but the sends are now batched below.
         await manager.broadcast(await configure_data(recipient_email), recipient_email)
-        await track_event("link_share", org_id=user.get("org_id"), user_id=user.get("user_id"))
 
-    return {"message": "Shared"}
+    background_tasks.add_task(send_email_batch, messages)
+    await track_event("link_share", org_id=user.get("org_id"), user_id=user.get("user_id"))
+    await log_audit(email, "link.share", "link", body.link_id, detail={"recipients": len(recipients)})
+    return {"message": "Shared", "recipients": len(recipients)}
 
 
 @router.get("/addlink")
-async def add_link_via_share(id: str, user: dict = Depends(get_confirmed_user)):
+@limiter.limit("20/minute")
+async def add_link_via_share(request: Request, id: str, user: dict = Depends(get_confirmed_user)):
     email = user["username"]
 
-    # Fast indexed lookup first; fall back to legacy O(n) scan for older docs without share_token
+    # Indexed lookup only. This used to fall back to scanning every link with a
+    # `share` field and Fernet-decrypting each one, which made a miss O(n) in both
+    # queries and crypto — a trivial way to saturate the workers. Pre-existing docs
+    # are backfilled by scripts/backfill_share_tokens.py instead.
     target = await motor_db.links.find_one({"share_token": id})
-    if target is None:
-        async for doc in motor_db.links.find({"share": {"$exists": True}, "share_token": {"$exists": False}}):
-            try:
-                if decrypt(doc["share"]).split("?id=")[-1] == id:
-                    target = doc
-                    await motor_db.links.update_one({"_id": doc["_id"]}, {"$set": {"share_token": id}})
-                    break
-            except Exception:
-                continue
 
     if target is None:
         raise HTTPException(status_code=404, detail="Link not found")

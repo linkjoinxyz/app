@@ -1,3 +1,4 @@
+import logging
 import secrets
 from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks, Request
@@ -5,20 +6,19 @@ from google.oauth2 import id_token
 from google.auth.transport import requests as google_requests
 from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError, InvalidHashError
-from pydantic import BaseModel
 import httpx
 from app.database import motor_db
 from app.auth import create_token, decode_token, get_confirmed_user, get_current_user, is_confirmed
 from app.limiter import limiter
-from app.models.user import RegisterRequest, LoginRequest, ResetPasswordRequest, TokenResponse
+from app.models.user import RegisterRequest, LoginRequest, ResetPasswordRequest
 from app.config import get_settings
 from app.email_service import send_email
 from app.utils import gen_id, track_event
 from app.redis_client import get_redis
 from app.audit import log_audit
-from jose import JWTError
 import re
 
+log = logging.getLogger(__name__)
 router = APIRouter(prefix="/auth", tags=["auth"])
 hasher = PasswordHasher()
 _settings = get_settings()
@@ -76,7 +76,6 @@ async def register(request: Request, body: RegisterRequest, background_tasks: Ba
         "username": email,
         "user_id": secrets.token_urlsafe(16),
         "account_type": "personal",
-        "premium": "false",
         "premium_status": "trial",
         "trial_start": _trial_start,
         "trial_end": _trial_start + timedelta(days=14),
@@ -286,92 +285,10 @@ async def set_password(body: dict, user: dict = Depends(get_confirmed_user)):
     return {"ok": True}
 
 
-class GoogleCodeRequest(BaseModel):
-    code: str
-    redirect_uri: str
-    code_verifier: str
-    client_id: str
 
-
-@router.post("/google-code")
-@limiter.limit("10/minute")
-async def google_code_exchange(request: Request, body: GoogleCodeRequest):
-    # Chrome App clients are public clients — PKCE alone is sufficient, no secret needed.
-    # Web application clients require the secret.
-    is_chrome_app = body.client_id == _settings.google_chrome_client_id
-    exchange_data = {
-        "code": body.code,
-        "client_id": body.client_id,
-        "redirect_uri": body.redirect_uri,
-        "grant_type": "authorization_code",
-        "code_verifier": body.code_verifier,
-    }
-    if not is_chrome_app:
-        exchange_data["client_secret"] = _settings.google_client_secret
-
-    async with httpx.AsyncClient() as client:
-        token_resp = await client.post("https://oauth2.googleapis.com/token", data=exchange_data)
-
-    if token_resp.status_code != 200:
-        raise HTTPException(status_code=400, detail="google_login_failed")
-
-    id_token_jwt = token_resp.json().get("id_token")
-    if not id_token_jwt:
-        raise HTTPException(status_code=400, detail="google_login_failed")
-
-    try:
-        google_info = id_token.verify_oauth2_token(
-            id_token_jwt, google_requests.Request(), body.client_id
-        )
-        email = google_info["email"].lower()
-    except Exception:
-        raise HTTPException(status_code=400, detail="google_login_failed")
-
-    user = await motor_db.login.find_one({"username": email})
-    if not user:
-        _trial_start = datetime.now(timezone.utc)
-        account = {
-            "username": email,
-            "user_id": secrets.token_urlsafe(16),
-            "account_type": "personal",
-            "premium": "false",
-            "premium_status": "trial",
-            "trial_start": _trial_start,
-            "trial_end": _trial_start + timedelta(days=14),
-            "refer": gen_id(),
-            "onboarding_done": False,
-            "popup_check_done": False,
-            "trial_welcome_seen": False,
-            "offset": 0,
-            "notes": {},
-            "confirmed": "true",
-            "timezone": "",
-            "org_name": email.split("@")[1],
-        }
-        await motor_db.login.insert_one(account)
-        await track_event("signup", user_id=account.get("user_id"))
-        user = account
-
-    is_admin_role = user.get("role") in {"school_admin", "district_admin"} or user.get("admin") == "true"
-    force_mfa = user.get("mfa_enabled") or (is_admin_role and user.get("number"))
-    if force_mfa:
-        from app.routers.mfa import _send_mfa_code
-        await _send_mfa_code(user)
-        mfa_session = create_token(email, minutes=10, extra={"scope": "mfa_only"})
-        return {"mfa_required": True, "mfa_session": mfa_session}
-
-    access_token = create_token(email)
-    confirmed = is_confirmed(user)
-    return {
-        "access_token": access_token, "token_type": "bearer", "email": email, "confirmed": confirmed,
-        "account_type": user.get("account_type", "personal"),
-        "role": user.get("role"),
-        "org_id": user.get("org_id"),
-        "admin": user.get("admin"),
-        "onboarding_done": bool(user.get("onboarding_done", True)),
-        "must_change_password": bool(user.get("must_change_password", False)),
-        "mfa_setup_required": is_admin_role and not user.get("mfa_enabled") and not user.get("number"),
-    }
+def _allowed_google_audiences() -> set[str]:
+    # Empty strings are filtered so an unset env var can never act as a wildcard.
+    return {a for a in (_settings.google_client_id, _settings.google_chrome_client_id) if a}
 
 
 @router.post("/google-token")
@@ -381,17 +298,37 @@ async def google_token_auth(request: Request, body: dict):
     if not access_token:
         raise HTTPException(status_code=400, detail="google_login_failed")
 
+    # tokeninfo, NOT userinfo. userinfo answers for any token Google considers
+    # valid and never reveals which OAuth client it was issued to, so a token
+    # minted for an unrelated app would authenticate as that user here. tokeninfo
+    # returns `aud`, which is the only thing that binds the token to us. It also
+    # returns the email, so this replaces the userinfo call rather than adding to it.
     async with httpx.AsyncClient() as client:
         info_resp = await client.get(
-            "https://www.googleapis.com/oauth2/v1/userinfo",
-            headers={"Authorization": f"Bearer {access_token}"},
+            "https://oauth2.googleapis.com/tokeninfo",
+            params={"access_token": access_token},
         )
 
     if info_resp.status_code != 200:
         raise HTTPException(status_code=400, detail="google_login_failed")
 
     info = info_resp.json()
-    email = info.get("email", "").lower()
+
+    allowed = _allowed_google_audiences()
+    if info.get("aud") not in allowed:
+        # Logged loudly: a misconfigured GOOGLE_CLIENT_ID / GOOGLE_CHROME_CLIENT_ID
+        # breaks *all* Google sign-in and is otherwise indistinguishable from an
+        # attack. This line tells you which it is immediately.
+        log.warning(
+            "[auth] google-token rejected: aud=%r not in configured audiences (%d configured)",
+            info.get("aud"), len(allowed),
+        )
+        raise HTTPException(status_code=400, detail="google_login_failed")
+    # tokeninfo returns JSON booleans as strings on some responses.
+    if str(info.get("email_verified", "")).lower() != "true":
+        raise HTTPException(status_code=400, detail="google_login_failed")
+
+    email = (info.get("email") or "").lower()
     if not email:
         raise HTTPException(status_code=400, detail="google_login_failed")
 
@@ -404,7 +341,6 @@ async def google_token_auth(request: Request, body: dict):
             "username": email,
             "user_id": secrets.token_urlsafe(16),
             "account_type": "personal",
-            "premium": "false",
             "premium_status": "trial",
             "trial_start": _trial_start,
             "trial_end": _trial_start + timedelta(days=14),
@@ -516,7 +452,8 @@ async def forgot_password(request: Request, body: dict, background_tasks: Backgr
 
 
 @router.post("/reset-password/{token}")
-async def reset_password_with_token(token: str, body: ResetPasswordRequest):
+@limiter.limit("5/hour")
+async def reset_password_with_token(request: Request, token: str, body: ResetPasswordRequest):
     try:
         payload = decode_token(token)
     except HTTPException:
@@ -532,7 +469,13 @@ async def reset_password_with_token(token: str, body: ResetPasswordRequest):
 
     email = payload.get("sub")
     hashed = hasher.hash(body.password)
-    result = await motor_db.login.update_one({"username": email}, {"$set": {"password": hashed}})
+    # password_changed_at is the session epoch: get_current_user rejects any token
+    # issued before it, so a reset evicts sessions on every other device. Without
+    # it, a stolen 7-day access token survives the reset that was meant to kill it.
+    result = await motor_db.login.update_one(
+        {"username": email},
+        {"$set": {"password": hashed, "password_changed_at": datetime.now(timezone.utc)}},
+    )
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="User not found")
 

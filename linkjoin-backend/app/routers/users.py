@@ -1,5 +1,6 @@
 import asyncio
 import json
+import logging
 import nh3
 import mistune
 from collections import defaultdict
@@ -9,7 +10,7 @@ from fastapi.responses import Response
 from pydantic import BaseModel
 from app.auth import get_confirmed_user, get_current_user
 from app.database import motor_db
-from app.roles import require_premium
+from app.roles import is_premium, require_premium
 from app.models.user import (
     UpdateTimezoneRequest, AddNumberRequest,
     SortRequest, OpenEarlyRequest, NoteRequest, AutoDeleteRequest, VacationModeRequest,
@@ -23,6 +24,7 @@ class ParentContactBody(BaseModel):
     parent_name: str = ""
     student_user_id: str | None = None
 
+log = logging.getLogger(__name__)
 router = APIRouter(prefix="/users", tags=["users"])
 
 _ALLOWED_TAGS = {
@@ -31,12 +33,24 @@ _ALLOWED_TAGS = {
 }
 
 
+# Premium-only behaviours the client acts on directly. Writing them is gated by
+# require_premium, but nothing ever cleared them when entitlement lapsed and the
+# frontend is the only thing that reads them (useAutoOpen.js) — so every user who
+# touched these during their 14-day trial kept the features permanently. Filtering
+# on read is the enforcement point; the stored values are deliberately left intact
+# so resubscribing restores the user's configuration.
+_PREMIUM_ONLY_FIELDS = ("open_early", "vacation_mode", "auto_delete_past")
+
+
 @router.get("/me")
 async def get_me(user: dict = Depends(get_current_user)):
     user.pop("_id", None)
     user.pop("password", None)
     user.pop("_jti", None)
     user.pop("_exp", None)
+    if not is_premium(user):
+        for field in _PREMIUM_ONLY_FIELDS:
+            user.pop(field, None)
     return user
 
 
@@ -453,13 +467,40 @@ async def get_parent_profile(user_id: str, user: dict = Depends(get_confirmed_us
 async def delete_account(user: dict = Depends(get_current_user)):
     from app.audit import log_audit
     email = user["username"]
-    await log_audit(email, "user.delete_account")
+
+    # Cancel billing FIRST, and abort the whole deletion if it fails. Deleting the
+    # account while the subscription survives is the exact failure this prevents:
+    # Stripe keeps charging and the user has no way back in to stop it.
+    sub_id = user.get("stripe_subscription_id")
+    if sub_id:
+        import stripe
+        try:
+            await stripe.Subscription.cancel_async(sub_id)
+        except Exception:
+            log.exception("[billing] cancel failed on account delete for %s", email)
+            raise HTTPException(
+                status_code=502,
+                detail="Could not cancel your subscription. Please contact support.",
+            )
+
+    await log_audit(email, "user.delete_account", detail={"subscription_cancelled": bool(sub_id)})
     await motor_db.links.delete_many({"username": email})
     await motor_db.bookmarks.delete_many({"username": email})
     await motor_db.deleted_links.delete_many({"username": email})
     await motor_db.deleted_bookmarks.delete_many({"username": email})
     await motor_db.pending_links.delete_many({"username": email})
     await motor_db.pending_bookmarks.delete_many({"username": email})
+    await motor_db.open_log.delete_many({"username": email})
+
+    # Referential cleanup the original sweep missed, which is how dangling
+    # user_id references accumulated in classes/parent_links.
+    user_id = user.get("user_id")
+    if user_id:
+        await motor_db.mfa_challenges.delete_many({"user_id": user_id})
+        await motor_db.parent_links.delete_many({"parent_user_id": user_id})
+        await motor_db.parent_links.delete_many({"student_user_id": user_id})
+        await motor_db.classes.update_many({"student_ids": user_id}, {"$pull": {"student_ids": user_id}})
+
     await motor_db.login.delete_one({"username": email})
     return {"message": "Account deleted"}
 

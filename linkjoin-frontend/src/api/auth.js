@@ -3,7 +3,6 @@ import { apiPost, apiFetch } from './client.js'
 export const authApi = {
   register: (data) => apiPost('/auth/register', data),
   login: (data) => apiPost('/auth/login', data),
-  googleLogin: (jwt, keep) => apiPost('/auth/login', { jwt, keep }),
   googleTokenLogin: (access_token, intent) => apiPost('/auth/google-token', { access_token, intent }),
   googleRegister: (data) => apiPost('/auth/register', data),
   forgotPassword: (email) => apiPost('/auth/forgot-password', { email }),

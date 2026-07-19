@@ -24,6 +24,9 @@ class Settings(BaseSettings):
     frontend_url: str = "http://localhost:5173"
 
     # JWT settings
+    # Kill switch for the password-reset token epoch. Rollback is otherwise a code
+    # deploy plus a manual Azure restart; this makes it an app-setting change.
+    enforce_password_epoch: bool = True
     jwt_algorithm: str = "HS256"
     access_token_expire_minutes: int = 10080
     reset_token_expire_minutes: int = 60
