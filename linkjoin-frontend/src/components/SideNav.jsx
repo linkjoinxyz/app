@@ -46,7 +46,7 @@ function NavItem({ to, icon, label, active, collapsed, onClick }) {
 }
 
 export default function SideNav({ onAdd, page, search, onSearch, searchPlaceholder }) {
-  const { logout, role, isAdmin, isPremium, email } = useAuth()
+  const { logout, role, isAdmin, isPremium, accountType, email } = useAuth()
   const isTeacher = TEACHER_ROLES.has(role)
   const { isDark, toggle: toggleDark } = useDarkMode()
   const { installed, checked, browser, installUrl } = useExtDetection()
@@ -164,7 +164,7 @@ export default function SideNav({ onAdd, page, search, onSearch, searchPlacehold
                 ? <img src={profile.avatar} className="sn-avatar-img" alt="" />
                 : <span className="sn-avatar-initials" style={{ background: pal.bg, border: `1.5px solid ${pal.border}` }}>{initials}</span>
               }
-              {isPremium && <img src="/images/crown.svg" className="sn-avatar-crown" alt="Premium" title="Premium" />}
+              {isPremium && accountType !== 'institutional' && <img src="/images/crown.svg" className="sn-avatar-crown" alt="Premium" title="Premium" />}
             </Link>
             <button className="sn-item sn-logout-item" onClick={() => { closeMobile(); handleLogout() }}>
               <span className="sn-item-icon">{ICONS.logout}</span>
