@@ -20,14 +20,20 @@ def require_district_admin(user: dict) -> None:
         raise HTTPException(status_code=403, detail="District admin access required")
 
 
-def require_premium(user: dict) -> None:
+def is_premium(user: dict) -> bool:
+    """Entitlement predicate. Mirrors isPremium in the frontend AuthContext."""
     if user.get("account_type") == "institutional":
-        return  # School plan bundles "Everything in Individual" — always entitled
+        return True  # School plan bundles "Everything in Individual" — always entitled
     status = user.get("premium_status", "expired")
     if status in ("active", "grandfathered"):
-        return
+        return True
     if status == "trial":
         trial_end = user.get("trial_end")
         if trial_end and datetime.now(timezone.utc) < trial_end.replace(tzinfo=timezone.utc):
-            return
-    raise HTTPException(status_code=403, detail="Premium required")
+            return True
+    return False
+
+
+def require_premium(user: dict) -> None:
+    if not is_premium(user):
+        raise HTTPException(status_code=403, detail="Premium required")

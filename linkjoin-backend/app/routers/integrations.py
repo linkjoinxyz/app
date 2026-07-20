@@ -562,7 +562,6 @@ async def _run_clever_sync(org_id: str) -> dict:
                     "role": "student",
                     "org_id": org_id,
                     "confirmed": "false",
-                    "premium": "false",
                     "clever_user_id": clever_sid,
                 })
                 new_accounts += 1
@@ -885,7 +884,6 @@ async def _run_oneroster_sync(org_id: str) -> dict:
                     "role": "student",
                     "org_id": org_id,
                     "confirmed": "false",
-                    "premium": "false",
                 })
                 new_accounts += 1
             if uid not in existing_student_ids:
@@ -1518,7 +1516,6 @@ async def _run_schoology_sync(org_id: str) -> dict:
                     "role": "student",
                     "org_id": org_id,
                     "confirmed": "false",
-                    "premium": "false",
                 })
                 new_accounts += 1
 

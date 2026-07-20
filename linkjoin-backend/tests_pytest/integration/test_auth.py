@@ -4,31 +4,39 @@ of the extension's own chrome-mocked test of that call."""
 import httpx
 import pytest
 
+from app.config import get_settings
 from app.database import motor_db
 
+_ALLOWED_AUD = get_settings().google_client_id or "test-web-client.apps.googleusercontent.com"
 
-class _FakeUserinfoResponse:
-    def __init__(self, email: str):
+
+class _FakeTokeninfoResponse:
+    def __init__(self, payload: dict):
         self.status_code = 200
-        self._email = email
+        self._payload = payload
 
     def json(self):
-        return {"email": self._email, "verified_email": True}
+        return self._payload
 
 
 @pytest.fixture
 def fake_google_userinfo(monkeypatch):
-    """Returns a setter: fake_google_userinfo(email) makes any AsyncClient.get
-    call return a canned userinfo payload for that email, regardless of token."""
-    state = {"email": None}
+    """Returns a setter: fake_google_userinfo(email, aud=..., email_verified=...)
+    makes any AsyncClient.get return a canned *tokeninfo* payload.
+
+    tokeninfo, not userinfo — the endpoint validates the token's audience, which
+    userinfo never reports. Tests that vary `aud` are the ones covering the
+    account-takeover path this replaced.
+    """
+    state = {"payload": None}
 
     async def _fake_get(self, url, **kwargs):
-        return _FakeUserinfoResponse(state["email"])
+        return _FakeTokeninfoResponse(state["payload"])
 
     monkeypatch.setattr(httpx.AsyncClient, "get", _fake_get)
 
-    def _set(email: str):
-        state["email"] = email
+    def _set(email: str, aud: str = _ALLOWED_AUD, email_verified: str = "true"):
+        state["payload"] = {"email": email, "email_verified": email_verified, "aud": aud}
     return _set
 
 
@@ -90,3 +98,28 @@ async def test_login_intent_still_succeeds_for_existing_account(client, fake_goo
     resp = await client.post("/auth/google-token", json={"access_token": "fake-token", "intent": "login"})
     assert resp.status_code == 200
     assert resp.json()["email"] == institutional_teacher_user["username"]
+
+
+async def test_token_minted_for_another_oauth_client_is_rejected(client, fake_google_userinfo, institutional_teacher_user):
+    """Account takeover: a Google access token issued to ANY other app used to
+    authenticate here, because userinfo answers for any valid token and never
+    says which client it was minted for. The audience must be checked."""
+    fake_google_userinfo(
+        institutional_teacher_user["username"],
+        aud="some-unrelated-app.apps.googleusercontent.com",
+    )
+
+    resp = await client.post("/auth/google-token", json={"access_token": "stolen-token"})
+    assert resp.status_code == 400
+    assert resp.json()["detail"] == "google_login_failed"
+
+
+async def test_unverified_google_email_is_rejected(client, fake_google_userinfo):
+    """An unverified address proves nothing about who controls it."""
+    email = "unverified@test.lincoln.edu"
+    fake_google_userinfo(email, email_verified="false")
+
+    resp = await client.post("/auth/google-token", json={"access_token": "fake-token"})
+    assert resp.status_code == 400
+
+    assert await motor_db.login.find_one({"username": email}) is None

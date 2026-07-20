@@ -106,6 +106,7 @@ export default function SettingsModal({ user, visible, onClose, onShowDeleted, o
             <h2 className="modal-delete-title">Delete your account?</h2>
             <p className="modal-delete-body">
               This will permanently delete your account, all your meetings, bookmarks, and settings.
+              Any active subscription is cancelled immediately, with no refund for the current period.
               <strong> This cannot be undone.</strong>
             </p>
             {deleteError && <div className="modal-error" style={{ marginBottom: 12 }}>{deleteError}</div>}
