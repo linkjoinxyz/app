@@ -29,12 +29,12 @@ async def _cleanup_test_classes_and_links():
     await motor_db.audit_logs.delete_many({"resource_id": {"$regex": "^class-"}})
 
 
-async def _make_class(student_ids):
+async def _make_class(student_ids, teacher_id="teacher-fixture"):
     class_id = f"class-{secrets.token_hex(6)}"
     doc = {
         "class_id": class_id,
         "name": "Algebra II",
-        "teacher_id": "teacher-fixture",
+        "teacher_id": teacher_id,
         "student_ids": student_ids,
         "time": "9:00",
         "days": ["Mon"],
@@ -115,16 +115,13 @@ async def test_same_day_rehit_is_idempotent(as_user, rostered_student):
     assert count == 1
 
 
-async def test_non_rostered_student_never_locked_out(as_user, rostered_student):
-    """Roster miss still returns a usable url — never blocks the redirect."""
+async def test_non_rostered_student_gets_403(as_user, rostered_student):
+    """A student not on this class's roster is not entitled to its meeting URL."""
     class_id = await _make_class([])  # rostered_student is NOT in student_ids
     slug = await _make_link(class_id=class_id, class_name="Algebra II")
 
     resp = await as_user(rostered_student).get(f"/links/c/{slug}")
-    assert resp.status_code == 200
-    body = resp.json()
-    assert body["logged"] is False
-    assert body["url"] == "https://zoom.us/j/1234567890"
+    assert resp.status_code == 403
 
     row = await motor_db.attendance.find_one({"class_id": class_id, "student_email": rostered_student["username"]})
     assert row is None
@@ -137,16 +134,59 @@ async def test_non_rostered_student_never_locked_out(as_user, rostered_student):
     assert audit is not None
 
 
-async def test_teacher_role_no_attendance_side_effect(as_user, institutional_teacher_user):
-    class_id = await _make_class([])
+async def test_owning_teacher_gets_url_no_attendance_side_effect(as_user, institutional_teacher_user):
+    class_id = await _make_class([], teacher_id=institutional_teacher_user["user_id"])
     slug = await _make_link(class_id=class_id, class_name="Algebra II")
 
     resp = await as_user(institutional_teacher_user).get(f"/links/c/{slug}")
     assert resp.status_code == 200
-    assert resp.json()["logged"] is False
+    body = resp.json()
+    assert body["logged"] is False
+    assert body["url"] == "https://zoom.us/j/1234567890"
 
     row = await motor_db.attendance.find_one({"class_id": class_id})
     assert row is None
+
+
+async def test_other_teacher_gets_403(as_user, institutional_teacher_user):
+    """A teacher who doesn't own this class has no standing exception."""
+    class_id = await _make_class([], teacher_id="some-other-teacher-id")
+    slug = await _make_link(class_id=class_id, class_name="Algebra II")
+
+    resp = await as_user(institutional_teacher_user).get(f"/links/c/{slug}")
+    assert resp.status_code == 403
+
+
+async def test_org_admin_gets_url(as_user, institutional_admin_user):
+    class_id = await _make_class([])  # org_id="test-org", matches institutional_admin_user
+    slug = await _make_link(class_id=class_id, class_name="Algebra II")
+
+    resp = await as_user(institutional_admin_user).get(f"/links/c/{slug}")
+    assert resp.status_code == 200
+    assert resp.json()["url"] == "https://zoom.us/j/1234567890"
+
+
+async def test_other_org_admin_gets_403(as_user):
+    import secrets as _secrets
+    from datetime import datetime as _dt
+    other_admin = {
+        "username": f"admin-{_secrets.token_hex(4)}@other.example.edu",
+        "user_id": _secrets.token_urlsafe(12),
+        "account_type": "institutional",
+        "role": "school_admin",
+        "org_id": "other-org",
+        "confirmed": "true",
+        "created_at": _dt.now(timezone.utc),
+    }
+    await motor_db.login.insert_one(other_admin)
+    try:
+        class_id = await _make_class([])  # org_id="test-org"
+        slug = await _make_link(class_id=class_id, class_name="Algebra II")
+
+        resp = await as_user(other_admin).get(f"/links/c/{slug}")
+        assert resp.status_code == 403
+    finally:
+        await motor_db.login.delete_one({"username": other_admin["username"]})
 
 
 async def test_personal_link_straight_through(as_user, institutional_teacher_user):

@@ -15,6 +15,7 @@ from app.models.link import (
     AcceptLinkRequest,
 )
 from app.limiter import limiter
+from app.roles import SCHOOL_ADMIN_ROLES
 from app.scheduler import create_text_job, delete_text_job
 from app.utils import configure_data, track_event, async_next_link_id, gen_slug, compute_session_start_utc
 from app.websocket_manager import manager
@@ -64,61 +65,70 @@ async def get_links(user: dict = Depends(get_current_user)):
 @router.get("/c/{slug}")
 async def resolve_class_link(slug: str, background_tasks: BackgroundTasks, user: dict = Depends(get_confirmed_user)):
     """Log a linkjoin_click (when eligible) and hand back the meeting URL for the frontend
-    to open. Every failure mode short of an unknown slug still returns a url — never lock
-    a student out of class over a logging problem."""
+    to open. For class-linked meetings, only the rostered student, the class's own
+    teacher, or an org admin may receive the URL — everyone else is denied before it's
+    ever decrypted, matching the redaction _clean_items applies everywhere links are
+    listed. Personal (non-class) links are unaffected."""
     link = await motor_db.links.find_one({"slug": slug})
     if not link:
         raise HTTPException(status_code=404, detail="Link not found")
 
     logged = False
     class_id = link.get("class_id")
+    cls = None
+    is_rostered = False
+    if class_id:
+        cls = await motor_db.classes.find_one({"class_id": class_id})
+        role = user.get("role")
+        is_rostered = bool(cls) and role == "student" and user.get("user_id") in (cls.get("student_ids") or [])
+        is_owning_teacher = bool(cls) and role == "teacher" and cls.get("teacher_id") == user.get("user_id")
+        is_org_admin = bool(cls) and role in SCHOOL_ADMIN_ROLES and user.get("org_id") == cls.get("org_id")
+        if not (is_rostered or is_owning_teacher or is_org_admin):
+            if role == "student":
+                await log_audit(user["username"], "attendance.roster_miss", "class", class_id)
+            raise HTTPException(status_code=403, detail="Not authorized for this class link")
+
     try:
-        if class_id and user.get("role") == "student":
-            cls = await motor_db.classes.find_one({"class_id": class_id})
-            if cls:
-                is_rostered = user["user_id"] in (cls.get("student_ids") or [])
-                if not is_rostered:
-                    await log_audit(user["username"], "attendance.roster_miss", "class", class_id)
+        if is_rostered:
+            teacher = await motor_db.login.find_one({"user_id": cls.get("teacher_id", "")}, {"timezone": 1})
+            tz_name = (teacher or {}).get("timezone") or "UTC"
+            now_utc = datetime.now(timezone.utc)
+            session_start = compute_session_start_utc(cls.get("time", ""), cls.get("days") or [], tz_name, now_utc)
+            if session_start is not None:
+                # Match on record_date (the class's local calendar day), not a UTC
+                # timestamp range — session_start's local evening can fall on the
+                # *next* UTC day for negative-offset timezones, which would make a
+                # UTC-midnight-aligned window miss the very row it just inserted.
+                record_date = session_start.strftime("%Y-%m-%d")
+                existing = await motor_db.attendance.find_one({
+                    "class_id": class_id,
+                    "student_email": user["username"],
+                    "source": "linkjoin_click",
+                    "record_date": record_date,
+                })
+                if existing:
+                    logged = True
                 else:
-                    teacher = await motor_db.login.find_one({"user_id": cls.get("teacher_id", "")}, {"timezone": 1})
-                    tz_name = (teacher or {}).get("timezone") or "UTC"
-                    now_utc = datetime.now(timezone.utc)
-                    session_start = compute_session_start_utc(cls.get("time", ""), cls.get("days") or [], tz_name, now_utc)
-                    if session_start is not None:
-                        # Match on record_date (the class's local calendar day), not a UTC
-                        # timestamp range — session_start's local evening can fall on the
-                        # *next* UTC day for negative-offset timezones, which would make a
-                        # UTC-midnight-aligned window miss the very row it just inserted.
-                        record_date = session_start.strftime("%Y-%m-%d")
-                        existing = await motor_db.attendance.find_one({
-                            "class_id": class_id,
-                            "student_email": user["username"],
-                            "source": "linkjoin_click",
-                            "record_date": record_date,
-                        })
-                        if existing:
-                            logged = True
-                        else:
-                            minutes_late = round((now_utc - session_start).total_seconds() / 60)
-                            await motor_db.attendance.insert_one({
-                                "student_email": user["username"],
-                                "link_id": link.get("id"),
-                                "class_id": class_id,
-                                "class_name": link.get("class_name") or cls.get("name", ""),
-                                "share_id": link.get("share_id"),
-                                "opened_at": now_utc,
-                                "minutes_late": minutes_late,
-                                "source": "linkjoin_click",
-                                "recorded_by_user_id": None,
-                                "reason_code": None,
-                                "note": "",
-                                "recorded_at": now_utc,
-                                "record_date": record_date,
-                                "previous_record": None,
-                            })
-                            logged = True
-                            from app.routers.attendance import _gc_sync_if_due
-                            background_tasks.add_task(_gc_sync_if_due, class_id)
+                    minutes_late = round((now_utc - session_start).total_seconds() / 60)
+                    await motor_db.attendance.insert_one({
+                        "student_email": user["username"],
+                        "link_id": link.get("id"),
+                        "class_id": class_id,
+                        "class_name": link.get("class_name") or cls.get("name", ""),
+                        "share_id": link.get("share_id"),
+                        "opened_at": now_utc,
+                        "minutes_late": minutes_late,
+                        "source": "linkjoin_click",
+                        "recorded_by_user_id": None,
+                        "reason_code": None,
+                        "note": "",
+                        "recorded_at": now_utc,
+                        "record_date": record_date,
+                        "previous_record": None,
+                    })
+                    logged = True
+                    from app.routers.attendance import _gc_sync_if_due
+                    background_tasks.add_task(_gc_sync_if_due, class_id)
     except Exception:
         log.exception("class link resolve failed for slug=%s", slug)
 
