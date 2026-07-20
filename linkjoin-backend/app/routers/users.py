@@ -320,14 +320,18 @@ async def get_student_profile(user_id: str, user: dict = Depends(get_confirmed_u
     if not student:
         raise HTTPException(status_code=404, detail="Student not found")
 
-    # Teachers may only view students in their own classes
+    # Teachers may only view students in their own classes, and only see that
+    # student's data for their own classes — not every class/teacher/case the
+    # student happens to touch. Admins get the full cross-class view.
+    allowed_class_ids: set[str] | None = None
     if role == "teacher":
         teacher_classes = await motor_db.classes.find(
-            {"teacher_id": user["user_id"]}, {"student_ids": 1}
+            {"teacher_id": user["user_id"]}, {"class_id": 1, "student_ids": 1}
         ).to_list(None)
         allowed_ids = {uid for cls in teacher_classes for uid in (cls.get("student_ids") or [])}
         if user_id not in allowed_ids:
             raise HTTPException(status_code=403, detail="Student not in your classes")
+        allowed_class_ids = {cls["class_id"] for cls in teacher_classes}
     else:
         if student.get("org_id") != user.get("org_id"):
             raise HTTPException(status_code=403, detail="Student not in your organization")
@@ -335,8 +339,11 @@ async def get_student_profile(user_id: str, user: dict = Depends(get_confirmed_u
     email = student["username"]
 
     # Enrolled classes
+    class_filter: dict = {"student_ids": user_id}
+    if allowed_class_ids is not None:
+        class_filter["class_id"] = {"$in": list(allowed_class_ids)}
     enrolled_classes = await motor_db.classes.find(
-        {"student_ids": user_id},
+        class_filter,
         {"_id": 0, "class_id": 1, "name": 1, "days": 1, "time": 1, "teacher_id": 1},
     ).to_list(None)
 
@@ -353,9 +360,12 @@ async def get_student_profile(user_id: str, user: dict = Depends(get_confirmed_u
 
     # Attendance records (last 90 days)
     cutoff = datetime.now(timezone.utc) - timedelta(days=90)
+    attendance_filter: dict = {"student_email": email, "opened_at": {"$gte": cutoff}}
+    if allowed_class_ids is not None:
+        attendance_filter["class_id"] = {"$in": list(allowed_class_ids)}
     records = []
     async for r in motor_db.attendance.find(
-        {"student_email": email, "opened_at": {"$gte": cutoff}},
+        attendance_filter,
         {"_id": 0, "class_id": 1, "class_name": 1, "opened_at": 1, "minutes_late": 1, "excused": 1, "excuse_reason": 1}
     ).sort("opened_at", -1).limit(100):
         if isinstance(r.get("opened_at"), datetime):
@@ -386,8 +396,11 @@ async def get_student_profile(user_id: str, user: dict = Depends(get_confirmed_u
         })
 
     # Active interventions
+    interventions_filter: dict = {"student_email": email, "status": {"$ne": "resolved"}}
+    if allowed_class_ids is not None:
+        interventions_filter["class_id"] = {"$in": list(allowed_class_ids)}
     interventions = await motor_db.interventions.find(
-        {"student_email": email, "status": {"$ne": "resolved"}},
+        interventions_filter,
         {"_id": 0, "intervention_id": 1, "class_id": 1, "class_name": 1, "flag_type": 1,
          "status": 1, "created_at": 1, "updated_at": 1, "notes": 1, "assigned_to": 1},
     ).to_list(None)
@@ -547,7 +560,8 @@ async def update_mfa(body: dict, user: dict = Depends(get_confirmed_user)):
             {"$set": {"mfa_phone": phone}},
         )
         updated_user = await motor_db.login.find_one({"username": user["username"]})
-        await _send_mfa_code(updated_user)
+        if not await _send_mfa_code(updated_user):
+            raise HTTPException(status_code=503, detail="Could not send verification code, contact support")
         return {"message": "Verification code sent. Call /auth/mfa/setup-verify with the code to confirm."}
     else:
         from app.audit import log_audit

@@ -7,7 +7,9 @@ from app.routers.attendance import (
     compute_student_attendance_rate,
     _LOOKBACK_DAYS as _RATE_LOOKBACK_DAYS,
     _TARDY_THRESHOLD_MINUTES,
+    _record_date_str,
 )
+from app.utils import get_blackout_set
 
 router = APIRouter(prefix="/parent", tags=["parent"])
 
@@ -163,37 +165,66 @@ async def get_child_attendance(student_id: str, limit: int = 20, offset: int = 0
     now = datetime.now(timezone.utc)
     cutoff = now - timedelta(days=_LOOKBACK_DAYS)
 
-    # Index attendance records by (class_id, date)
+    def _ts(r: dict):
+        t = r.get("recorded_at") or r.get("opened_at")
+        if isinstance(t, datetime) and t.tzinfo is None:
+            t = t.replace(tzinfo=timezone.utc)
+        return t
+
+    # Index attendance records by (class_id, date), keeping the most-recently
+    # recorded row per key so a teacher override supersedes a stale/original
+    # row instead of an arbitrary cursor-order pick — same tie-break rule as
+    # attendance.py's _resolve_latest_records, keyed across classes here since
+    # this endpoint spans every class the student is in.
     records_map: dict = {}
     async for r in motor_db.attendance.find(
-        {"student_email": student_email, "opened_at": {"$gte": cutoff}},
-        {"class_id": 1, "class_name": 1, "opened_at": 1, "minutes_late": 1},
+        {"student_email": student_email, "$or": [{"opened_at": {"$gte": cutoff}}, {"recorded_at": {"$gte": cutoff}}]},
+        {"class_id": 1, "class_name": 1, "opened_at": 1, "minutes_late": 1, "recorded_at": 1, "record_date": 1},
     ):
         oid = str(r.pop("_id"))
-        opened_at = r["opened_at"]
-        date_str = opened_at.strftime("%Y-%m-%d") if hasattr(opened_at, "strftime") else str(opened_at)[:10]
+        date_str = _record_date_str(r)
         r["record_id"] = oid
         r["date"] = date_str
-        r["opened_at"] = opened_at.isoformat() if hasattr(opened_at, "isoformat") else str(opened_at)
-        records_map.setdefault((r["class_id"], date_str), r)
+        opened_at = r["opened_at"]
+        r["opened_at"] = opened_at.isoformat() if hasattr(opened_at, "isoformat") else opened_at
+        key = (r["class_id"], date_str)
+        existing = records_map.get(key)
+        if existing is None or (_ts(r) and (not _ts(existing) or _ts(r) >= _ts(existing))):
+            records_map[key] = r
 
-    # Build per-class scheduled dates within the lookback window up to today
+    # Build per-class scheduled dates within the lookback window up to today,
+    # excluding org blackout/summer dates like every teacher-facing surface
+    # (attendance.py:360,576,832) and using the org's configured tardy
+    # threshold instead of a hardcoded value.
     class_info: dict = {}
+    org_cache: dict = {}
     async for cls in motor_db.classes.find(
         {"student_ids": student_id},
-        {"class_id": 1, "name": 1, "days": 1, "_id": 0},
+        {"class_id": 1, "name": 1, "days": 1, "org_id": 1, "_id": 0},
     ):
         class_days = cls.get("days") or []
         scheduled_weekdays = {_DAY_TO_WEEKDAY[d] for d in class_days if d in _DAY_TO_WEEKDAY}
         if not scheduled_weekdays:
             continue
+
+        org_id = cls.get("org_id", "")
+        if org_id not in org_cache:
+            org_cache[org_id] = await motor_db.orgs.find_one(
+                {"org_id": org_id}, {"blackout_dates": 1, "summer_start": 1, "summer_end": 1, "attendance_settings": 1}
+            ) or {}
+        org = org_cache[org_id]
+        blackout_dates = get_blackout_set(org)
+        tardy_threshold = int((org.get("attendance_settings") or {}).get("tardy_threshold_minutes", _TARDY_THRESHOLD_MINUTES))
+
         scheduled_dates = {
             (cutoff + timedelta(days=i)).strftime("%Y-%m-%d")
             for i in range(_LOOKBACK_DAYS + 1)
             if (cutoff + timedelta(days=i)).weekday() in scheduled_weekdays
             and (cutoff + timedelta(days=i)).date() <= now.date()
+        } - blackout_dates
+        class_info[cls["class_id"]] = {
+            "class_name": cls["name"], "scheduled_dates": scheduled_dates, "tardy_threshold": tardy_threshold,
         }
-        class_info[cls["class_id"]] = {"class_name": cls["name"], "scheduled_dates": scheduled_dates}
 
     # Index parent notes by (class_id, date)
     notes_map: dict = {}
@@ -204,14 +235,16 @@ async def get_child_attendance(student_id: str, limit: int = 20, offset: int = 0
         notes_map[(n["class_id"], n["date"])] = n
 
     events = []
-    seen: set = set()
 
-    # Attended sessions (on_time or tardy)
+    # Attended sessions (on_time or tardy); a record whose latest version is an
+    # absent/excused override (opened_at None) falls through to "absent" below.
     for (class_id, date_str), rec in records_map.items():
-        seen.add((class_id, date_str))
+        if not rec.get("opened_at"):
+            continue
         ml = rec.get("minutes_late") or 0
+        tardy_threshold = class_info.get(class_id, {}).get("tardy_threshold", _TARDY_THRESHOLD_MINUTES)
         events.append({
-            "type": "tardy" if ml > 5 else "on_time",
+            "type": "tardy" if ml > tardy_threshold else "on_time",
             "date": date_str,
             "class_id": class_id,
             "class_name": rec.get("class_name") or class_info.get(class_id, {}).get("class_name", ""),
@@ -220,19 +253,23 @@ async def get_child_attendance(student_id: str, limit: int = 20, offset: int = 0
             "parent_note": notes_map.get((class_id, date_str)),
         })
 
-    # Absent sessions (scheduled but no record)
+    # Absent sessions: scheduled but no record, or the latest record for that
+    # date is an absent/excused override.
     for class_id, info in class_info.items():
         for date_str in info["scheduled_dates"]:
-            if (class_id, date_str) not in seen:
-                events.append({
-                    "type": "absent",
-                    "date": date_str,
-                    "class_id": class_id,
-                    "class_name": info["class_name"],
-                    "record_id": None,
-                    "minutes_late": None,
-                    "parent_note": notes_map.get((class_id, date_str)),
-                })
+            key = (class_id, date_str)
+            rec = records_map.get(key)
+            if rec and rec.get("opened_at"):
+                continue
+            events.append({
+                "type": "absent",
+                "date": date_str,
+                "class_id": class_id,
+                "class_name": info["class_name"],
+                "record_id": rec["record_id"] if rec else None,
+                "minutes_late": None,
+                "parent_note": notes_map.get(key),
+            })
 
     events.sort(key=lambda e: e["date"], reverse=True)
     if q:
@@ -293,7 +330,14 @@ async def list_student_notes(student_id: str, user: dict = Depends(get_confirmed
         stu = await motor_db.login.find_one({"user_id": student_id}, {"org_id": 1, "_id": 0})
         if not stu:
             raise HTTPException(status_code=404, detail="Student not found")
-        if user.get("org_id") and stu.get("org_id") != user.get("org_id"):
+        if role == "teacher":
+            teacher_classes = await motor_db.classes.find(
+                {"teacher_id": user["user_id"]}, {"student_ids": 1}
+            ).to_list(None)
+            allowed_ids = {uid for cls in teacher_classes for uid in (cls.get("student_ids") or [])}
+            if student_id not in allowed_ids:
+                raise HTTPException(status_code=403, detail="Student not in your classes")
+        elif not user.get("org_id") or stu.get("org_id") != user.get("org_id"):
             raise HTTPException(status_code=403, detail="Access denied")
     else:
         raise HTTPException(status_code=403, detail="Access denied")

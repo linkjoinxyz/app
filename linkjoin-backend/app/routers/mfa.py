@@ -1,3 +1,5 @@
+import hmac
+import logging
 import secrets
 import string
 from datetime import datetime, timezone
@@ -8,15 +10,25 @@ from app.config import get_settings
 from app.limiter import limiter
 from app.audit import log_audit
 
+log = logging.getLogger(__name__)
 router = APIRouter(prefix="/auth/mfa", tags=["mfa"])
 _settings = get_settings()
+
+# Guessing bound per challenge: on top of the per-IP @limiter.limit on /verify,
+# a challenge stops accepting attempts after this many wrong codes, forcing a
+# fresh one via /resend instead of staying live for its full 10-minute TTL.
+_MAX_VERIFY_ATTEMPTS = 5
 
 
 def _gen_mfa_code() -> str:
     return "".join(secrets.choice(string.digits) for _ in range(6))
 
 
-async def _send_mfa_code(user: dict) -> str:
+async def _send_mfa_code(user: dict) -> bool:
+    """Create a challenge and attempt delivery. Returns False if the user has no
+    way to learn the code (unconfigured Twilio or a delivery failure) — callers
+    must not tell the client mfa_required in that case, since verify/resend would
+    have no way to ever succeed."""
     code = _gen_mfa_code()
     await motor_db.mfa_challenges.update_many(
         {"user_id": user["user_id"], "used": False},
@@ -27,22 +39,26 @@ async def _send_mfa_code(user: dict) -> str:
         "code": code,
         "created_at": datetime.now(timezone.utc),
         "used": False,
+        "attempts": 0,
         "resend_count": 0,
     })
 
     phone = user.get("mfa_phone") or str(user.get("number", ""))
-    if phone and _settings.twilio_sid and _settings.twilio_token:
-        try:
-            from twilio.rest import Client
-            twilio = Client(_settings.twilio_sid, _settings.twilio_token)
-            twilio.messages.create(
-                from_=_settings.twilio_from_number,
-                body=f"Your LinkJoin verification code is: {code}. Valid for 10 minutes.",
-                to=f"+{phone}",
-            )
-        except Exception:
-            pass
-    return code
+    if not (phone and _settings.twilio_sid and _settings.twilio_token):
+        log.warning("MFA SMS not sent (unconfigured) for user_id=%s", user.get("user_id"))
+        return False
+    try:
+        from twilio.rest import Client
+        twilio = Client(_settings.twilio_sid, _settings.twilio_token)
+        twilio.messages.create(
+            from_=_settings.twilio_from_number,
+            body=f"Your LinkJoin verification code is: {code}. Valid for 10 minutes.",
+            to=f"+{phone}",
+        )
+        return True
+    except Exception:
+        log.warning("MFA SMS delivery failed for user_id=%s", user.get("user_id"))
+        return False
 
 
 @router.post("/verify")
@@ -73,8 +89,14 @@ async def verify_mfa(body: dict, request: Request):
     )
     ip = request.client.host if request.client else None
 
-    if not challenge or challenge.get("code") != code:
+    if not challenge or not hmac.compare_digest(challenge.get("code", ""), code):
         await log_audit(email, "auth.mfa_failure", ip=ip)
+        if challenge:
+            attempts = challenge.get("attempts", 0) + 1
+            update = {"attempts": attempts}
+            if attempts >= _MAX_VERIFY_ATTEMPTS:
+                update["used"] = True
+            await motor_db.mfa_challenges.update_one({"_id": challenge["_id"]}, {"$set": update})
         raise HTTPException(status_code=401, detail="Invalid or expired code")
 
     await motor_db.mfa_challenges.update_one(
@@ -100,6 +122,7 @@ async def verify_mfa(body: dict, request: Request):
 
 
 @router.post("/resend")
+@limiter.limit("5/hour")
 async def resend_mfa(body: dict, request: Request):
     mfa_session = body.get("mfa_session")
     if not mfa_session:
@@ -118,15 +141,20 @@ async def resend_mfa(body: dict, request: Request):
     if not user:
         raise HTTPException(status_code=401, detail="User not found")
 
-    # Rate limit: max 3 resends per session
+    # Rate limit: max 3 resends per session. `iat` is the standard numeric JWT
+    # claim every token carries (see create_token) — this used to read a nonexistent
+    # "iat_str" claim, which fell back to a year-2000 default and made this count
+    # every challenge the user has ever received instead of just this session's.
+    session_start = datetime.fromtimestamp(payload["iat"], tz=timezone.utc)
     session_resends = await motor_db.mfa_challenges.count_documents({
         "user_id": user["user_id"],
-        "created_at": {"$gte": datetime.fromisoformat(payload.get("iat_str", "2000-01-01T00:00:00+00:00"))},
+        "created_at": {"$gte": session_start},
     })
     if session_resends >= 4:
         raise HTTPException(status_code=429, detail="Too many resend attempts")
 
-    await _send_mfa_code(user)
+    if not await _send_mfa_code(user):
+        raise HTTPException(status_code=503, detail="Could not send verification code, contact support")
     return {"message": "Code resent"}
 
 
@@ -142,7 +170,7 @@ async def setup_verify_mfa(body: dict, request: Request, user: dict = Depends(ge
     )
     ip = request.client.host if request.client else None
 
-    if not challenge or challenge.get("code") != code:
+    if not challenge or not hmac.compare_digest(challenge.get("code", ""), code):
         await log_audit(user["username"], "auth.mfa_setup_failure", ip=ip)
         raise HTTPException(status_code=401, detail="Invalid or expired code")
 

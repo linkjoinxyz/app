@@ -2,6 +2,7 @@ import secrets
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse
+from pymongo import ReturnDocument
 from app.auth import get_confirmed_user
 from app.database import motor_db
 from app.audit import log_audit
@@ -81,24 +82,28 @@ _INVALID_HTML = """<!DOCTYPE html>
 
 @router.get("/consent/grant", response_class=HTMLResponse)
 async def grant_parental_consent(token: str, request: Request):
-    user = await motor_db.login.find_one({"parental_consent.token": token})
-    if not user:
-        return HTMLResponse(_INVALID_HTML, status_code=400)
-
-    consent = user.get("parental_consent", {})
-    if consent.get("status") == "granted":
-        return HTMLResponse(_ALREADY_GRANTED_HTML)
-
     ip = request.client.host if request.client else None
-    await motor_db.login.update_one(
-        {"parental_consent.token": token},
+
+    # Atomic compare-and-swap: only a document still "pending" (not already
+    # granted) matches, so two concurrent hits on the same token can't both
+    # succeed — the loser falls through to the invalid/already-granted branch.
+    user = await motor_db.login.find_one_and_update(
+        {"parental_consent.token": token, "parental_consent.status": {"$ne": "granted"}},
         {"$set": {
             "parental_consent.status": "granted",
             "parental_consent.granted_at": datetime.now(timezone.utc),
             "parental_consent.grant_ip": ip,
             "parental_consent.token": None,
         }},
+        return_document=ReturnDocument.BEFORE,
     )
+    if user is None:
+        existing = await motor_db.login.find_one({"parental_consent.token": token})
+        if not existing:
+            return HTMLResponse(_INVALID_HTML, status_code=400)
+        return HTMLResponse(_ALREADY_GRANTED_HTML)
+
+    consent = user.get("parental_consent", {})
     await log_audit(
         user["username"],
         "consent.parental_granted",

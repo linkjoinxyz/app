@@ -11,7 +11,7 @@ from pydantic import BaseModel
 from app.auth import get_confirmed_user
 from app.database import motor_db
 from app.roles import require_teacher, require_premium
-from app.utils import get_blackout_set, get_school_year_start, compute_session_start_utc
+from app.utils import get_blackout_set, get_school_year_start, compute_session_start_utc, csv_safe
 from app.audit import log_audit
 
 log = logging.getLogger(__name__)
@@ -170,6 +170,90 @@ async def compute_leak_rate(class_id: str, cutoff: datetime) -> tuple[float, int
     return (0.0, 0)
 
 
+def resolve_org_thresholds(org: dict | None) -> dict:
+    """Org-configured flag thresholds/blackout dates, falling back to the module
+    defaults when unset — the single place get_class_patterns and /at-risk both
+    read from, so a school's configured policy can't be honored in one and
+    silently ignored in the other."""
+    org_settings = (org or {}).get("attendance_settings") or {}
+    return {
+        "blackout_dates": get_blackout_set(org or {}),
+        "tardy_threshold": int(org_settings.get("tardy_threshold_minutes", _TARDY_THRESHOLD_MINUTES)),
+        "tardy_rate_flag": float(org_settings.get("tardy_rate_flag", _TARDY_RATE_FLAG)),
+        "attendance_rate_flag": float(org_settings.get("attendance_rate_flag", _ATTENDANCE_RATE_FLAG)),
+        "min_sessions": int(org_settings.get("min_sessions_to_flag", _MIN_SESSIONS_TO_FLAG)),
+    }
+
+
+async def compute_class_flag_metrics(
+    class_id: str, cls: dict, thresholds: dict, cutoff: datetime,
+    enrolled_emails: set[str] | None = None,
+) -> tuple[list[str], dict[str, dict]]:
+    """Per-student sessions/tardy_rate/effective_expected/attendance_rate for one
+    class, using org-config thresholds, excused_absences, blackout dates, and
+    _resolve_latest_records — the core math get_class_patterns and /at-risk must
+    not diverge on. Returns (expected_dates, metrics_by_student_email)."""
+    blackout_dates = thresholds["blackout_dates"]
+    tardy_threshold = thresholds["tardy_threshold"]
+
+    class_days = cls.get("days") or []
+    scheduled_weekdays = {_DAY_TO_WEEKDAY[d] for d in class_days if d in _DAY_TO_WEEKDAY}
+    expected_dates = [
+        (cutoff + timedelta(days=i)).strftime("%Y-%m-%d")
+        for i in range(_LOOKBACK_DAYS)
+        if (cutoff + timedelta(days=i)).weekday() in scheduled_weekdays
+    ]
+    expected_dates_set = set(expected_dates)
+    expected_count = len(expected_dates)
+    class_excused_absences = cls.get("excused_absences") or []
+
+    by_student: dict[str, list] = defaultdict(list)
+    async for r in motor_db.attendance.find({
+        "class_id": class_id,
+        "$or": [{"opened_at": {"$gte": cutoff}}, {"recorded_at": {"$gte": cutoff}}],
+    }):
+        by_student[r["student_email"]].append(r)
+    for email in (enrolled_emails or ()):
+        by_student.setdefault(email, [])
+
+    metrics: dict[str, dict] = {}
+    for email, records in by_student.items():
+        current_records = list(_resolve_latest_records(records).values())
+        attended = [r for r in current_records if isinstance(r.get("opened_at"), datetime)]
+        joined_dates = {_record_date_str(r) for r in attended}
+
+        total = len(attended)
+        tardy = sum(1 for r in attended if (r.get("minutes_late") or 0) > tardy_threshold and not r.get("excused"))
+        on_time = total - tardy
+        tardy_rate = tardy / total if total > 0 else 0.0
+
+        override_excused_dates = {
+            _record_date_str(r) for r in current_records
+            if not isinstance(r.get("opened_at"), datetime) and r.get("excused")
+        }
+        student_excused_dates = ({
+            e["date"] for e in class_excused_absences
+            if e.get("student_email") == email and e.get("date") in expected_dates_set
+        } | (override_excused_dates & expected_dates_set))
+        effective_expected = max(expected_count - len(student_excused_dates), 0)
+        attendance_rate = min(total / effective_expected, 1.0) if effective_expected > 0 else 1.0
+        missed_dates = sorted(expected_dates_set - joined_dates - student_excused_dates - blackout_dates)
+        excused_absence_dates = sorted(student_excused_dates)
+
+        metrics[email] = {
+            "sessions": total,
+            "on_time": on_time,
+            "tardy": tardy,
+            "tardy_rate": round(tardy_rate, 2),
+            "effective_expected": effective_expected,
+            "attendance_rate": round(attendance_rate, 2),
+            "missed_dates": missed_dates,
+            "excused_absence_dates": excused_absence_dates,
+            "attended": attended,
+        }
+    return expected_dates, metrics
+
+
 async def _gc_sync_if_due(class_id: str) -> None:
     try:
         cls = await motor_db.classes.find_one({"class_id": class_id})
@@ -300,9 +384,14 @@ async def get_class_attendance(class_id: str, user: dict = Depends(get_confirmed
         raise HTTPException(status_code=403, detail="Access denied")
 
     records = []
-    present_combos: set[tuple[str, str]] = set()
-    raw_records = await motor_db.attendance.find({"class_id": class_id}).sort("opened_at", -1).limit(200).to_list(None)
+    now = datetime.now(timezone.utc)
+    cutoff = now - timedelta(days=_LOOKBACK_DAYS)
+    raw_records = await motor_db.attendance.find({
+        "class_id": class_id,
+        "$or": [{"opened_at": {"$gte": cutoff}}, {"recorded_at": {"$gte": cutoff}}],
+    }).to_list(None)
     latest_by_key = _resolve_latest_records(raw_records)
+    present_combos: set[tuple[str, str]] = set(latest_by_key.keys())
     for r in raw_records:
         r.setdefault("manual", False)
         r.setdefault("source", "manual_override" if r.get("manual") else "linkjoin_click")
@@ -321,13 +410,10 @@ async def get_class_attendance(class_id: str, user: dict = Depends(get_confirmed
         r["opened_at"] = opened.isoformat() if isinstance(opened, datetime) else opened
         r["recorded_at"] = recorded.isoformat() if isinstance(recorded, datetime) else recorded
         records.append(r)
-        present_combos.add((r["student_email"], date_str))
 
     # Fill in absences: for every scheduled class day in the recent lookback
     # window, any roster student with no record at all gets a synthetic
     # "absent" row instead of just being missing from the table.
-    now = datetime.now(timezone.utc)
-    cutoff = now - timedelta(days=_LOOKBACK_DAYS)
     class_days = cls.get("days") or []
     scheduled_weekdays = {_DAY_TO_WEEKDAY[d] for d in class_days if d in _DAY_TO_WEEKDAY}
     expected_dates = [
@@ -373,7 +459,10 @@ async def get_class_attendance(class_id: str, user: dict = Depends(get_confirmed
                 "is_current": True,
             })
 
-    records.sort(key=lambda r: r["opened_at"], reverse=True)
+    # record_date is always a populated string; opened_at is null on an
+    # absent/excused record, which a bare `sort(key=opened_at)` can't compare
+    # against the string opened_at of other rows.
+    records.sort(key=lambda r: (r["record_date"], r["opened_at"] or ""), reverse=True)
     return {"records": records}
 
 
@@ -552,12 +641,12 @@ async def get_class_patterns(class_id: str, student_email: str | None = Query(de
         {"org_id": cls.get("org_id", "")},
         {"attendance_settings": 1, "blackout_dates": 1, "summer_start": 1, "summer_end": 1}
     )
+    thresholds = resolve_org_thresholds(org)
+    tardy_threshold = thresholds["tardy_threshold"]
+    tardy_rate_flag = thresholds["tardy_rate_flag"]
+    attendance_rate_flag = thresholds["attendance_rate_flag"]
+    min_sessions = thresholds["min_sessions"]
     org_settings = (org or {}).get("attendance_settings") or {}
-    blackout_dates = get_blackout_set(org or {})
-    tardy_threshold = int(org_settings.get("tardy_threshold_minutes", _TARDY_THRESHOLD_MINUTES))
-    tardy_rate_flag = float(org_settings.get("tardy_rate_flag", _TARDY_RATE_FLAG))
-    attendance_rate_flag = float(org_settings.get("attendance_rate_flag", _ATTENDANCE_RATE_FLAG))
-    min_sessions = int(org_settings.get("min_sessions_to_flag", _MIN_SESSIONS_TO_FLAG))
     leak_rate_flag = float(org_settings.get("leak_rate_flag", _LEAK_RATE_FLAG))
 
     now = datetime.now(timezone.utc)
@@ -565,31 +654,6 @@ async def get_class_patterns(class_id: str, student_email: str | None = Query(de
 
     leak_rate, leak_total_events = await compute_leak_rate(class_id, cutoff)
     data_quality_flagged = leak_total_events >= min_sessions and leak_rate >= leak_rate_flag
-
-    # Build ordered list of scheduled class dates in the lookback window.
-    # All scheduled days count toward expected_count; blackout dates are excluded
-    # from the missed-days list but do not reduce expected_count.
-    class_days = cls.get("days") or []
-    scheduled_weekdays = {_DAY_TO_WEEKDAY[d] for d in class_days if d in _DAY_TO_WEEKDAY}
-    expected_dates: list[str] = [
-        (cutoff + timedelta(days=i)).strftime("%Y-%m-%d")
-        for i in range(_LOOKBACK_DAYS)
-        if (cutoff + timedelta(days=i)).weekday() in scheduled_weekdays
-    ]
-    expected_count = len(expected_dates)
-    expected_dates_set = set(expected_dates)
-
-    # Load per-student excused absences stored on the class document
-    class_excused_absences: list[dict] = cls.get("excused_absences") or []
-
-    # Fetch all attendance records within the window. Match on opened_at OR
-    # recorded_at — a manual_override for an absence has a null opened_at.
-    by_student: dict[str, list] = defaultdict(list)
-    async for r in motor_db.attendance.find({
-        "class_id": class_id,
-        "$or": [{"opened_at": {"$gte": cutoff}}, {"recorded_at": {"$gte": cutoff}}],
-    }):
-        by_student[r["student_email"]].append(r)
 
     # Resolve enrolled students from roster
     enrolled_emails: set[str] = set()
@@ -599,7 +663,11 @@ async def get_class_patterns(class_id: str, student_email: str | None = Query(de
         if u:
             enrolled_emails.add(u["username"])
             email_to_user_id[u["username"]] = u["user_id"]
-            by_student.setdefault(u["username"], [])
+
+    expected_dates, metrics_by_email = await compute_class_flag_metrics(
+        class_id, cls, thresholds, cutoff, enrolled_emails=enrolled_emails
+    )
+    expected_count = len(expected_dates)
 
     # Build intervention state per (student_email, flag_type):
     #   active_iv_keys  — has an open/in_progress intervention → use normal flag logic
@@ -619,48 +687,14 @@ async def get_class_patterns(class_id: str, student_email: str | None = Query(de
                 resolved_iv_ts[key] = ts
 
     results = []
-    for email, records in by_student.items():
+    for email, m in metrics_by_email.items():
         if student_email and email != student_email:
             continue
-        # Resolve one record per calendar date: the most recently *recorded*
-        # row wins (append-only overrides supersede earlier joins/overrides,
-        # rather than whichever happens to look best).
-        latest_by_key = _resolve_latest_records(records)
-        current_records = list(latest_by_key.values())
-
-        # Only rows with a real join timestamp count as an attended session —
-        # an absent/excused override has no timestamp by design.
-        attended = [r for r in current_records if isinstance(r.get("opened_at"), datetime)]
-        joined_dates = {_record_date_str(r) for r in attended}
-        deduped = attended  # kept for downstream post-resolution intervention logic
-
-        total = len(deduped)
-        tardy = sum(
-            1 for r in deduped
-            if (r.get("minutes_late") or 0) > tardy_threshold and not r.get("excused")
-        )
-        on_time = total - tardy
-        tardy_rate = tardy / total if total > 0 else 0.0
-
-        # An absent override explicitly marked "excused" resolves that date —
-        # it's not a silent gap — so fold it in alongside the class-level
-        # excused-absences list rather than letting it show as a missed date.
-        override_excused_dates = {
-            _record_date_str(r) for r in current_records
-            if not isinstance(r.get("opened_at"), datetime) and r.get("excused")
-        }
-
-        # Compute per-student excused absence dates that fall on expected session days
-        student_excused_dates = ({
-            e["date"] for e in class_excused_absences
-            if e.get("student_email") == email and e.get("date") in expected_dates_set
-        } | (override_excused_dates & expected_dates_set))
-        effective_expected = max(expected_count - len(student_excused_dates), 0)
-        attendance_rate = min(total / effective_expected, 1.0) if effective_expected > 0 else 1.0
-
-        # Compute which expected dates the student has no record for (exclude blackouts)
-        missed_dates = sorted(expected_dates_set - joined_dates - student_excused_dates - blackout_dates)
-        excused_absence_dates = sorted(student_excused_dates)
+        total = m["sessions"]
+        tardy_rate = m["tardy_rate"]
+        effective_expected = m["effective_expected"]
+        attendance_rate = m["attendance_rate"]
+        attended = m["attended"]
 
         flags = []
         reopen_flags = []
@@ -676,8 +710,7 @@ async def get_class_patterns(class_id: str, student_email: str | None = Query(de
                         flags.append(flag_type)
             elif (resolved_at := resolved_iv_ts.get(key)):
                 # Resolved intervention: suppress normal flag; check post-resolution stats
-                post = [r for r in deduped
-                        if isinstance(r.get("opened_at"), datetime) and r["opened_at"] > resolved_at]
+                post = [r for r in attended if r["opened_at"] > resolved_at]
                 post_total = len(post)
                 if flag_type == "repeat_tardy":
                     post_tardy = sum(1 for r in post
@@ -705,13 +738,13 @@ async def get_class_patterns(class_id: str, student_email: str | None = Query(de
             "student_user_id": email_to_user_id.get(email),
             "enrolled": email in enrolled_emails,
             "sessions": total,
-            "on_time": on_time,
-            "tardy": tardy,
-            "tardy_rate": round(tardy_rate, 2),
+            "on_time": m["on_time"],
+            "tardy": m["tardy"],
+            "tardy_rate": tardy_rate,
             "effective_expected": effective_expected,
-            "attendance_rate": round(attendance_rate, 2),
-            "missed_dates": missed_dates,
-            "excused_absence_dates": excused_absence_dates,
+            "attendance_rate": attendance_rate,
+            "missed_dates": m["missed_dates"],
+            "excused_absence_dates": m["excused_absence_dates"],
             "flags": flags,
             "reopen_flags": reopen_flags,
             # Leaked joins have no timestamps, so a class over the leak threshold
@@ -759,7 +792,12 @@ async def get_class_attendance_summary(
     )
     tardy_threshold = int((org or {}).get("attendance_settings", {}).get("tardy_threshold_minutes", _TARDY_THRESHOLD_MINUTES))
     now = datetime.now(timezone.utc)
-    cutoff = get_school_year_start(org or {}, now) if window == "school_year" else now - timedelta(days=_LOOKBACK_DAYS)
+    if window == "school_year":
+        cutoff = get_school_year_start(org or {}, now)
+        lookback_days = (now.date() - cutoff.date()).days + 1
+    else:
+        cutoff = now - timedelta(days=_LOOKBACK_DAYS)
+        lookback_days = _LOOKBACK_DAYS
 
     counts = await compute_student_session_counts(class_id, cutoff, tardy_threshold)
 
@@ -769,17 +807,22 @@ async def get_class_attendance_summary(
         if u:
             email_to_user_id[u["username"]] = u["user_id"]
 
-    students = [
-        {
+    students = []
+    for email, c in counts.items():
+        # attendance_rate is expected-sessions-weighted (same math as the parent
+        # portal), not on-time-joins-over-joins-attended — sessions/on_time/late
+        # stay as raw counts from compute_student_session_counts above.
+        rate_stats = await compute_student_attendance_rate(
+            class_id, cls, email, cutoff, lookback_days, tardy_threshold
+        )
+        students.append({
             "student_email": email,
             "student_user_id": email_to_user_id.get(email),
             "sessions": c["sessions"],
             "on_time": c["on_time"],
             "late": c["late"],
-            "attendance_rate": round(c["on_time"] / c["sessions"] * 100) if c["sessions"] else 0,
-        }
-        for email, c in counts.items()
-    ]
+            "attendance_rate": round(rate_stats["attendance_rate"] * 100),
+        })
     students.sort(key=lambda s: s["student_email"])
     return {"window": window, "students": students}
 
@@ -862,7 +905,7 @@ async def export_class_attendance(
                 is_excused = rec.get("excused", False)
                 excuse_reason = rec.get("excuse_reason", "") or rec.get("note", "")
                 status = "Excused Absent" if is_excused else "Absent"
-                writer.writerow([email, name, class_name, date_str, day_name, status, "", is_excused, excuse_reason])
+                writer.writerow([email, csv_safe(name), class_name, date_str, day_name, status, "", is_excused, csv_safe(excuse_reason)])
             elif rec:
                 ml = rec.get("minutes_late") or 0
                 is_excused = rec.get("excused", False)
@@ -873,12 +916,12 @@ async def export_class_attendance(
                     status = "Tardy"
                 else:
                     status = "Present"
-                writer.writerow([email, name, class_name, date_str, day_name, status,
-                                 ml if ml > tardy_threshold else "", is_excused, excuse_reason])
+                writer.writerow([email, csv_safe(name), class_name, date_str, day_name, status,
+                                 ml if ml > tardy_threshold else "", is_excused, csv_safe(excuse_reason)])
             else:
                 is_excused_absent = date_str in excused_by_student.get(email, set())
                 status = "Excused Absent" if is_excused_absent else "Absent"
-                writer.writerow([email, name, class_name, date_str, day_name, status, "", is_excused_absent, ""])
+                writer.writerow([email, csv_safe(name), class_name, date_str, day_name, status, "", is_excused_absent, ""])
 
     await log_audit(user["username"], "data.attendance_export", detail={"class_id": class_id})
     safe_name = "".join(c if c.isalnum() or c in " -_" else "_" for c in class_name)

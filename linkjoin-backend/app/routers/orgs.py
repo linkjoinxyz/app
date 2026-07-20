@@ -14,8 +14,8 @@ from app.database import motor_db
 from app.config import get_settings
 from app.models.org import CreateOrgRequest, UpdateOrgRequest
 from app.roles import require_school_admin
-from app.utils import track_event, get_school_year_start
-from app.routers.attendance import compute_student_session_counts, _LOOKBACK_DAYS, _TARDY_THRESHOLD_MINUTES
+from app.utils import track_event, get_school_year_start, STAFF_HIDDEN_FIELDS
+from app.routers.attendance import compute_student_attendance_rate, _LOOKBACK_DAYS, _TARDY_THRESHOLD_MINUTES
 from app.email_service import send_email
 
 _hasher = _PH()
@@ -174,7 +174,7 @@ async def get_org_members(org_id: str, user: dict = Depends(get_confirmed_user))
     if user.get("org_id") != org_id and user.get("role") != "district_admin":
         raise HTTPException(status_code=403, detail="Access denied")
     members = []
-    async for u in motor_db.login.find({"org_id": org_id}, {"password": 0, "_id": 0}):
+    async for u in motor_db.login.find({"org_id": org_id}, STAFF_HIDDEN_FIELDS):
         members.append(u)
     return members
 
@@ -458,7 +458,10 @@ async def get_org_attendance(org_id: str, window: str = Query(default="28d"), us
         raise HTTPException(status_code=403, detail="Access denied")
 
     classes = []
-    async for cls in motor_db.classes.find({"org_id": org_id}, {"_id": 0, "class_id": 1, "name": 1, "teacher_name": 1}):
+    async for cls in motor_db.classes.find(
+        {"org_id": org_id},
+        {"_id": 0, "class_id": 1, "name": 1, "teacher_name": 1, "days": 1, "excused_absences": 1, "student_ids": 1},
+    ):
         classes.append(cls)
 
     if not classes:
@@ -467,14 +470,36 @@ async def get_org_attendance(org_id: str, window: str = Query(default="28d"), us
     org = await motor_db.orgs.find_one({"org_id": org_id}, {"attendance_settings": 1, "summer_end": 1})
     tardy_threshold = int((org or {}).get("attendance_settings", {}).get("tardy_threshold_minutes", _TARDY_THRESHOLD_MINUTES))
     now = datetime.now(timezone.utc)
-    cutoff = get_school_year_start(org or {}, now) if window == "school_year" else now - timedelta(days=_LOOKBACK_DAYS)
+    if window == "school_year":
+        cutoff = get_school_year_start(org or {}, now)
+        lookback_days = (now.date() - cutoff.date()).days + 1
+    else:
+        cutoff = now - timedelta(days=_LOOKBACK_DAYS)
+        lookback_days = _LOOKBACK_DAYS
 
     result = []
     for cls in classes:
-        counts = (await compute_student_session_counts(cls["class_id"], cutoff, tardy_threshold)).values()
-        total = sum(c["sessions"] for c in counts)
-        on_time = sum(c["on_time"] for c in counts)
-        late = sum(c["late"] for c in counts)
+        emails = []
+        for uid in cls.get("student_ids") or []:
+            student = await motor_db.login.find_one({"user_id": uid}, {"username": 1, "_id": 0})
+            if student:
+                emails.append(student["username"])
+
+        # Rate is expected-sessions-weighted across the roster (same math as the
+        # parent portal / get_class_patterns), not on-time-joins-over-joins-attended —
+        # a student who skips most of the term should not read as 100% attendance.
+        total = on_time = late = expected_total = 0
+        for email in emails:
+            stats = await compute_student_attendance_rate(
+                cls["class_id"], cls, email, cutoff, lookback_days, tardy_threshold
+            )
+            total += stats["sessions"]
+            on_time += stats["on_time"]
+            late += stats["tardy"]
+            expected_total += stats["effective_expected"]
+
+        attendance_rate = round(min(total / expected_total, 1.0) * 100) if expected_total else 0
+
         result.append({
             "class_id": cls["class_id"],
             "class_name": cls.get("name", ""),
@@ -482,7 +507,7 @@ async def get_org_attendance(org_id: str, window: str = Query(default="28d"), us
             "total_records": total,
             "on_time": on_time,
             "late": late,
-            "attendance_rate": round(on_time / total * 100) if total else 0,
+            "attendance_rate": attendance_rate,
         })
 
     result.sort(key=lambda r: r["class_name"].lower())
