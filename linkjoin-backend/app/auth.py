@@ -2,11 +2,12 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 from jose import JWTError, jwt
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from app.config import get_settings
 from app.database import motor_db
 from app.redis_client import get_redis
+from app.roles import is_admin_role
 
 _settings = get_settings()
 _bearer = HTTPBearer(auto_error=False)
@@ -116,7 +117,33 @@ def is_confirmed(user: dict) -> bool:
     return user.get("confirmed") != "false"
 
 
-async def get_confirmed_user(user: dict = Depends(get_current_user)) -> dict:
+# Endpoints an account must still be able to reach while it's gated below —
+# to change a temp password or to finish MFA enrollment. Everything else 403s
+# until the account acts, so a leaked temp password or an MFA-less admin
+# session isn't a standing credential (findings 6.5/6.6).
+_SELF_SERVICE_ALLOWLIST = {
+    ("POST", "/auth/set-password"),
+    ("POST", "/auth/logout"),
+    ("GET", "/users/me"),
+    ("PATCH", "/users/mfa"),
+    ("POST", "/auth/mfa/setup-verify"),
+}
+
+
+async def get_confirmed_user(request: Request, user: dict = Depends(get_current_user)) -> dict:
     if not is_confirmed(user):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Email not confirmed")
+
+    if (request.method, request.url.path) in _SELF_SERVICE_ALLOWLIST:
+        return user
+
+    if user.get("must_change_password"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="must_change_password")
+
+    # Mirrors the force_mfa/mfa_setup_required logic in /auth/login: a phone
+    # number already gets an admin MFA-challenged every login even before they've
+    # run the explicit enable flow, so only block when neither path is present.
+    if is_admin_role(user) and not user.get("mfa_enabled") and not user.get("number"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="mfa_setup_required")
+
     return user

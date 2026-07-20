@@ -121,6 +121,9 @@ async def lifespan(app: FastAPI):
         motor_db.absence_alerts.create_index(
             [("class_id", 1), ("student_email", 1), ("date", 1)], unique=True
         ),
+        motor_db.parent_reminder_log.create_index(
+            [("class_id", 1), ("student_user_id", 1), ("parent_user_id", 1), ("date", 1)], unique=True
+        ),
         motor_db.open_log.create_index([("username", 1), ("opened_at", -1)]),
         motor_db.open_log.create_index([("username", 1), ("link_id", 1), ("opened_at", -1)]),
         motor_db.invites.create_index("token", unique=True),

@@ -53,6 +53,21 @@ async def _resolve_students(student_ids: list[str]) -> list[dict]:
     return result
 
 
+async def get_authorized_class(class_id: str, user: dict = Depends(get_confirmed_user)) -> dict:
+    """Single source of truth for class access: role gate, then ownership
+    (teacher) or org-membership (school_admin/district_admin) check.
+    Reused by every handler below instead of each repeating the pair inline."""
+    require_teacher(user)
+    cls = await motor_db.classes.find_one({"class_id": class_id}, {"_id": 0})
+    if not cls:
+        raise HTTPException(status_code=404, detail="Class not found")
+    if user.get("role") == "teacher" and cls["teacher_id"] != user["user_id"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+    if user.get("role") in ("school_admin", "district_admin") and cls.get("org_id") != user.get("org_id"):
+        raise HTTPException(status_code=403, detail="Access denied")
+    return cls
+
+
 @router.get("")
 async def list_classes(user: dict = Depends(get_confirmed_user)):
     require_teacher(user)
@@ -98,29 +113,13 @@ async def create_class(body: CreateClassRequest, user: dict = Depends(get_confir
 
 
 @router.get("/{class_id}")
-async def get_class(class_id: str, user: dict = Depends(get_confirmed_user)):
-    require_teacher(user)
-    cls = await motor_db.classes.find_one({"class_id": class_id}, {"_id": 0})
-    if not cls:
-        raise HTTPException(status_code=404, detail="Class not found")
-    if user.get("role") == "teacher" and cls["teacher_id"] != user["user_id"]:
-        raise HTTPException(status_code=403, detail="Access denied")
-    if user.get("role") in ("school_admin", "district_admin") and cls["org_id"] != user.get("org_id"):
-        raise HTTPException(status_code=403, detail="Access denied")
+async def get_class(cls: dict = Depends(get_authorized_class)):
     cls["students"] = await _resolve_students(cls.get("student_ids", []))
     return cls
 
 
 @router.get("/{class_id}/links")
-async def get_class_links(class_id: str, user: dict = Depends(get_confirmed_user)):
-    require_teacher(user)
-    cls = await motor_db.classes.find_one({"class_id": class_id}, {"_id": 0, "teacher_id": 1, "org_id": 1, "link_ids": 1})
-    if not cls:
-        raise HTTPException(status_code=404, detail="Class not found")
-    if user.get("role") == "teacher" and cls["teacher_id"] != user["user_id"]:
-        raise HTTPException(status_code=403, detail="Access denied")
-    if user.get("role") in ("school_admin", "district_admin") and cls.get("org_id") != user.get("org_id"):
-        raise HTTPException(status_code=403, detail="Access denied")
+async def get_class_links(cls: dict = Depends(get_authorized_class)):
     link_ids = cls.get("link_ids") or []
     if not link_ids:
         return {"links": []}
@@ -131,16 +130,10 @@ async def get_class_links(class_id: str, user: dict = Depends(get_confirmed_user
 
 
 @router.put("/{class_id}")
-async def update_class(class_id: str, body: UpdateClassRequest, user: dict = Depends(get_confirmed_user)):
-    require_teacher(user)
-    cls = await motor_db.classes.find_one({"class_id": class_id})
-    if not cls:
-        raise HTTPException(status_code=404, detail="Class not found")
-    if user.get("role") == "teacher" and cls["teacher_id"] != user["user_id"]:
-        raise HTTPException(status_code=403, detail="Access denied")
+async def update_class(body: UpdateClassRequest, cls: dict = Depends(get_authorized_class)):
     updates = {k: v for k, v in body.model_dump().items() if v is not None}
     if updates:
-        await motor_db.classes.update_one({"class_id": class_id}, {"$set": updates})
+        await motor_db.classes.update_one({"class_id": cls["class_id"]}, {"$set": updates})
     return {"message": "Updated"}
 
 
@@ -162,21 +155,17 @@ async def delete_class(class_id: str, user: dict = Depends(get_confirmed_user)):
 
 
 @router.post("/{class_id}/students")
-async def add_students(class_id: str, body: AddStudentsRequest, user: dict = Depends(get_confirmed_user)):
-    require_teacher(user)
-    cls = await motor_db.classes.find_one({"class_id": class_id})
-    if not cls:
-        raise HTTPException(status_code=404, detail="Class not found")
-    if user.get("role") == "teacher" and cls["teacher_id"] != user["user_id"]:
-        raise HTTPException(status_code=403, detail="Access denied")
+async def add_students(body: AddStudentsRequest, cls: dict = Depends(get_authorized_class)):
+    class_id = cls["class_id"]
+    org_id = cls.get("org_id")
 
     existing_ids = set(cls.get("student_ids", []))
     new_ids = []
     for entry in body.student_ids:
-        u = await motor_db.login.find_one({"user_id": entry}, {"user_id": 1})
+        u = await motor_db.login.find_one({"user_id": entry}, {"user_id": 1, "org_id": 1})
         if not u:
-            u = await motor_db.login.find_one({"username": entry.lower().strip()}, {"user_id": 1})
-        if u and u["user_id"] not in existing_ids:
+            u = await motor_db.login.find_one({"username": entry.lower().strip()}, {"user_id": 1, "org_id": 1})
+        if u and u.get("org_id") == org_id and u["user_id"] not in existing_ids:
             new_ids.append(u["user_id"])
     if not new_ids:
         raise HTTPException(status_code=404, detail="No matching students found")
@@ -200,14 +189,8 @@ async def add_students(class_id: str, body: AddStudentsRequest, user: dict = Dep
 
 
 @router.delete("/{class_id}/students/{user_id}")
-async def remove_student(class_id: str, user_id: str, user: dict = Depends(get_confirmed_user)):
-    require_teacher(user)
-    cls = await motor_db.classes.find_one({"class_id": class_id})
-    if not cls:
-        raise HTTPException(status_code=404, detail="Class not found")
-    if user.get("role") == "teacher" and cls["teacher_id"] != user["user_id"]:
-        raise HTTPException(status_code=403, detail="Access denied")
-
+async def remove_student(user_id: str, cls: dict = Depends(get_authorized_class)):
+    class_id = cls["class_id"]
     await motor_db.classes.update_one({"class_id": class_id}, {"$pull": {"student_ids": user_id}})
 
     student = await motor_db.login.find_one({"user_id": user_id}, {"username": 1})
@@ -219,14 +202,8 @@ async def remove_student(class_id: str, user_id: str, user: dict = Depends(get_c
 
 
 @router.post("/{class_id}/links/{link_id}")
-async def add_class_link(class_id: str, link_id: int, user: dict = Depends(get_confirmed_user)):
-    require_teacher(user)
-    cls = await motor_db.classes.find_one({"class_id": class_id})
-    if not cls:
-        raise HTTPException(status_code=404, detail="Class not found")
-    if user.get("role") == "teacher" and cls["teacher_id"] != user["user_id"]:
-        raise HTTPException(status_code=403, detail="Access denied")
-
+async def add_class_link(link_id: int, user: dict = Depends(get_confirmed_user), cls: dict = Depends(get_authorized_class)):
+    class_id = cls["class_id"]
     link = await motor_db.links.find_one({"id": link_id, "username": user["username"]})
     if not link:
         raise HTTPException(status_code=404, detail="Link not found")
@@ -252,14 +229,8 @@ async def add_class_link(class_id: str, link_id: int, user: dict = Depends(get_c
 
 
 @router.delete("/{class_id}/links/{link_id}")
-async def remove_class_link(class_id: str, link_id: int, user: dict = Depends(get_confirmed_user)):
-    require_teacher(user)
-    cls = await motor_db.classes.find_one({"class_id": class_id})
-    if not cls:
-        raise HTTPException(status_code=404, detail="Class not found")
-    if user.get("role") == "teacher" and cls["teacher_id"] != user["user_id"]:
-        raise HTTPException(status_code=403, detail="Access denied")
-
+async def remove_class_link(link_id: int, cls: dict = Depends(get_authorized_class)):
+    class_id = cls["class_id"]
     await motor_db.classes.update_one({"class_id": class_id}, {"$pull": {"link_ids": link_id}})
     await motor_db.links.update_many({"id": link_id}, {"$unset": {"class_id": ""}})
 
@@ -271,36 +242,20 @@ async def remove_class_link(class_id: str, link_id: int, user: dict = Depends(ge
 
 
 @router.post("/{class_id}/excuse-absence", status_code=200)
-async def add_excused_absence(class_id: str, body: ExcuseAbsenceBody, user: dict = Depends(get_confirmed_user)):
-    require_teacher(user)
-    cls = await motor_db.classes.find_one({"class_id": class_id})
-    if not cls:
-        raise HTTPException(status_code=404, detail="Class not found")
-    if user.get("role") == "teacher" and cls["teacher_id"] != user["user_id"]:
-        raise HTTPException(status_code=403, detail="Access denied")
-    if user.get("role") in ("school_admin", "district_admin") and cls["org_id"] != user.get("org_id"):
-        raise HTTPException(status_code=403, detail="Access denied")
+async def add_excused_absence(body: ExcuseAbsenceBody, cls: dict = Depends(get_authorized_class)):
     entry = {"student_email": body.student_email, "date": body.date}
     await motor_db.classes.update_one(
-        {"class_id": class_id},
+        {"class_id": cls["class_id"]},
         {"$addToSet": {"excused_absences": entry}}
     )
     return {"ok": True}
 
 
 @router.delete("/{class_id}/excuse-absence", status_code=200)
-async def remove_excused_absence(class_id: str, body: ExcuseAbsenceBody, user: dict = Depends(get_confirmed_user)):
-    require_teacher(user)
-    cls = await motor_db.classes.find_one({"class_id": class_id})
-    if not cls:
-        raise HTTPException(status_code=404, detail="Class not found")
-    if user.get("role") == "teacher" and cls["teacher_id"] != user["user_id"]:
-        raise HTTPException(status_code=403, detail="Access denied")
-    if user.get("role") in ("school_admin", "district_admin") and cls["org_id"] != user.get("org_id"):
-        raise HTTPException(status_code=403, detail="Access denied")
+async def remove_excused_absence(body: ExcuseAbsenceBody, cls: dict = Depends(get_authorized_class)):
     entry = {"student_email": body.student_email, "date": body.date}
     await motor_db.classes.update_one(
-        {"class_id": class_id},
+        {"class_id": cls["class_id"]},
         {"$pull": {"excused_absences": entry}}
     )
     return {"ok": True}

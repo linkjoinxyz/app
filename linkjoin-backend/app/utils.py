@@ -7,6 +7,20 @@ from app.database import sync_db, motor_db
 from app.encryption import decrypt
 
 
+# Projection for `login` docs returned to staff (school/district/platform admins)
+# viewing OTHER users' records. Excludes fields that are either secrets (consent
+# grant token, MFA phone) or private to the account owner (billing id, notes).
+STAFF_HIDDEN_FIELDS = {
+    "password": 0,
+    "_id": 0,
+    "parental_consent.token": 0,
+    "stripe_customer_id": 0,
+    "mfa_phone": 0,
+    "refer": 0,
+    "notes": 0,
+}
+
+
 def gen_id() -> str:
     candidate = secrets.token_urlsafe(16)
     while sync_db.login.find_one({"refer": candidate}):
@@ -190,6 +204,19 @@ def get_blackout_set(org: dict) -> set[str]:
             dates.add(cur.isoformat())
             cur += timedelta(days=1)
     return dates
+
+
+_CSV_DANGEROUS_PREFIXES = ("=", "+", "-", "@", "\t", "\r")
+
+
+def csv_safe(value) -> str:
+    """Prefix a leading formula-trigger character with a single quote before
+    writing to CSV — the standard mitigation for Excel/Sheets formula
+    injection (OWASP CSV Injection). Apply to every user-controlled cell."""
+    s = str(value) if value is not None else ""
+    if s.startswith(_CSV_DANGEROUS_PREFIXES):
+        return "'" + s
+    return s
 
 
 def get_school_year_start(org: dict, now: datetime) -> datetime:

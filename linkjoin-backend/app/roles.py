@@ -20,6 +20,12 @@ def require_district_admin(user: dict) -> None:
         raise HTTPException(status_code=403, detail="District admin access required")
 
 
+def is_admin_role(user: dict) -> bool:
+    """School/district admins and platform admins — the accounts MFA is meant
+    to protect, since they're the ones with reach into student PII."""
+    return user.get("role") in SCHOOL_ADMIN_ROLES or user.get("admin") == "true"
+
+
 def is_premium(user: dict) -> bool:
     """Entitlement predicate. Mirrors isPremium in the frontend AuthContext."""
     if user.get("account_type") == "institutional":

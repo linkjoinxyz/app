@@ -2,10 +2,11 @@ import secrets
 from datetime import datetime, timezone, timedelta
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from app.auth import get_confirmed_user
+from app.audit import log_audit
 from app.config import get_settings
 from app.database import motor_db
 from app.email_service import send_email
-from app.roles import require_teacher
+from app.roles import require_teacher, TEACHER_ROLES
 
 router = APIRouter(prefix="/interventions", tags=["interventions"])
 
@@ -166,25 +167,27 @@ async def _assert_access(intervention, user):
             raise HTTPException(status_code=403, detail="Access denied")
     elif role == "teacher":
         cls = await motor_db.classes.find_one({"class_id": intervention.get("class_id")})
-        if not cls or cls.get("teacher_id") != user.get("user_id"):
+        is_owner = bool(cls) and cls.get("teacher_id") == user.get("user_id")
+        is_assignee = intervention.get("assigned_to") == user.get("username")
+        if not (is_owner or is_assignee):
             raise HTTPException(status_code=403, detail="Access denied")
     else:
         raise HTTPException(status_code=403, detail="Access denied")
 
 
-_DAY_TO_WEEKDAY = {'Sun': 6, 'Mon': 0, 'Tue': 1, 'Wed': 2, 'Thu': 3, 'Fri': 4, 'Sat': 5}
 _LOOKBACK_DAYS = 28
-_TARDY_THRESHOLD_MINUTES = 5
-_TARDY_RATE_FLAG = 0.33
-_ATTENDANCE_RATE_FLAG = 0.5
-_MIN_SESSIONS_TO_FLAG = 3
 
 
 @router.get("/at-risk")
 async def get_at_risk_students(user: dict = Depends(get_confirmed_user)):
-    """Students with attendance flags who have no open intervention case yet."""
+    """Students with attendance flags who have no open intervention case yet.
+    Flag math is delegated to attendance.compute_class_flag_metrics — the same
+    org-config-aware, excused/blackout-aware, dedup-aware calculation /patterns
+    uses, so the two views can't silently disagree on who needs intervention."""
     require_teacher(user)
     role = user.get("role")
+
+    from app.routers.attendance import compute_class_flag_metrics, resolve_org_thresholds
 
     if role in ("school_admin", "district_admin"):
         class_docs = await motor_db.classes.find({"org_id": user.get("org_id")}).to_list(None)
@@ -206,59 +209,48 @@ async def get_at_risk_students(user: dict = Depends(get_confirmed_user)):
     now = datetime.now(timezone.utc)
     cutoff = now - timedelta(days=_LOOKBACK_DAYS)
 
-    pipeline = [
-        {"$match": {"class_id": {"$in": class_ids}, "opened_at": {"$gte": cutoff}}},
-        {"$group": {
-            "_id": {"class_id": "$class_id", "student_email": "$student_email"},
-            "total": {"$sum": 1},
-            "tardy": {"$sum": {"$cond": [{"$gt": ["$minutes_late", _TARDY_THRESHOLD_MINUTES]}, 1, 0]}},
-        }},
-    ]
+    # Classes can span multiple orgs (district_admin, or a teacher assigned
+    # across schools), so thresholds are resolved per-class's own org_id —
+    # a single global lookup would silently apply the wrong school's policy.
+    org_ids = {c.get("org_id", "") for c in class_docs}
+    orgs_by_id: dict[str, dict] = {}
+    async for org in motor_db.orgs.find({"org_id": {"$in": list(org_ids)}}):
+        orgs_by_id[org["org_id"]] = org
 
     results = []
-    async for doc in motor_db.attendance.aggregate(pipeline):
-        class_id = doc["_id"]["class_id"]
-        student_email = doc["_id"]["student_email"]
-        total = doc["total"]
-        tardy = doc["tardy"]
+    for class_id, cls in class_map.items():
+        thresholds = resolve_org_thresholds(orgs_by_id.get(cls.get("org_id", "")))
+        _, metrics_by_email = await compute_class_flag_metrics(class_id, cls, thresholds, cutoff)
 
-        if total < _MIN_SESSIONS_TO_FLAG:
-            continue
+        for student_email, m in metrics_by_email.items():
+            total = m["sessions"]
+            if total < thresholds["min_sessions"]:
+                continue
 
-        cls = class_map.get(class_id)
-        if not cls:
-            continue
+            if (m["tardy_rate"] >= thresholds["tardy_rate_flag"]
+                    and (class_id, student_email, "repeat_tardy") not in open_keys):
+                results.append({
+                    "class_id": class_id,
+                    "class_name": cls.get("name", ""),
+                    "student_email": student_email,
+                    "flag_type": "repeat_tardy",
+                    "sessions": total,
+                    "tardy_count": m["tardy"],
+                    "rate": m["tardy_rate"],
+                })
 
-        tardy_rate = tardy / total if total > 0 else 0
-        if tardy_rate >= _TARDY_RATE_FLAG and (class_id, student_email, "repeat_tardy") not in open_keys:
-            results.append({
-                "class_id": class_id,
-                "class_name": cls.get("name", ""),
-                "student_email": student_email,
-                "flag_type": "repeat_tardy",
-                "sessions": total,
-                "tardy_count": tardy,
-                "rate": round(tardy_rate, 2),
-            })
-
-        class_days = cls.get("days") or []
-        scheduled_weekdays = {_DAY_TO_WEEKDAY[d] for d in class_days if d in _DAY_TO_WEEKDAY}
-        if scheduled_weekdays:
-            expected = sum(
-                1 for i in range(_LOOKBACK_DAYS)
-                if (cutoff + timedelta(days=i)).weekday() in scheduled_weekdays
-            )
-            if expected >= _MIN_SESSIONS_TO_FLAG and total / expected < _ATTENDANCE_RATE_FLAG:
-                if (class_id, student_email, "low_attendance") not in open_keys:
-                    results.append({
-                        "class_id": class_id,
-                        "class_name": cls.get("name", ""),
-                        "student_email": student_email,
-                        "flag_type": "low_attendance",
-                        "sessions": total,
-                        "expected": expected,
-                        "rate": round(total / expected, 2),
-                    })
+            if (m["effective_expected"] >= thresholds["min_sessions"]
+                    and m["attendance_rate"] < thresholds["attendance_rate_flag"]
+                    and (class_id, student_email, "low_attendance") not in open_keys):
+                results.append({
+                    "class_id": class_id,
+                    "class_name": cls.get("name", ""),
+                    "student_email": student_email,
+                    "flag_type": "low_attendance",
+                    "sessions": total,
+                    "expected": m["effective_expected"],
+                    "rate": m["attendance_rate"],
+                })
 
     results.sort(key=lambda r: r["rate"])
     return results[:50]
@@ -368,6 +360,11 @@ async def create_intervention(body: dict, user: dict = Depends(get_confirmed_use
         "updated_at": _now(),
     }
     await motor_db.interventions.insert_one(doc)
+    await log_audit(
+        user["username"], "intervention.create",
+        detail={"intervention_id": doc["intervention_id"], "class_id": class_id,
+                "student_email": student_email, "flag_type": flag_type},
+    )
     return _clean(doc)
 
 
@@ -401,7 +398,19 @@ async def update_intervention(
             raise HTTPException(status_code=422, detail=f"status must be one of {allowed_statuses}")
         updates["status"] = body["status"]
     if "assigned_to" in body:
-        updates["assigned_to"] = body["assigned_to"] or None
+        new_assignee = body["assigned_to"] or None
+        if new_assignee:
+            assignee = await motor_db.login.find_one(
+                {"username": new_assignee, "org_id": doc.get("org_id")},
+                {"role": 1, "account_type": 1, "username": 1},
+            )
+            if (
+                not assignee
+                or assignee.get("account_type") != "institutional"
+                or assignee.get("role") not in TEACHER_ROLES
+            ):
+                raise HTTPException(status_code=422, detail="assigned_to must be a teacher/admin in this org")
+        updates["assigned_to"] = new_assignee
 
     if not updates:
         return _clean(doc)
@@ -437,6 +446,13 @@ async def update_intervention(
 
     await motor_db.interventions.update_one(
         {"intervention_id": intervention_id}, {"$set": updates}
+    )
+    await log_audit(
+        user["username"], "intervention.update",
+        detail={
+            "intervention_id": intervention_id,
+            **{k: v for k, v in updates.items() if k in ("status", "assigned_to")},
+        },
     )
     doc.update(updates)
     return _clean(doc)
@@ -490,6 +506,10 @@ async def add_note(intervention_id: str, body: dict, user: dict = Depends(get_co
         {"intervention_id": intervention_id},
         {"$push": {"notes": note}, "$set": {"updated_at": now}},
     )
+    await log_audit(
+        user["username"], "intervention.note_add",
+        detail={"intervention_id": intervention_id, "note_id": note["note_id"]},
+    )
     note["created_at"] = note["created_at"].isoformat()
     return note
 
@@ -511,4 +531,8 @@ async def delete_note(intervention_id: str, note_id: str, user: dict = Depends(g
     await motor_db.interventions.update_one(
         {"intervention_id": intervention_id},
         {"$pull": {"notes": {"note_id": note_id}}, "$set": {"updated_at": _now()}},
+    )
+    await log_audit(
+        user["username"], "intervention.note_delete",
+        detail={"intervention_id": intervention_id, "note_id": note_id},
     )

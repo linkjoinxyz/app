@@ -11,7 +11,7 @@ from app.auth import get_confirmed_user
 from app.config import get_settings
 from app.database import motor_db
 from app.email_service import send_email
-from app.utils import configure_data, gen_id
+from app.utils import configure_data, gen_id, STAFF_HIDDEN_FIELDS
 from app.websocket_manager import manager
 from app.audit import log_audit
 from app.roles import TEACHER_ROLES
@@ -208,7 +208,7 @@ async def get_org_detail(org_id: str, user: dict = Depends(get_confirmed_user)):
     if not org:
         raise HTTPException(status_code=404, detail="Org not found")
     members = []
-    async for u in motor_db.login.find({"org_id": org_id}, {"password": 0, "_id": 0}):
+    async for u in motor_db.login.find({"org_id": org_id}, STAFF_HIDDEN_FIELDS):
         members.append(u)
     return {**org, "members": members}
 
@@ -277,10 +277,10 @@ async def search_users(q: str = "", user: dict = Depends(get_confirmed_user)):
     results = []
     if q.strip():
         query: dict = {"username": {"$regex": q.strip(), "$options": "i"}}
-        async for u in motor_db.login.find(query, {"password": 0, "_id": 0}).limit(20):
+        async for u in motor_db.login.find(query, STAFF_HIDDEN_FIELDS).limit(20):
             results.append(u)
     else:
-        async for u in motor_db.login.find({}, {"password": 0, "_id": 0}).sort("created_at", -1).limit(20):
+        async for u in motor_db.login.find({}, STAFF_HIDDEN_FIELDS).sort("created_at", -1).limit(20):
             results.append(u)
     return results
 

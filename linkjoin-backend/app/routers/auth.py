@@ -9,6 +9,7 @@ from argon2.exceptions import VerifyMismatchError, InvalidHashError
 import httpx
 from app.database import motor_db
 from app.auth import create_token, decode_token, get_confirmed_user, get_current_user, is_confirmed
+from app.roles import is_admin_role
 from app.limiter import limiter
 from app.models.user import RegisterRequest, LoginRequest, ResetPasswordRequest
 from app.config import get_settings
@@ -246,11 +247,12 @@ async def login(request: Request, body: LoginRequest):
     ip = request.client.host if request.client else None
     await log_audit(email, "auth.login", ip=ip)
 
-    is_admin_role = user.get("role") in {"school_admin", "district_admin"} or user.get("admin") == "true"
-    force_mfa = user.get("mfa_enabled") or (is_admin_role and user.get("number"))
+    admin_role = is_admin_role(user)
+    force_mfa = user.get("mfa_enabled") or (admin_role and user.get("number"))
     if force_mfa:
         from app.routers.mfa import _send_mfa_code
-        await _send_mfa_code(user)
+        if not await _send_mfa_code(user):
+            raise HTTPException(status_code=503, detail="Could not send verification code, contact support")
         mfa_session = create_token(email, minutes=10, extra={"scope": "mfa_only"})
         return {"mfa_required": True, "mfa_session": mfa_session}
 
@@ -265,7 +267,7 @@ async def login(request: Request, body: LoginRequest):
         "onboarding_done": bool(user.get("onboarding_done", True)),
         "mfa_enabled": bool(user.get("mfa_enabled", False)),
         "must_change_password": bool(user.get("must_change_password", False)),
-        "mfa_setup_required": is_admin_role and not user.get("mfa_enabled") and not user.get("number"),
+        "mfa_setup_required": admin_role and not user.get("mfa_enabled") and not user.get("number"),
     }
 
 
@@ -358,11 +360,12 @@ async def google_token_auth(request: Request, body: dict):
         await track_event("signup", user_id=account.get("user_id"))
         user = account
 
-    is_admin_role = user.get("role") in {"school_admin", "district_admin"} or user.get("admin") == "true"
-    force_mfa = user.get("mfa_enabled") or (is_admin_role and user.get("number"))
+    admin_role = is_admin_role(user)
+    force_mfa = user.get("mfa_enabled") or (admin_role and user.get("number"))
     if force_mfa:
         from app.routers.mfa import _send_mfa_code
-        await _send_mfa_code(user)
+        if not await _send_mfa_code(user):
+            raise HTTPException(status_code=503, detail="Could not send verification code, contact support")
         mfa_session = create_token(email, minutes=10, extra={"scope": "mfa_only"})
         return {"mfa_required": True, "mfa_session": mfa_session}
 
@@ -376,7 +379,7 @@ async def google_token_auth(request: Request, body: dict):
         "admin": user.get("admin"),
         "onboarding_done": bool(user.get("onboarding_done", True)),
         "must_change_password": bool(user.get("must_change_password", False)),
-        "mfa_setup_required": is_admin_role and not user.get("mfa_enabled") and not user.get("number"),
+        "mfa_setup_required": admin_role and not user.get("mfa_enabled") and not user.get("number"),
     }
 
 
