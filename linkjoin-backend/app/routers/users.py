@@ -5,7 +5,7 @@ import nh3
 import mistune
 from collections import defaultdict
 from datetime import datetime, timezone, timedelta
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from fastapi.responses import Response
 from pydantic import BaseModel
 from app.auth import get_confirmed_user, get_current_user
@@ -231,8 +231,11 @@ async def markdown_to_html(body: dict, user: dict = Depends(get_confirmed_user))
 
 
 @router.patch("/parent-contact")
-async def update_parent_contact(body: ParentContactBody, user: dict = Depends(get_confirmed_user)):
+async def update_parent_contact(
+    body: ParentContactBody, background_tasks: BackgroundTasks, user: dict = Depends(get_confirmed_user)
+):
     role = user.get("role", "")
+    is_self_edit = not body.student_user_id
     if body.student_user_id and role in ("school_admin", "district_admin"):
         student = await motor_db.login.find_one({"user_id": body.student_user_id})
         if not student:
@@ -245,6 +248,12 @@ async def update_parent_contact(body: ParentContactBody, user: dict = Depends(ge
     else:
         target = {"username": user["username"]}
 
+    # Self-edits are unverified (any student can type in any parent contact info),
+    # and the same fields gate truancy alerts (scheduler.check_absences) — so a
+    # self-edit that changes an already-set parent_email is flagged: audit-logged
+    # always, and the OLD address is notified so a redirect isn't silent.
+    old_parent_email = (user.get("parent_email") or "").strip().lower() if is_self_edit else None
+
     updates = {
         "parent_phone": body.parent_phone.strip(),
         "parent_phone_country": body.parent_phone_country.strip(),
@@ -252,6 +261,23 @@ async def update_parent_contact(body: ParentContactBody, user: dict = Depends(ge
         "parent_name": body.parent_name.strip(),
     }
     await motor_db.login.update_one(target, {"$set": updates})
+
+    if is_self_edit:
+        from app.audit import log_audit
+        await log_audit(user["username"], "user.parent_contact_self_edit", "user", user["username"])
+
+        new_parent_email = updates["parent_email"]
+        if old_parent_email and old_parent_email != new_parent_email:
+            def _notify_old_contact(old_email=old_parent_email, student_name=user.get("name") or user["username"]):
+                from app.email_service import send_email
+                html = (
+                    f"<p>The parent/guardian contact information on file for "
+                    f"<strong>{student_name}</strong>'s LinkJoin account was just changed.</p>"
+                    f"<p>If you did not expect this, please contact the school.</p>"
+                )
+                send_email(html, "Parent contact information changed", old_email)
+            background_tasks.add_task(_notify_old_contact)
+
     return {"ok": True}
 
 

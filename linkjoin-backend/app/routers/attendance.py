@@ -187,35 +187,12 @@ async def _gc_sync_if_due(class_id: str) -> None:
         log.exception("GC auto-sync failed for class %s", class_id)
 
 
-@router.post("", status_code=201)
-async def log_attendance(body: dict, background_tasks: BackgroundTasks, user: dict = Depends(get_confirmed_user)):
-    email = user["username"]
-    link_id = body.get("link_id")
-    class_id = body.get("class_id")
-
-    if not isinstance(link_id, int) or not class_id:
-        raise HTTPException(status_code=422, detail="link_id and class_id required")
-
-    link = await motor_db.links.find_one({"username": email, "id": link_id})
-    if not link:
-        raise HTTPException(status_code=404, detail="Link not found")
-
-    await motor_db.attendance.insert_one({
-        "student_email": email,
-        "link_id": link_id,
-        "class_id": class_id,
-        "class_name": body.get("class_name") or link.get("class_name", ""),
-        "share_id": link.get("share_id"),
-        "opened_at": datetime.now(timezone.utc),
-        "minutes_late": int(body.get("minutes_late", 0)),
-    })
-    background_tasks.add_task(_gc_sync_if_due, class_id)
-    return {"message": "Logged"}
-
-
 @router.get("/me/rewards")
 async def get_my_rewards(user: dict = Depends(get_confirmed_user)):
-    require_premium(user)
+    # Rewards reflect the student's own already-tracked attendance data, not a
+    # paid feature — only gate non-student callers behind premium.
+    if user.get("role") != "student":
+        require_premium(user)
     email = user["username"]
 
     org_id = user.get("org_id")
@@ -225,18 +202,21 @@ async def get_my_rewards(user: dict = Depends(get_confirmed_user)):
         org_settings = (org or {}).get("attendance_settings") or {}
         tardy_threshold = int(org_settings.get("tardy_threshold_minutes", _TARDY_THRESHOLD_MINUTES))
 
-    records = []
-    async for r in motor_db.attendance.find(
-        # opened_at can be null on an absent/excused manual_override — those
-        # aren't "sessions" for streak purposes, exclude them at the query level.
-        {"student_email": email, "opened_at": {"$ne": None}},
-        {"opened_at": 1, "minutes_late": 1}
-    ).sort("opened_at", 1):
-        records.append(r)
+    raw_records = []
+    async for r in motor_db.attendance.find({"student_email": email}).sort("opened_at", 1):
+        raw_records.append(r)
+
+    current_records = list(_resolve_latest_records(raw_records).values())
+    # opened_at is null on an absent/excused manual_override — those aren't
+    # "sessions" for streak purposes, but they must still flow through
+    # _resolve_latest_records so an override can supersede a stale/forged join.
+    records = [r for r in current_records if isinstance(r.get("opened_at"), datetime)]
 
     if not records:
         return {"current_streak": 0, "longest_streak": 0, "total_sessions": 0,
                 "on_time_sessions": 0, "awards": []}
+
+    records.sort(key=lambda r: r["opened_at"])
 
     by_date: dict[str, list[int]] = defaultdict(list)
     for r in records:

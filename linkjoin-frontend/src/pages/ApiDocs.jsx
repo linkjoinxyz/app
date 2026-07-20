@@ -166,7 +166,6 @@ Content-Type: application/json
               Attendance records are created when a student opens their meeting link through
               LinkJoin. Teachers and admins can query and export these records.
             </p>
-            <Endpoint method="POST" path="/attendance" desc="Record an attendance event (called by the extension)" />
             <Endpoint method="GET"  path="/attendance/class/{class_id}" desc="List all attendance records for a class" />
             <Endpoint method="GET"  path="/attendance/class/{class_id}/patterns" desc="Aggregated attendance patterns per student" />
             <Endpoint method="GET"  path="/attendance/class/{class_id}/export" desc="Download attendance as CSV" />
