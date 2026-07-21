@@ -80,3 +80,21 @@ class NoteRequest(BaseModel):
     name: str
     markdown: str
     date: str
+
+    # Notes live inline in the login document, which get_current_user fetches on
+    # every authenticated request, so an unbounded note inflates the auth hot path
+    # for that account and eventually walks into MongoDB's 16MB document ceiling,
+    # after which the account cannot be written to at all.
+    @field_validator("markdown")
+    @classmethod
+    def markdown_length(cls, v):
+        if len(v) > 100_000:
+            raise ValueError("Note is too large (max 100,000 characters)")
+        return v
+
+    @field_validator("name")
+    @classmethod
+    def name_length(cls, v):
+        if len(v) > 200:
+            raise ValueError("Note name must be at most 200 characters")
+        return v

@@ -6,7 +6,46 @@ function getToken() {
   return localStorage.getItem('lj_token')
 }
 
-export async function apiFetch(path, options = {}) {
+// Access tokens are short-lived now, so a 401 is usually "expired", not "signed
+// out". Exchange the refresh token for a new pair and replay the request once.
+// Shared promise: a page load fires several requests at once and they would
+// otherwise each burn a refresh token, and each rotation invalidates the last.
+let refreshInFlight = null
+
+async function refreshSession() {
+  const refreshToken = localStorage.getItem('lj_refresh_token')
+  if (!refreshToken) return null
+  if (!refreshInFlight) {
+    refreshInFlight = fetch(`${BASE}/auth/refresh`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refresh_token: refreshToken }),
+    })
+      .then(r => (r.ok ? r.json() : null))
+      .catch(() => null)
+      .then(data => {
+        if (data?.access_token) {
+          localStorage.setItem('lj_token', data.access_token)
+          if (data.refresh_token) localStorage.setItem('lj_refresh_token', data.refresh_token)
+          // Keep the extension's copy in step; it reads these from the page.
+          window.postMessage({ type: 'lj:login' }, window.location.origin)
+        }
+        refreshInFlight = null
+        return data?.access_token || null
+      })
+  }
+  return refreshInFlight
+}
+
+function signOutAndRedirect() {
+  localStorage.removeItem('lj_token')
+  localStorage.removeItem('lj_refresh_token')
+  localStorage.removeItem('lj_email')
+  const redirect = window.location.pathname + window.location.search
+  window.location.href = `/login?redirect=${encodeURIComponent(redirect)}`
+}
+
+export async function apiFetch(path, options = {}, _retried = false) {
   const token = getToken()
   const headers = {
     'Content-Type': 'application/json',
@@ -17,10 +56,11 @@ export async function apiFetch(path, options = {}) {
   if (!res.ok) {
     const body = await res.json().catch(() => ({}))
     if (res.status === 401 && !path.startsWith('/auth/')) {
-      localStorage.removeItem('lj_token')
-      localStorage.removeItem('lj_email')
-      const redirect = window.location.pathname + window.location.search
-      window.location.href = `/login?redirect=${encodeURIComponent(redirect)}`
+      if (!_retried) {
+        const fresh = await refreshSession()
+        if (fresh) return apiFetch(path, options, true)
+      }
+      signOutAndRedirect()
       return
     }
     const detail = body.detail

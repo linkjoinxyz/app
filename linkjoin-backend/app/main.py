@@ -1,10 +1,10 @@
 import asyncio
 import logging
-import secrets
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s — %(message)s")
+log = logging.getLogger(__name__)
 from pathlib import Path
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -44,6 +44,50 @@ if _settings.sentry_dsn:
         send_default_pii=False,
     )
 
+def strip_port(host: str) -> str:
+    """Drop a trailing :port from a forwarded client address.
+
+    Azure App Service writes the source PORT into the client entry of
+    X-Forwarded-For ("203.0.113.5:54321"), and uvicorn's ProxyHeadersMiddleware
+    passes that entry through verbatim. Left alone, request.client.host varies per
+    connection, so the rate limiter (keyed on get_remote_address) hands every
+    single request its own bucket and stops limiting anything at all -- worse than
+    the pre-fix behaviour of bucketing everyone together.
+    """
+    if not host:
+        return host
+    if host.startswith("["):  # [::1]:443 -> ::1
+        end = host.find("]")
+        return host[1:end] if end != -1 else host
+    # A bare IPv6 address has several colons and no port; only strip when there is
+    # exactly one, which is the IPv4:port form.
+    if host.count(":") == 1:
+        return host.split(":", 1)[0]
+    return host
+
+
+class NormalizeClientIPMiddleware:
+    """Pure-ASGI so it can rewrite scope['client'] before routing.
+
+    Runs inside uvicorn's ProxyHeadersMiddleware, so it sees the already
+    forwarded-for-derived client and normalizes it once for everything
+    downstream: the rate limiter and the audit log both read request.client.host.
+    """
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] in ("http", "websocket"):
+            client = scope.get("client")
+            if client and isinstance(client[0], str):
+                host = strip_port(client[0])
+                if host != client[0]:
+                    scope = dict(scope)
+                    scope["client"] = (host, client[1])
+        return await self.app(scope, receive, send)
+
+
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request, call_next):
         response = await call_next(request)
@@ -73,12 +117,20 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 async def _soft_index(*coros) -> None:
     """Run index-creation coroutines that may legitimately conflict with an
     existing index (e.g. TTL params changed) — swallow so one bad index
-    doesn't block the others."""
-    try:
-        for coro in coros:
+    doesn't block the others.
+
+    Each coroutine is isolated. They used to share one try block, so a conflict on
+    the first silently skipped every later one in the same call (the
+    mfa_challenges.user_id index was never created for this reason). Failures are
+    logged rather than passed: a swallowed exception here means an index is simply
+    absent, which is invisible until something is slow or a uniqueness constraint
+    turns out not to exist.
+    """
+    for coro in coros:
+        try:
             await coro
-    except Exception:
-        pass
+        except Exception as exc:
+            log.warning("[startup] index creation skipped: %s", exc)
 
 
 @asynccontextmanager
@@ -112,6 +164,7 @@ async def lifespan(app: FastAPI):
         motor_db.classes.create_index("org_id"),
         motor_db.classes.create_index("teacher_id"),
         motor_db.orgs.create_index("org_id", unique=True),
+        motor_db.orgs.create_index("parent_org_id", sparse=True),
         motor_db.attendance.create_index([("class_id", 1), ("opened_at", -1)]),
         motor_db.attendance.create_index("student_email"),
         motor_db.attendance.create_index([("class_id", 1), ("student_email", 1), ("source", 1), ("opened_at", -1)]),
@@ -154,19 +207,29 @@ async def lifespan(app: FastAPI):
         ),
     )
 
-    async for u in motor_db.login.find({"user_id": {"$exists": False}}):
-        await motor_db.login.update_one(
-            {"_id": u["_id"]},
-            {"$set": {"user_id": secrets.token_urlsafe(16), "account_type": "personal"}}
-        )
+    # NOTE: the user_id backfill that used to live here has moved to
+    # scripts/backfill_user_ids.py. It scanned the whole login collection on every
+    # boot, in all four gunicorn workers simultaneously, to fix rows that a one-off
+    # migration handles once.
 
-    async def _init_scheduler():
-        await asyncio.to_thread(load_all_text_jobs)
-        scheduler.start()
+    from app.scheduler import run_leader_loop
 
-    asyncio.create_task(_init_scheduler())
+    def _log_task_exception(task: asyncio.Task) -> None:
+        """A bare create_task swallows the traceback: if scheduler init raised,
+        no jobs ran and nothing said so."""
+        if task.cancelled():
+            return
+        if task.exception() is not None:
+            log.error("[scheduler] leader loop exited unexpectedly", exc_info=task.exception())
+
+    _leader_task = asyncio.create_task(run_leader_loop(load_all_text_jobs))
+    _leader_task.add_done_callback(_log_task_exception)
     yield
-    scheduler.shutdown()
+    _leader_task.cancel()
+    if scheduler.running:
+        scheduler.shutdown()
+    from app.scheduler import release_leadership
+    await release_leadership()
 
 
 app = FastAPI(title="LinkJoin API", lifespan=lifespan)
@@ -175,6 +238,9 @@ app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 app.add_middleware(SecurityHeadersMiddleware)
+# Added last so it wraps outermost of the app-level stack, i.e. the client is
+# normalized before the rate limiter or any handler reads it.
+app.add_middleware(NormalizeClientIPMiddleware)
 _origins = [_settings.frontend_url, "http://localhost:5173"]
 if _settings.frontend_url.startswith("https://"):
     _bare = _settings.frontend_url.replace("https://", "")
@@ -219,28 +285,6 @@ async def location(cf_ipcountry: str | None = None):
 @app.get("/health")
 async def health():
     return {"status": "ok"}
-
-
-@app.get("/health/client-ip")
-async def health_client_ip(request: Request):
-    """TEMPORARY — remove once proxy trust is configured.
-
-    Client IPs are currently wrong everywhere: gunicorn only trusts forwarded
-    headers from 127.0.0.1, so request.client.host is Azure's front end, not the
-    caller. That means rate limits bucket every user together and audit logs
-    record the load balancer's address.
-
-    Fixing it needs --forwarded-allow-ips, but the correct parsing depends on the
-    exact header Azure sends (it is known to append a :port to the client entry,
-    which naive parsers mishandle). Hit this endpoint on prod, read the values,
-    then configure startup.sh accordingly and delete this.
-    """
-    return {
-        "x_forwarded_for": request.headers.get("x-forwarded-for"),
-        "x_client_ip": request.headers.get("x-client-ip"),
-        "x_forwarded_proto": request.headers.get("x-forwarded-proto"),
-        "request_client_host": request.client.host if request.client else None,
-    }
 
 
 @app.get("/health/ready")

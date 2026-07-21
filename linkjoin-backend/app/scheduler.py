@@ -1,8 +1,13 @@
 import asyncio
+import json
 import logging
+import os
+import secrets as _secrets
 from datetime import datetime, timezone, timedelta
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.jobstores.memory import MemoryJobStore
+from apscheduler.schedulers.base import STATE_STOPPED, STATE_RUNNING, STATE_PAUSED
+from pymongo.errors import DuplicateKeyError
 from pytz import utc, timezone as pytz_timezone
 from app.config import get_settings
 from app.database import sync_db, motor_db
@@ -11,6 +16,150 @@ from app.utils import get_text_time, get_blackout_set, compute_session_start_utc
 _settings = get_settings()
 scheduler = AsyncIOScheduler(timezone=utc, jobstores={"default": MemoryJobStore()})
 log = logging.getLogger(__name__)
+
+# ── Cross-worker coordination ────────────────────────────────────────────────
+# gunicorn runs multiple worker processes, each with its own in-memory
+# AsyncIOScheduler. Without this, every interval/cron job fires once per
+# worker. Only the Redis-lock holder ("leader") runs a live scheduler at all;
+# other workers stay idle. Link-job registration (triggered by request
+# handlers, which may run on any worker) is forwarded to the leader over
+# Redis pub/sub instead of mutating a non-leader's inert scheduler.
+_LEADER_LOCK_KEY = "linkjoin:scheduler:leader"
+_LEADER_LOCK_TTL = 30  # seconds
+_LINK_JOB_CHANNEL = "linkjoin:scheduler:link-jobs"
+_LINK_JOB_FIELDS = ("id", "username", "name", "text", "active", "repeat", "days", "time", "date", "end_date")
+_worker_id = f"{os.getpid()}-{_secrets.token_hex(4)}"
+_is_leader = False
+
+
+async def try_become_leader() -> bool:
+    global _is_leader
+    from app.redis_client import get_redis
+    won = await get_redis().set(_LEADER_LOCK_KEY, _worker_id, nx=True, ex=_LEADER_LOCK_TTL)
+    _is_leader = bool(won)
+    return _is_leader
+
+
+def _stand_down() -> None:
+    """Give up leadership locally: quiesce the scheduler and clear the flag.
+
+    Returning from the renewal loop without doing this was a split brain. The
+    worker kept a live AsyncIOScheduler after its lock expired, so once another
+    worker won the lock two schedulers fired every job. send_class_reminders is
+    guarded by an atomic upsert, but _send_sms is not, so users got doubled texts.
+
+    pause(), not shutdown(): APScheduler 3.x does not return a shut-down scheduler
+    to a restartable state (state stays RUNNING and a later start() raises
+    SchedulerAlreadyRunningError), so a worker that stood down could never take
+    leadership again. pause() stops jobs firing and resume() is a clean inverse.
+    """
+    global _is_leader
+    _is_leader = False
+    try:
+        if scheduler.state == STATE_RUNNING:
+            scheduler.pause()
+    except Exception:
+        log.exception("[scheduler] failed to pause after losing leadership")
+
+
+async def _renew_leadership() -> None:
+    from app.redis_client import get_redis
+    r = get_redis()
+    while _is_leader:
+        await asyncio.sleep(_LEADER_LOCK_TTL // 3)
+        try:
+            holder = await r.get(_LEADER_LOCK_KEY)
+        except Exception:
+            # A Redis blip is not proof we lost the lock; keep running and retry
+            # on the next tick rather than tearing down every scheduled job.
+            log.warning("[scheduler] could not read leadership lock, retrying")
+            continue
+        if holder == _worker_id:
+            await r.expire(_LEADER_LOCK_KEY, _LEADER_LOCK_TTL)
+        else:
+            log.warning("[scheduler] lost leadership lock, standing down")
+            _stand_down()
+            return
+
+
+_LEADER_RETRY_SECONDS = 10
+_subscriber_task: asyncio.Task | None = None
+
+
+async def run_leader_loop(load_jobs) -> None:
+    """Contend for the scheduler lock forever, running the scheduler while held.
+
+    Election used to be a single attempt at worker startup. If the leader died,
+    its 30s lock simply expired and nothing reclaimed it: the other workers had
+    already made their one attempt and never retried, so every background job
+    stopped platform-wide until someone restarted the app. This retries, so a
+    dead leader is replaced within _LEADER_RETRY_SECONDS.
+    """
+    global _subscriber_task
+    while True:
+        try:
+            if await try_become_leader():
+                log.info("[scheduler] this worker (pid %s) elected leader", os.getpid())
+                await asyncio.to_thread(load_jobs)
+                # First term starts it; a later term resumes the paused instance,
+                # since a shut-down APScheduler cannot be restarted (see _stand_down).
+                if scheduler.state == STATE_STOPPED:
+                    scheduler.start()
+                elif scheduler.state == STATE_PAUSED:
+                    scheduler.resume()
+                # Cancel any subscriber left over from a previous term, otherwise
+                # regaining leadership stacks a second one and link-job changes
+                # get applied twice.
+                if _subscriber_task and not _subscriber_task.done():
+                    _subscriber_task.cancel()
+                _subscriber_task = asyncio.create_task(_subscribe_link_job_changes())
+                # Returns only once this worker has stood down.
+                await _renew_leadership()
+                log.info("[scheduler] no longer leader, will contend again")
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            log.exception("[scheduler] leader loop iteration failed")
+            _stand_down()
+        await asyncio.sleep(_LEADER_RETRY_SECONDS)
+
+
+async def release_leadership() -> None:
+    global _is_leader
+    if not _is_leader:
+        return
+    from app.redis_client import get_redis
+    r = get_redis()
+    if await r.get(_LEADER_LOCK_KEY) == _worker_id:
+        await r.delete(_LEADER_LOCK_KEY)
+    _is_leader = False
+
+
+async def publish_link_job_change(action: str, link: dict, update: bool = False) -> None:
+    """Called from request handlers (any worker) instead of touching the
+    scheduler directly — only the leader's scheduler is live."""
+    from app.redis_client import get_redis
+    payload = {"action": action, "link": {k: link.get(k) for k in _LINK_JOB_FIELDS}, "update": update}
+    await get_redis().publish(_LINK_JOB_CHANNEL, json.dumps(payload))
+
+
+async def _subscribe_link_job_changes() -> None:
+    """Leader-only: applies link-job changes published by any worker (including
+    itself) to this worker's live scheduler."""
+    from app.redis_client import get_redis
+    pubsub = get_redis().pubsub()
+    await pubsub.subscribe(_LINK_JOB_CHANNEL)
+    async for message in pubsub.listen():
+        if message["type"] != "message":
+            continue
+        try:
+            payload = json.loads(message["data"])
+            if payload["action"] == "create":
+                await create_text_job(payload["link"], update=payload.get("update", False))
+            elif payload["action"] == "delete":
+                delete_text_job(payload["link"])
+        except Exception:
+            log.exception("[scheduler] failed to process link job change message")
 
 _text_messages = [
     "LinkJoin Reminder: Your link, {name}, will open in {text} minutes. "
@@ -97,7 +246,11 @@ async def _send_sms(job_data: dict) -> None:
         log.error("[SMS] Twilio error for link %s: %s", link.get("id"), e)
 
 
-def create_text_job(link: dict, update: bool = False) -> None:
+def _schedule_text_jobs(link: dict, tz_name: str) -> None:
+    """Leader-only, DB-free: builds the APScheduler job(s) for one link given
+    the owner's timezone. Split out from create_text_job so load_all_text_jobs
+    (which runs off the event loop via asyncio.to_thread) and create_text_job
+    (async, called from the leader's pub/sub subscriber) can share it."""
     text_val = link.get("text", "false")
     if text_val == "false" or link.get("active") == "false":
         return
@@ -107,8 +260,6 @@ def create_text_job(link: dict, update: bool = False) -> None:
     except (ValueError, TypeError):
         return
 
-    user = sync_db.login.find_one({"username": link["username"]})
-    tz_name = (user.get("timezone") or "UTC") if user else "UTC"
     try:
         tz = pytz_timezone(tz_name)
     except Exception:
@@ -187,6 +338,16 @@ def create_text_job(link: dict, update: bool = False) -> None:
         log.info("[scheduler] added job %s (day=%s %02d:%02d %s, week=%s)", job_id, day, info["hour"], info["minute"], tz_name, kwargs.get("week", "*"))
 
 
+async def create_text_job(link: dict, update: bool = False) -> None:
+    """Async, motor_db-based entry point — used by the leader's pub/sub
+    subscriber so link creation/update never blocks the event loop on a
+    sync PyMongo call (see _schedule_text_jobs for the shared job-building
+    logic used by both this and load_all_text_jobs)."""
+    user = await motor_db.login.find_one({"username": link["username"]})
+    tz_name = (user.get("timezone") or "UTC") if user else "UTC"
+    _schedule_text_jobs(link, tz_name)
+
+
 def delete_text_job(link: dict) -> None:
     if not link:
         return
@@ -244,11 +405,20 @@ async def check_absences() -> None:
             ampm = "AM" if h < 12 else "PM"
             class_time_display = f"{hour12}:{m:02d} {ampm}"
 
-            for uid in cls.get("student_ids") or []:
-                student = await motor_db.login.find_one(
-                    {"user_id": uid},
-                    {"username": 1, "name": 1, "parent_phone": 1, "parent_phone_country": 1, "parent_email": 1, "parent_name": 1, "_id": 0},
+            # One query for the roster rather than one per student: this job runs
+            # every 5 minutes over every class with family alerts enabled.
+            roster_ids = cls.get("student_ids") or []
+            students_by_id = {
+                s["user_id"]: s
+                async for s in motor_db.login.find(
+                    {"user_id": {"$in": roster_ids}},
+                    {"username": 1, "name": 1, "parent_phone": 1, "parent_phone_country": 1,
+                     "parent_email": 1, "parent_name": 1, "user_id": 1, "_id": 0},
                 )
+            } if roster_ids else {}
+
+            for uid in roster_ids:
+                student = students_by_id.get(uid)
                 if not student:
                     continue
 
@@ -258,9 +428,6 @@ async def check_absences() -> None:
                 if not parent_phone and not parent_email:
                     continue
 
-                if await motor_db.absence_alerts.find_one({"class_id": cls["class_id"], "student_email": student_email, "date": today_date}):
-                    continue
-
                 start_naive = class_start_utc.replace(tzinfo=None)
                 attended = await motor_db.attendance.find_one({
                     "class_id": cls["class_id"],
@@ -268,6 +435,28 @@ async def check_absences() -> None:
                     "opened_at": {"$gte": start_naive - timedelta(minutes=5), "$lt": start_naive + timedelta(minutes=30)},
                 })
                 if attended:
+                    continue
+
+                # Claim the send atomically BEFORE doing it. This was a find_one
+                # followed by an insert_one at the end, against a collection with a
+                # unique (class_id, student_email, date) index: the job runs every
+                # 5 minutes across a 60-minute eligibility window, so overlapping
+                # runs both passed the check and the loser's insert raised
+                # DuplicateKeyError. That exception was caught only by the outer
+                # per-CLASS handler, so it aborted every remaining student in the
+                # class and they got no alert at all that day.
+                dedup_key = {
+                    "class_id": cls["class_id"],
+                    "student_email": student_email,
+                    "date": today_date,
+                }
+                try:
+                    claim = await motor_db.absence_alerts.update_one(
+                        dedup_key, {"$setOnInsert": {**dedup_key, "sent_at": now_utc}}, upsert=True
+                    )
+                except DuplicateKeyError:
+                    continue
+                if claim.upserted_id is None:
                     continue
 
                 student_name = student.get("name") or student_email.split("@")[0]
@@ -308,14 +497,9 @@ async def check_absences() -> None:
                     except Exception as e:
                         log.error("[absence] email failed for %s: %s", student_email, e)
 
-                await motor_db.absence_alerts.insert_one({
-                    "class_id": cls["class_id"],
-                    "student_email": student_email,
-                    "date": today_date,
-                    "sms_sent": sms_sent,
-                    "email_sent": email_sent,
-                    "sent_at": now_utc,
-                })
+                await motor_db.absence_alerts.update_one(
+                    dedup_key, {"$set": {"sms_sent": sms_sent, "email_sent": email_sent, "sent_at": now_utc}}
+                )
                 log.info("[absence] alert sent for student %s in class %s", student_email, cls["class_id"])
         except Exception:
             log.exception("[absence] check_absences failed for class %s", cls.get("class_id"))
@@ -356,18 +540,46 @@ async def send_class_reminders() -> None:
             brand_name = (org or {}).get("brand_name") or (org or {}).get("name") or "LinkJoin"
             class_name = cls.get("name", "class")
 
-            for uid in cls.get("student_ids") or []:
-                student = await motor_db.login.find_one({"user_id": uid}, {"username": 1, "name": 1, "_id": 0})
+            # Three nested per-record queries collapsed into three bulk ones: the
+            # roster, every parent_link for that roster, and every parent account.
+            # This job runs every 5 minutes over every class that has students, so
+            # the old shape was (students + students*parents) round trips per class
+            # per tick across the whole platform.
+            roster_ids = cls.get("student_ids") or []
+            if not roster_ids:
+                continue
+
+            students_by_id = {
+                s["user_id"]: s
+                async for s in motor_db.login.find(
+                    {"user_id": {"$in": roster_ids}}, {"username": 1, "name": 1, "user_id": 1, "_id": 0}
+                )
+            }
+
+            links_by_student: dict[str, list[str]] = {}
+            async for plink in motor_db.parent_links.find(
+                {"student_user_id": {"$in": roster_ids}}, {"parent_user_id": 1, "student_user_id": 1, "_id": 0}
+            ):
+                links_by_student.setdefault(plink["student_user_id"], []).append(plink["parent_user_id"])
+
+            parent_ids = sorted({pid for pids in links_by_student.values() for pid in pids})
+            parents_by_id = {
+                p["user_id"]: p
+                async for p in motor_db.login.find(
+                    {"user_id": {"$in": parent_ids}},
+                    {"username": 1, "number": 1, "parent_reminders_sms": 1,
+                     "parent_reminders_email": 1, "user_id": 1, "_id": 0},
+                )
+            } if parent_ids else {}
+
+            for uid in roster_ids:
+                student = students_by_id.get(uid)
                 if not student:
                     continue
                 student_name = student.get("name") or student.get("username", "").split("@")[0]
 
-                async for plink in motor_db.parent_links.find({"student_user_id": uid}, {"parent_user_id": 1, "_id": 0}):
-                    parent_id = plink["parent_user_id"]
-                    parent = await motor_db.login.find_one(
-                        {"user_id": parent_id},
-                        {"username": 1, "number": 1, "parent_reminders_sms": 1, "parent_reminders_email": 1, "_id": 0},
-                    )
+                for parent_id in links_by_student.get(uid, []):
+                    parent = parents_by_id.get(parent_id)
                     if not parent:
                         continue
                     sms_on = bool(parent.get("parent_reminders_sms")) and bool(parent.get("number"))
@@ -420,21 +632,34 @@ async def send_class_reminders() -> None:
 
 
 async def record_status_check() -> None:
-    """Every-5-min job: ping MongoDB and record uptime for the public status page."""
+    """Every-5-min job: ping MongoDB and Redis, record uptime for the public status page."""
     import time as _time
     from datetime import datetime, timezone, timedelta
     from app.database import motor_db
+    from app.redis_client import get_redis
+
     t0 = _time.monotonic()
-    ok = False
+    mongo_ok = False
     mongo_ms = None
     try:
         await motor_db.command("ping")
         mongo_ms = round((_time.monotonic() - t0) * 1000)
-        ok = True
+        mongo_ok = True
     except Exception as exc:
         log.warning("[status-check] MongoDB ping failed: %s", exc)
+
+    redis_ok = False
+    try:
+        await get_redis().ping()
+        redis_ok = True
+    except Exception as exc:
+        log.warning("[status-check] Redis ping failed: %s", exc)
+
     now = datetime.now(timezone.utc)
-    await motor_db.status_checks.insert_one({"ts": now, "ok": ok, "mongo_ms": mongo_ms})
+    await motor_db.status_checks.insert_one({
+        "ts": now, "ok": mongo_ok and redis_ok,
+        "mongo_ms": mongo_ms, "mongo_ok": mongo_ok, "redis_ok": redis_ok,
+    })
     cutoff = now - timedelta(days=91)
     await motor_db.status_checks.delete_many({"ts": {"$lt": cutoff}})
 
@@ -494,7 +719,11 @@ async def auto_delete_past_links() -> None:
 
 
 async def run_backup_health_check() -> None:
-    """Weekly job: verify MongoDB is reachable and core collections are non-empty."""
+    """Weekly job: verify MongoDB is reachable and core collections are non-empty.
+
+    Despite the name, this does NOT verify that backups exist or are
+    restorable — it only checks the live database. Restorability must be
+    verified separately (e.g. a periodic restore-to-scratch drill)."""
     import time as _time
     from datetime import datetime, timezone
     from app.database import motor_db
@@ -510,7 +739,7 @@ async def run_backup_health_check() -> None:
     except Exception as e:
         result["ok"] = False
         result["errors"].append(f"MongoDB ping failed: {e}")
-        log.error("[backup-check] MongoDB ping failed: %s", e)
+        log.error("[collection-liveness-check] MongoDB ping failed: %s", e)
 
     for coll_name in CORE_COLLECTIONS:
         try:
@@ -526,16 +755,16 @@ async def run_backup_health_check() -> None:
     try:
         await log_audit(
             "system",
-            "backup.health_check",
+            "system.collection_liveness_check",
             detail={**result, "ts": datetime.now(timezone.utc).isoformat()},
         )
     except Exception as e:
-        log.error("[backup-check] failed to write audit log: %s", e)
+        log.error("[collection-liveness-check] failed to write audit log: %s", e)
 
     if result["ok"]:
-        log.info("[backup-check] OK: %s", result)
+        log.info("[collection-liveness-check] OK: %s", result)
     else:
-        log.error("[backup-check] DEGRADED: %s", result)
+        log.error("[collection-liveness-check] DEGRADED: %s", result)
 
 
 def load_all_text_jobs() -> None:
@@ -543,15 +772,6 @@ def load_all_text_jobs() -> None:
     for job in scheduler.get_jobs():
         scheduler.remove_job(job.id)
     log.info("[scheduler] cleared all persisted jobs, repopulating from DB")
-
-    query: dict = {"active": "true", "text": {"$ne": "false"}}
-    if _settings.scheduler_email_filter:
-        query["username"] = _settings.scheduler_email_filter
-
-    for link in sync_db.links.find(query):
-        user = sync_db.login.find_one({"username": link["username"]})
-        if user and user.get("number"):
-            create_text_job(link)
 
     scheduler.add_job(
         check_absences,
@@ -617,3 +837,31 @@ def load_all_text_jobs() -> None:
         misfire_grace_time=3600,
     )
     log.info("[scheduler] added auto-delete-past-links daily job (04:00 UTC)")
+
+    # Per-link SMS jobs come LAST, and each one is isolated.
+    #
+    # These are built from user-controlled `time`/`days` values, and get_text_time
+    # parses them with bare int()/list.index(), so one malformed row raises. When
+    # this loop ran first and unguarded, that exception escaped load_all_text_jobs,
+    # propagated through the asyncio.to_thread in main._init_scheduler, and was
+    # swallowed by a bare create_task — so scheduler.start() never ran and EVERY
+    # background job (absence checks, parent reminders, status checks, audit purge)
+    # silently stopped platform-wide because of a single bad link.
+    query: dict = {"active": "true", "text": {"$ne": "false"}}
+    if _settings.scheduler_email_filter:
+        query["username"] = _settings.scheduler_email_filter
+
+    scheduled = failed = 0
+    for link in sync_db.links.find(query):
+        try:
+            user = sync_db.login.find_one({"username": link["username"]})
+            if user and user.get("number"):
+                _schedule_text_jobs(link, user.get("timezone") or "UTC")
+                scheduled += 1
+        except Exception:
+            failed += 1
+            log.exception(
+                "[scheduler] skipping SMS job for link id=%s user=%s (malformed schedule)",
+                link.get("id"), link.get("username"),
+            )
+    log.info("[scheduler] scheduled SMS jobs for %d links (%d skipped)", scheduled, failed)

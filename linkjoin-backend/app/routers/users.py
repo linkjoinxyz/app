@@ -10,7 +10,7 @@ from fastapi.responses import Response
 from pydantic import BaseModel
 from app.auth import get_confirmed_user, get_current_user
 from app.database import motor_db
-from app.roles import is_premium, require_premium
+from app.roles import is_premium, require_premium, get_accessible_org_ids
 from app.models.user import (
     UpdateTimezoneRequest, AddNumberRequest,
     SortRequest, OpenEarlyRequest, NoteRequest, AutoDeleteRequest, VacationModeRequest,
@@ -186,11 +186,26 @@ async def get_notes(user: dict = Depends(get_confirmed_user)):
 
 @router.post("/notes")
 async def save_note(body: NoteRequest, user: dict = Depends(get_confirmed_user)):
-    doc = await motor_db.login.find_one({"username": user["username"]})
-    notes = (doc or {}).get("notes", {})
-    notes[str(body.id)] = {"id": body.id, "name": body.name, "markdown": body.markdown, "date": body.date}
-    await motor_db.login.update_one({"username": user["username"]}, {"$set": {"notes": notes}})
-    return notes
+    # Imported accounts are created with notes as the empty STRING (see
+    # admin.import_org_members / import_org_parents), not an object. A dotted
+    # $set against that errors, and the previous read-modify-write raised
+    # TypeError on it, so those users could never save a note at all. Normalize
+    # first; this is a no-op for everyone already holding an object.
+    current = await motor_db.login.find_one({"username": user["username"]}, {"notes": 1})
+    if not isinstance((current or {}).get("notes"), dict):
+        await motor_db.login.update_one({"username": user["username"]}, {"$set": {"notes": {}}})
+
+    # Write the one key rather than read-modify-writing the whole notes map: two
+    # concurrent saves (two tabs, or the extension and web app) both read the same
+    # map and the second $set silently discarded the first one's note.
+    await motor_db.login.update_one(
+        {"username": user["username"]},
+        {"$set": {f"notes.{body.id}": {
+            "id": body.id, "name": body.name, "markdown": body.markdown, "date": body.date,
+        }}},
+    )
+    doc = await motor_db.login.find_one({"username": user["username"]}, {"notes": 1})
+    return (doc or {}).get("notes", {})
 
 
 @router.patch("/whats-new-seen")
@@ -240,7 +255,7 @@ async def update_parent_contact(
         student = await motor_db.login.find_one({"user_id": body.student_user_id})
         if not student:
             raise HTTPException(status_code=404, detail="Student not found")
-        if student.get("org_id") != user.get("org_id"):
+        if student.get("org_id") not in await get_accessible_org_ids(user):
             raise HTTPException(status_code=403, detail="Student not in your organization")
         target = {"user_id": body.student_user_id}
     elif body.student_user_id:
@@ -292,7 +307,7 @@ async def get_parent_contact(student_user_id: str, user: dict = Depends(get_conf
     )
     if not student:
         raise HTTPException(status_code=404, detail="Student not found")
-    if student.get("org_id") != user.get("org_id"):
+    if student.get("org_id") not in await get_accessible_org_ids(user):
         raise HTTPException(status_code=403, detail="Student not in your organization")
     result = {k: v for k, v in student.items() if k != "org_id"}
     linked_parents = []
@@ -333,7 +348,7 @@ async def get_student_profile(user_id: str, user: dict = Depends(get_confirmed_u
             raise HTTPException(status_code=403, detail="Student not in your classes")
         allowed_class_ids = {cls["class_id"] for cls in teacher_classes}
     else:
-        if student.get("org_id") != user.get("org_id"):
+        if student.get("org_id") not in await get_accessible_org_ids(user):
             raise HTTPException(status_code=403, detail="Student not in your organization")
 
     email = student["username"]
@@ -383,7 +398,10 @@ async def get_student_profile(user_id: str, user: dict = Depends(get_confirmed_u
         cid = c["class_id"]
         recs = by_class.get(cid, [])
         total = len(recs)
-        tardy = sum(1 for r in recs if r.get("minutes_late", 0) > tardy_threshold and not r.get("excused"))
+        # (x or 0), not .get(k, 0): minutes_late is present-but-null on override
+        # rows, and None > int raises TypeError. Every other comparison in the
+        # codebase uses this idiom; this line was the sole exception.
+        tardy = sum(1 for r in recs if (r.get("minutes_late") or 0) > tardy_threshold and not r.get("excused"))
         class_summaries.append({
             "class_id": cid,
             "class_name": c["name"],
@@ -479,7 +497,7 @@ async def get_parent_profile(user_id: str, user: dict = Depends(get_confirmed_us
                 allowed = {uid for c in teacher_classes for uid in (c.get("student_ids") or [])}
                 if student["user_id"] not in allowed:
                     continue
-            elif student.get("org_id") != user.get("org_id"):
+            elif student.get("org_id") not in await get_accessible_org_ids(user):
                 continue
             linked_students.append({
                 "user_id": student["user_id"],
@@ -533,12 +551,27 @@ async def delete_account(user: dict = Depends(get_current_user)):
 
     # Referential cleanup the original sweep missed, which is how dangling
     # user_id references accumulated in classes/parent_links.
+    # Student-facing records key on the email, not user_id, and were left behind
+    # entirely: attendance rows survived deletion and kept being returned to
+    # teachers by GET /attendance/class/{id} with no account behind them, and open
+    # interventions kept teacher notes about a deleted person. Both are personal
+    # data under the DPA, so erasure has to reach them.
+    await motor_db.attendance.delete_many({"student_email": email})
+    await motor_db.interventions.delete_many({"student_email": email})
+    await motor_db.absence_alerts.delete_many({"student_email": email})
+
     user_id = user.get("user_id")
     if user_id:
         await motor_db.mfa_challenges.delete_many({"user_id": user_id})
         await motor_db.parent_links.delete_many({"parent_user_id": user_id})
         await motor_db.parent_links.delete_many({"student_user_id": user_id})
         await motor_db.classes.update_many({"student_ids": user_id}, {"$pull": {"student_ids": user_id}})
+        await motor_db.parent_reminder_log.delete_many({"student_user_id": user_id})
+        await motor_db.parent_reminder_log.delete_many({"parent_user_id": user_id})
+        # analytics_events is retained deliberately: it holds only an event name,
+        # a timestamp and ids, and is the basis of aggregate usage reporting. Drop
+        # the user_id so the rows stop being attributable to a deleted person.
+        await motor_db.analytics_events.update_many({"user_id": user_id}, {"$set": {"user_id": None}})
 
     await motor_db.login.delete_one({"username": email})
     return {"message": "Account deleted"}

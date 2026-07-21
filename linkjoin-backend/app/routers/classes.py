@@ -4,7 +4,7 @@ from pydantic import BaseModel
 from app.auth import get_confirmed_user
 from app.database import motor_db
 from app.models.class_ import CreateClassRequest, UpdateClassRequest, AddStudentsRequest
-from app.roles import require_teacher, require_school_admin, TEACHER_ROLES
+from app.roles import require_teacher, require_school_admin, TEACHER_ROLES, get_accessible_org_ids
 from app.utils import async_next_link_id, ensure_link_slug, _clean_items
 from app.websocket_manager import manager
 from app.utils import configure_data
@@ -45,12 +45,35 @@ async def _remove_link_from_student(link_id: int, student_email: str) -> None:
 
 
 async def _resolve_students(student_ids: list[str]) -> list[dict]:
-    result = []
-    for uid in student_ids:
-        u = await motor_db.login.find_one({"user_id": uid}, {"_id": 0, "username": 1, "user_id": 1})
-        if u:
-            result.append(u)
-    return result
+    """One query for the whole roster, not one per student.
+
+    This is called from the attendance reads, the org dashboards and the override
+    path, several of which sit inside a loop over classes -- so a per-student
+    find_one here multiplied out to thousands of sequential round trips on a
+    single request for a large org.
+    """
+    if not student_ids:
+        return []
+    found = {
+        u["user_id"]: u
+        async for u in motor_db.login.find(
+            {"user_id": {"$in": student_ids}}, {"_id": 0, "username": 1, "user_id": 1}
+        )
+    }
+    # Preserve roster order, and skip ids with no surviving account.
+    return [found[uid] for uid in student_ids if uid in found]
+
+
+async def _cascade_delete_class_data(class_ids: list[str]) -> None:
+    """Deletes the records that reference a class by class_id, so removing a
+    class (or the org it belongs to) doesn't leave attendance/interventions/
+    parent_notes/absence_alerts pointing at nothing."""
+    if not class_ids:
+        return
+    await motor_db.attendance.delete_many({"class_id": {"$in": class_ids}})
+    await motor_db.interventions.delete_many({"class_id": {"$in": class_ids}})
+    await motor_db.parent_notes.delete_many({"class_id": {"$in": class_ids}})
+    await motor_db.absence_alerts.delete_many({"class_id": {"$in": class_ids}})
 
 
 async def get_authorized_class(class_id: str, user: dict = Depends(get_confirmed_user)) -> dict:
@@ -63,7 +86,7 @@ async def get_authorized_class(class_id: str, user: dict = Depends(get_confirmed
         raise HTTPException(status_code=404, detail="Class not found")
     if user.get("role") == "teacher" and cls["teacher_id"] != user["user_id"]:
         raise HTTPException(status_code=403, detail="Access denied")
-    if user.get("role") in ("school_admin", "district_admin") and cls.get("org_id") != user.get("org_id"):
+    if user.get("role") in ("school_admin", "district_admin") and cls.get("org_id") not in await get_accessible_org_ids(user):
         raise HTTPException(status_code=403, detail="Access denied")
     return cls
 
@@ -73,19 +96,27 @@ async def list_classes(user: dict = Depends(get_confirmed_user)):
     require_teacher(user)
     is_admin = user.get("role") in ("school_admin", "district_admin")
     if is_admin:
-        query = {"org_id": user.get("org_id")}
+        query = {"org_id": {"$in": list(await get_accessible_org_ids(user))}}
     else:
         query = {"teacher_id": user["user_id"]}
     classes = await motor_db.classes.find(query, {"_id": 0}).to_list(None)
     if is_admin:
-        teacher_ids = {c["teacher_id"] for c in classes}
+        # Two bulk queries instead of up to two per teacher. teacher_id is
+        # normally a user_id, but legacy rows store an email, so both are matched
+        # in one pass with $or.
+        teacher_ids = sorted({c["teacher_id"] for c in classes if c.get("teacher_id")})
         teacher_map = {}
-        for tid in teacher_ids:
-            t = await motor_db.login.find_one({"user_id": tid}, {"username": 1, "name": 1, "avatar": 1})
-            if not t:
-                t = await motor_db.login.find_one({"username": tid}, {"username": 1, "name": 1, "avatar": 1})
-            if t:
-                teacher_map[tid] = {"email": t["username"], "name": t.get("name") or "", "avatar": t.get("avatar") or ""}
+        if teacher_ids:
+            async for t in motor_db.login.find(
+                {"$or": [{"user_id": {"$in": teacher_ids}}, {"username": {"$in": teacher_ids}}]},
+                {"username": 1, "name": 1, "avatar": 1, "user_id": 1, "_id": 0},
+            ):
+                info = {"email": t["username"], "name": t.get("name") or "", "avatar": t.get("avatar") or ""}
+                # Key under whichever identifier the class rows actually use.
+                if t.get("user_id") in teacher_ids:
+                    teacher_map[t["user_id"]] = info
+                if t["username"] in teacher_ids:
+                    teacher_map[t["username"]] = info
         for c in classes:
             info = teacher_map.get(c["teacher_id"]) or {}
             c["teacher_email"] = info.get("email")
@@ -143,13 +174,14 @@ async def delete_class(class_id: str, user: dict = Depends(get_confirmed_user)):
     cls = await motor_db.classes.find_one({"class_id": class_id})
     if not cls:
         raise HTTPException(status_code=404, detail="Class not found")
-    if cls["org_id"] != user.get("org_id"):
+    if cls["org_id"] not in await get_accessible_org_ids(user):
         raise HTTPException(status_code=403, detail="Access denied")
     students = await _resolve_students(cls.get("student_ids", []))
     for link_id in cls.get("link_ids", []):
         for s in students:
             await _remove_link_from_student(link_id, s["username"])
         await motor_db.links.update_many({"id": link_id}, {"$unset": {"class_id": ""}})
+    await _cascade_delete_class_data([class_id])
     await motor_db.classes.delete_one({"class_id": class_id})
     return {"message": "Deleted"}
 
@@ -243,6 +275,12 @@ async def remove_class_link(link_id: int, cls: dict = Depends(get_authorized_cla
 
 @router.post("/{class_id}/excuse-absence", status_code=200)
 async def add_excused_absence(body: ExcuseAbsenceBody, cls: dict = Depends(get_authorized_class)):
+    # Only students actually on this roster. An arbitrary string here grew the
+    # class document unboundedly and silently skewed effective_expected in the
+    # attendance rate math for a student who was never enrolled.
+    roster_emails = {s["username"] for s in await _resolve_students(cls.get("student_ids", []))}
+    if body.student_email not in roster_emails:
+        raise HTTPException(status_code=404, detail="Student is not on this class roster")
     entry = {"student_email": body.student_email, "date": body.date}
     await motor_db.classes.update_one(
         {"class_id": cls["class_id"]},
