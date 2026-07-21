@@ -28,7 +28,13 @@ class Settings(BaseSettings):
     # deploy plus a manual Azure restart; this makes it an app-setting change.
     enforce_password_epoch: bool = True
     jwt_algorithm: str = "HS256"
-    access_token_expire_minutes: int = 10080
+    # Was 10080 (7 days). The access token lives in localStorage, so an injection
+    # that reads it previously yielded a week of access; a short window plus a
+    # refresh token bounds that without forcing daily re-login. The refresh token
+    # carries purpose="refresh", which get_current_user already refuses to accept
+    # as a credential via _NON_ACCESS_CLAIMS.
+    access_token_expire_minutes: int = 60
+    refresh_token_expire_minutes: int = 10080  # 7 days
     reset_token_expire_minutes: int = 60
     confirm_token_expire_minutes: int = 60
 

@@ -1,10 +1,13 @@
 import hashlib
 import hmac
 import json
+import logging
 from datetime import datetime, timezone
 
 from app.config import get_settings
 from app.database import motor_db
+
+log = logging.getLogger(__name__)
 
 
 def _entry_hash(ts: str, user: str, action: str, resource_type: str | None,
@@ -44,5 +47,5 @@ async def log_audit(
                                 ip, detail_val),
         }
         await motor_db.audit_logs.insert_one(doc)
-    except Exception:
-        pass
+    except Exception as exc:
+        log.error("[audit] failed to record entry user=%s action=%s: %s", user, action, exc)

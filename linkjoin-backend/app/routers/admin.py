@@ -2,6 +2,7 @@ import asyncio
 import csv
 import io
 import json
+import re
 import secrets
 import string
 from datetime import datetime, timedelta, timezone
@@ -11,10 +12,11 @@ from app.auth import get_confirmed_user
 from app.config import get_settings
 from app.database import motor_db
 from app.email_service import send_email
+from app.routers.classes import _cascade_delete_class_data
 from app.utils import configure_data, gen_id, STAFF_HIDDEN_FIELDS
 from app.websocket_manager import manager
 from app.audit import log_audit
-from app.roles import TEACHER_ROLES
+from app.roles import TEACHER_ROLES, require_platform_admin, get_accessible_org_ids
 from argon2 import PasswordHasher
 
 _hasher = PasswordHasher()
@@ -133,24 +135,44 @@ def _mask_ip(ip: str | None) -> str | None:
 router = APIRouter(prefix="/admin", tags=["admin"])
 
 
-def _require_admin(user: dict) -> None:
-    if user.get("admin") != "true" or user.get("org_name") == "gmail.com":
-        raise HTTPException(status_code=403, detail="Admin access required")
+# org_name is derived from the email domain (auth.register sets it to
+# email.split("@")[1]), so scoping a bulk write by it means a platform admin on a
+# consumer mailbox would disable every unrelated user sharing that domain.
+_PUBLIC_EMAIL_DOMAINS = {
+    "gmail.com", "googlemail.com", "yahoo.com", "hotmail.com", "outlook.com",
+    "live.com", "icloud.com", "me.com", "aol.com", "proton.me", "protonmail.com",
+}
 
 
 @router.post("/disable-all")
 async def disable_all(body: dict, user: dict = Depends(get_confirmed_user)):
-    _require_admin(user)
+    require_platform_admin(user)
     disable = str(body.get("disable", "true")).lower()
-    org = user["org_name"]
 
-    async for org_user in motor_db.login.find({"org_name": org}):
+    # Prefer org_id: it is the real tenant key. org_name is only a fallback for
+    # legacy accounts that predate org_id, and is refused outright for consumer
+    # domains, where the blast radius is "everyone on gmail".
+    org_id = user.get("org_id")
+    if org_id:
+        query = {"org_id": org_id}
+        scope = {"org_id": org_id}
+    else:
+        org = (user.get("org_name") or "").strip().lower()
+        if not org or org in _PUBLIC_EMAIL_DOMAINS:
+            raise HTTPException(
+                status_code=422,
+                detail="Your account has no organization to scope this to.",
+            )
+        query = {"org_name": org}
+        scope = {"org_name": org}
+
+    async for org_user in motor_db.login.find(query):
         await motor_db.login.update_one(
             {"username": org_user["username"]}, {"$set": {"org_disabled": disable}}
         )
         await manager.broadcast(await configure_data(org_user["username"]), org_user["username"])
 
-    await log_audit(user["username"], "admin.disable_all", detail={"disable": disable, "org": org})
+    await log_audit(user["username"], "admin.disable_all", detail={"disable": disable, **scope})
     return {"message": "Updated"}
 
 
@@ -161,7 +183,7 @@ async def org_disabled(user: dict = Depends(get_confirmed_user)):
 
 @router.post("/view")
 async def toggle_admin_view(body: dict, user: dict = Depends(get_confirmed_user)):
-    _require_admin(user)
+    require_platform_admin(user)
     value = str(body.get("admin_view", "false")).lower()
     await motor_db.login.update_one({"username": user["username"]}, {"$set": {"admin_view": value}})
     await log_audit(user["username"], "admin.toggle_view", detail={"admin_view": value})
@@ -170,7 +192,7 @@ async def toggle_admin_view(body: dict, user: dict = Depends(get_confirmed_user)
 
 @router.patch("/users/{user_id}/role")
 async def set_user_role(user_id: str, body: dict, user: dict = Depends(get_confirmed_user)):
-    _require_admin(user)
+    require_platform_admin(user)
     account_type = body.get("account_type")
     role = body.get("role")
     org_id = body.get("org_id")
@@ -202,8 +224,7 @@ async def set_user_role(user_id: str, body: dict, user: dict = Depends(get_confi
 
 @router.get("/orgs/{org_id}")
 async def get_org_detail(org_id: str, user: dict = Depends(get_confirmed_user)):
-    if user.get("admin") != "true":
-        raise HTTPException(status_code=403, detail="Platform admin access required")
+    require_platform_admin(user)
     org = await motor_db.orgs.find_one({"org_id": org_id}, {"_id": 0})
     if not org:
         raise HTTPException(status_code=404, detail="Org not found")
@@ -215,8 +236,7 @@ async def get_org_detail(org_id: str, user: dict = Depends(get_confirmed_user)):
 
 @router.patch("/orgs/{org_id}")
 async def update_org_detail(org_id: str, body: dict, user: dict = Depends(get_confirmed_user)):
-    if user.get("admin") != "true":
-        raise HTTPException(status_code=403, detail="Platform admin access required")
+    require_platform_admin(user)
     org = await motor_db.orgs.find_one({"org_id": org_id}, {"_id": 0, "org_id": 1})
     if not org:
         raise HTTPException(status_code=404, detail="Org not found")
@@ -225,6 +245,10 @@ async def update_org_detail(org_id: str, body: dict, user: dict = Depends(get_co
     updates = {k: v for k, v in body.items() if k in allowed}
     if not updates:
         return {"message": "Nothing to update"}
+    if updates.get("parent_org_id"):
+        parent = await motor_db.orgs.find_one({"org_id": updates["parent_org_id"]}, {"type": 1})
+        if not parent or parent.get("type") != "district":
+            raise HTTPException(status_code=422, detail="parent_org_id must reference an existing district org")
     await motor_db.orgs.update_one({"org_id": org_id}, {"$set": updates})
     await log_audit(user["username"], "admin.update_org", detail={"org_id": org_id, "fields": list(updates.keys())})
     return {"message": "Updated"}
@@ -232,8 +256,7 @@ async def update_org_detail(org_id: str, body: dict, user: dict = Depends(get_co
 
 @router.patch("/orgs/{org_id}/members/{user_id}/role")
 async def update_member_role(org_id: str, user_id: str, body: dict, user: dict = Depends(get_confirmed_user)):
-    if user.get("admin") != "true":
-        raise HTTPException(status_code=403, detail="Platform admin access required")
+    require_platform_admin(user)
     role = body.get("role")
     if role not in ("student", "teacher", "school_admin", "district_admin"):
         raise HTTPException(status_code=422, detail="Invalid role")
@@ -247,8 +270,7 @@ async def update_member_role(org_id: str, user_id: str, body: dict, user: dict =
 
 @router.delete("/orgs/{org_id}/members/{user_id}")
 async def remove_member(org_id: str, user_id: str, user: dict = Depends(get_confirmed_user)):
-    if user.get("admin") != "true":
-        raise HTTPException(status_code=403, detail="Platform admin access required")
+    require_platform_admin(user)
     target = await motor_db.login.find_one({"user_id": user_id, "org_id": org_id})
     if not target:
         raise HTTPException(status_code=404, detail="Member not found in this org")
@@ -262,8 +284,7 @@ async def remove_member(org_id: str, user_id: str, user: dict = Depends(get_conf
 
 @router.get("/orgs")
 async def list_all_orgs(user: dict = Depends(get_confirmed_user)):
-    if user.get("admin") != "true":
-        raise HTTPException(status_code=403, detail="Platform admin access required")
+    require_platform_admin(user)
     orgs = []
     async for org in motor_db.orgs.find({}, {"_id": 0}):
         orgs.append(org)
@@ -272,26 +293,30 @@ async def list_all_orgs(user: dict = Depends(get_confirmed_user)):
 
 @router.get("/users/search")
 async def search_users(q: str = "", user: dict = Depends(get_confirmed_user)):
-    if user.get("admin") != "true":
-        raise HTTPException(status_code=403, detail="Platform admin access required")
+    require_platform_admin(user)
+    q = q.strip()
     results = []
-    if q.strip():
-        query: dict = {"username": {"$regex": q.strip(), "$options": "i"}}
+    if q:
+        query: dict = {"username": {"$regex": re.escape(q), "$options": "i"}}
         async for u in motor_db.login.find(query, STAFF_HIDDEN_FIELDS).limit(20):
             results.append(u)
     else:
         async for u in motor_db.login.find({}, STAFF_HIDDEN_FIELDS).sort("created_at", -1).limit(20):
             results.append(u)
+    await log_audit(user["username"], "admin.search_users", detail={"query": q})
     return results
 
 
 @router.delete("/orgs/{org_id}", status_code=204)
 async def delete_org(org_id: str, user: dict = Depends(get_confirmed_user)):
-    if user.get("admin") != "true":
-        raise HTTPException(status_code=403, detail="Platform admin access required")
+    require_platform_admin(user)
     org = await motor_db.orgs.find_one({"org_id": org_id})
     if not org:
         raise HTTPException(status_code=404, detail="Org not found")
+    class_ids = [c["class_id"] async for c in motor_db.classes.find({"org_id": org_id}, {"class_id": 1})]
+    await _cascade_delete_class_data(class_ids)
+    await motor_db.classes.delete_many({"org_id": org_id})
+    await motor_db.parent_links.delete_many({"org_id": org_id})
     await motor_db.orgs.delete_one({"org_id": org_id})
     await motor_db.login.update_many(
         {"org_id": org_id},
@@ -302,8 +327,7 @@ async def delete_org(org_id: str, user: dict = Depends(get_confirmed_user)):
 
 @router.post("/create-admin-account", status_code=201)
 async def create_admin_account(body: dict, background_tasks: BackgroundTasks, user: dict = Depends(get_confirmed_user)):
-    if user.get("admin") != "true":
-        raise HTTPException(status_code=403, detail="Platform admin access required")
+    require_platform_admin(user)
     email = (body.get("email") or "").strip().lower()
     if not email or "@" not in email:
         raise HTTPException(status_code=422, detail="Valid email required")
@@ -369,6 +393,13 @@ async def import_staff(
     if not rows or not isinstance(rows, list):
         raise HTTPException(status_code=422, detail="rows must be a non-empty list")
 
+    # A non-platform admin may only rewrite accounts that are already inside their
+    # own org hierarchy. Without this, the update branch below reassigns role/org_id
+    # keyed on nothing but an attacker-supplied email, which let any school admin
+    # pull an arbitrary account (any org, any role) into their own org and then read
+    # it through /orgs/{id}/members and /users/student/{id}.
+    accessible_org_ids = None if is_platform_admin else await get_accessible_org_ids(user)
+
     results = []
     for row in rows:
         email = (row.get("email") or "").strip().lower()
@@ -385,6 +416,17 @@ async def import_staff(
 
         existing = await motor_db.login.find_one({"username": email})
         if existing:
+            # Onboarding someone who already has an account is legitimate only when
+            # they are already in this admin's hierarchy. An unaffiliated or
+            # other-org account has to consent via the teacher invite flow
+            # (POST /invites, type "teacher"), which mails them a link.
+            if accessible_org_ids is not None and existing.get("org_id") not in accessible_org_ids:
+                results.append({
+                    "email": email,
+                    "status": "error",
+                    "error": "An account with that email exists outside your organization. Send an invite instead.",
+                })
+                continue
             await motor_db.login.update_one(
                 {"username": email},
                 {"$set": {"role": role, "org_id": org_id, "account_type": "institutional"}}
@@ -425,8 +467,7 @@ async def import_org_members(
     background_tasks: BackgroundTasks,
     user: dict = Depends(get_confirmed_user),
 ):
-    if user.get("admin") != "true":
-        raise HTTPException(status_code=403, detail="Platform admin access required")
+    require_platform_admin(user)
     org = await motor_db.orgs.find_one({"org_id": org_id})
     if not org:
         raise HTTPException(status_code=404, detail="Org not found")
@@ -547,6 +588,13 @@ async def import_org_parents(
         raise HTTPException(status_code=422, detail="rows must be a non-empty list")
 
     app_url = _settings.frontend_url
+
+    # parent_links is the *sole* authorization check the parent portal performs
+    # (routers/parent.py:_parent_student_ids does no org check at all), so a link
+    # written here hands over that student's roster, attendance, and rates in full.
+    # Both sides of the link must therefore be inside the caller's own hierarchy.
+    accessible_org_ids = None if is_platform_admin else await get_accessible_org_ids(user)
+
     results = []
     for row in rows:
         parent_email = (row.get("parent_email") or "").strip().lower()
@@ -556,13 +604,28 @@ async def import_org_parents(
             results.append({"parent_email": parent_email or "(blank)", "student_email": student_email or "(blank)", "status": "error", "error": "Invalid email"})
             continue
 
-        student = await motor_db.login.find_one({"username": student_email}, {"user_id": 1, "_id": 0})
+        student = await motor_db.login.find_one({"username": student_email}, {"user_id": 1, "org_id": 1, "_id": 0})
         if not student:
+            results.append({"parent_email": parent_email, "student_email": student_email, "status": "error", "error": "Student not found"})
+            continue
+        # Deliberately the same message as "not found": an admin who may not see
+        # this student should not learn whether the address exists on the platform.
+        if accessible_org_ids is not None and student.get("org_id") not in accessible_org_ids:
             results.append({"parent_email": parent_email, "student_email": student_email, "status": "error", "error": "Student not found"})
             continue
         student_user_id = student["user_id"]
 
-        existing_parent = await motor_db.login.find_one({"username": parent_email}, {"user_id": 1, "_id": 0})
+        existing_parent = await motor_db.login.find_one({"username": parent_email}, {"user_id": 1, "org_id": 1, "_id": 0})
+        if existing_parent and accessible_org_ids is not None and existing_parent.get("org_id") not in accessible_org_ids:
+            # Refuse to convert an unaffiliated or other-org account into a parent
+            # of this org; that is an account takeover keyed on an email address.
+            results.append({
+                "parent_email": parent_email,
+                "student_email": student_email,
+                "status": "error",
+                "error": "An account with that parent email exists outside your organization.",
+            })
+            continue
         if not existing_parent:
             temp_pw = _gen_temp_password()
             parent_user_id = gen_id()
@@ -614,8 +677,7 @@ async def import_org_parents(
 
 @router.get("/orgs/{org_id}/classes")
 async def get_org_classes(org_id: str, user: dict = Depends(get_confirmed_user)):
-    if user.get("admin") != "true":
-        raise HTTPException(status_code=403, detail="Platform admin access required")
+    require_platform_admin(user)
     classes = []
     async for cls in motor_db.classes.find({"org_id": org_id}, {"_id": 0}):
         classes.append(dict(cls))
@@ -634,7 +696,7 @@ async def get_org_classes(org_id: str, user: dict = Depends(get_confirmed_user))
 
 @router.get("/analytics")
 async def get_analytics(user: dict = Depends(get_confirmed_user)):
-    _require_admin(user)
+    require_platform_admin(user)
     now = datetime.now(timezone.utc)
 
     # Last 6 YYYY-MM labels
@@ -749,8 +811,7 @@ async def get_analytics(user: dict = Depends(get_confirmed_user)):
 
 @router.patch("/users/{user_id}/platform-admin")
 async def set_platform_admin(user_id: str, body: dict, user: dict = Depends(get_confirmed_user)):
-    if user.get("admin") != "true":
-        raise HTTPException(status_code=403, detail="Platform admin access required")
+    require_platform_admin(user)
     enabled = body.get("enabled", False)
     target = await motor_db.login.find_one({"user_id": user_id})
     if not target:
@@ -773,7 +834,7 @@ async def resend_consent_email(
     role = user.get("role")
     if role not in ("school_admin", "district_admin") and user.get("admin") != "true":
         raise HTTPException(status_code=403, detail="Insufficient permissions")
-    if user.get("admin") != "true" and user.get("org_id") != org_id:
+    if user.get("admin") != "true" and org_id not in await get_accessible_org_ids(user):
         raise HTTPException(status_code=403, detail="Org mismatch")
 
     student_id = body.get("student_id")
@@ -914,7 +975,8 @@ async def _build_audit_query(user: dict, from_date: str | None, to_date: str | N
         org_id = user.get("org_id")
         if not org_id:
             return {"user": "__no_org__"}
-        org_usernames = [u["username"] async for u in motor_db.login.find({"org_id": org_id}, {"username": 1, "_id": 0})]
+        accessible_org_ids = list(await get_accessible_org_ids(user))
+        org_usernames = [u["username"] async for u in motor_db.login.find({"org_id": {"$in": accessible_org_ids}}, {"username": 1, "_id": 0})]
         query = {"user": {"$in": org_usernames}}
 
     ts_filter: dict = {}

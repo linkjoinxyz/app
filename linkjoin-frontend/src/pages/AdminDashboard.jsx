@@ -4122,11 +4122,87 @@ function SchoolAdminView() {
 // ─── District Admin View ──────────────────────────────────────────────────────
 
 function DistrictAdminView() {
+  const { orgId } = useAuth()
+  const [schools, setSchools] = useState([])
+  const [classes, setClasses] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [expanded, setExpanded] = useState(null)
+
+  useEffect(() => {
+    if (!orgId) { setLoading(false); return }
+    Promise.all([
+      apiGet(`/orgs/${orgId}/children`),
+      apiGet('/classes').catch(() => []),
+    ])
+      .then(([kids, cls]) => {
+        setSchools(Array.isArray(kids) ? kids : [])
+        setClasses(Array.isArray(cls) ? cls : [])
+      })
+      .catch(e => setError(e?.message || 'Failed to load district data'))
+      .finally(() => setLoading(false))
+  }, [orgId])
+
+  if (loading) return <div className="admin-spinner-wrap"><div className="admin-spinner" /></div>
+  if (error) return <div className="admin-error" style={{ padding: 40 }}>{error}</div>
+
+  const totals = schools.reduce((acc, s) => ({
+    students: acc.students + (s.student_count || 0),
+    classes: acc.classes + (s.class_count || 0),
+    openCases: acc.openCases + (s.open_intervention_count || 0),
+  }), { students: 0, classes: 0, openCases: 0 })
+
   return (
-    <div style={{ color: 'rgba(255,255,255,0.4)', marginTop: 40, textAlign: 'center' }}>
-      <div style={{ fontSize: 15, marginBottom: 8 }}>District dashboard coming soon.</div>
-      <div style={{ fontSize: 13 }}>School and teacher management at the district level is under development.</div>
-    </div>
+    <>
+      <div className="admin-section-header">
+        <h2 className="admin-section-title">District overview</h2>
+      </div>
+      <div style={{ display: 'flex', gap: 24, marginBottom: 32, flexWrap: 'wrap' }}>
+        <div className="sp-stat"><div className="sp-stat-val">{schools.length}</div><div className="sp-stat-label">Schools</div></div>
+        <div className="sp-stat"><div className="sp-stat-val">{totals.students}</div><div className="sp-stat-label">Students</div></div>
+        <div className="sp-stat"><div className="sp-stat-val">{totals.classes}</div><div className="sp-stat-label">Classes</div></div>
+        <div className="sp-stat"><div className="sp-stat-val">{totals.openCases}</div><div className="sp-stat-label">Open cases</div></div>
+      </div>
+
+      <div className="admin-section-header">
+        <h2 className="admin-section-title">Schools</h2>
+      </div>
+      {schools.length === 0 && (
+        <div className="admin-empty">No schools in this district yet.</div>
+      )}
+      <div className="class-grid">
+        {schools.map(s => {
+          const isOpen = expanded === s.org_id
+          const schoolClasses = classes.filter(c => c.org_id === s.org_id)
+          return (
+            <div key={s.org_id} className="class-card" onClick={() => setExpanded(isOpen ? null : s.org_id)}>
+              <div className="class-card-header">
+                <span className="class-card-time">{s.name}</span>
+              </div>
+              <div className="class-card-body">
+                <div style={{ display: 'flex', gap: 20, marginBottom: isOpen ? 12 : 0 }}>
+                  <div className="sp-stat"><div className="sp-stat-val">{s.student_count}</div><div className="sp-stat-label">Students</div></div>
+                  <div className="sp-stat"><div className="sp-stat-val">{s.class_count}</div><div className="sp-stat-label">Classes</div></div>
+                  <div className="sp-stat"><div className="sp-stat-val">{s.open_intervention_count}</div><div className="sp-stat-label">Open cases</div></div>
+                </div>
+                {isOpen && (
+                  schoolClasses.length === 0 ? (
+                    <div className="admin-empty">No classes yet.</div>
+                  ) : (
+                    schoolClasses.map(c => (
+                      <div key={c.class_id} style={{ padding: '6px 0', borderTop: '1px solid rgba(255,255,255,0.06)', fontSize: 13 }}>
+                        <span>{c.name}</span>
+                        <span style={{ opacity: 0.6 }}> · {c.teacher_name || c.teacher_email || 'Unassigned'} · {(c.student_ids || []).length} students</span>
+                      </div>
+                    ))
+                  )
+                )}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </>
   )
 }
 

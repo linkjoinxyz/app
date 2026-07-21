@@ -1,3 +1,4 @@
+import logging
 import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Optional
@@ -9,6 +10,7 @@ from app.database import motor_db
 from app.redis_client import get_redis
 from app.roles import is_admin_role
 
+log = logging.getLogger(__name__)
 _settings = get_settings()
 _bearer = HTTPBearer(auto_error=False)
 
@@ -90,8 +92,8 @@ async def get_current_user(
                 raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token revoked")
         except HTTPException:
             raise
-        except Exception:
-            pass
+        except Exception as exc:
+            log.error("[auth] Redis jti-revocation check failed, allowing request: %s", exc)
 
     email: str = payload.get("sub")
     if not email:
@@ -127,7 +129,15 @@ _SELF_SERVICE_ALLOWLIST = {
     ("GET", "/users/me"),
     ("PATCH", "/users/mfa"),
     ("POST", "/auth/mfa/setup-verify"),
+    # Status read: a disabled account has to be able to learn that it is disabled,
+    # otherwise the org_disabled gate below makes the check that reports it 403.
+    ("GET", "/admin/org-disabled"),
 }
+
+
+def is_org_disabled(user: dict) -> bool:
+    """admin.disable_all writes this flag; it is stored as the string "true"."""
+    return str(user.get("org_disabled", "")).lower() == "true"
 
 
 async def get_confirmed_user(request: Request, user: dict = Depends(get_current_user)) -> dict:
@@ -136,6 +146,13 @@ async def get_confirmed_user(request: Request, user: dict = Depends(get_current_
 
     if (request.method, request.url.path) in _SELF_SERVICE_ALLOWLIST:
         return user
+
+    # Enforced here rather than only in the client. /admin/disable-all set this
+    # flag and three frontend components read it, but no server-side code ever
+    # did, so a "disabled" account kept full API access by calling it directly or
+    # just leaving a tab open with a cached token.
+    if is_org_disabled(user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="org_disabled")
 
     if user.get("must_change_password"):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="must_change_password")

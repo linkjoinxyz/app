@@ -20,6 +20,7 @@ import WhatsNewModal from '../components/WhatsNewModal.jsx'
 import GrandfatheredThanksModal from '../components/GrandfatheredThanksModal.jsx'
 import TrialWelcomeModal from '../components/TrialWelcomeModal.jsx'
 import TeacherSetupModal from '../components/TeacherSetupModal.jsx'
+import { rememberTzPromptDeclined, isTzPromptDeclined, clearTzPromptDeclined } from '../utils.js'
 import '../styles/links.css'
 import '../styles/new_links.css'
 import '../styles/calendar-panel.css'
@@ -289,10 +290,19 @@ const [showDeleted, setShowDeleted] = useState(false)
     try {
       const saved = await usersApi.me()
       if (saved.timezone && saved.timezone !== tz) {
-        // IANA timezone changed (traveled / switched system) — ask the user
-        setTzMismatch({ from: saved.timezone, to: tz, newOffset: parseFloat(offset) })
+        // IANA timezone changed (traveled / switched system) — ask the user.
+        // Declining is remembered per device: the mismatch is a property of THIS
+        // machine's clock vs the saved timezone, so localStorage is the right
+        // scope. Keyed on the exact from/to pair rather than a plain "dismissed"
+        // flag, so moving on to a different zone still asks.
+        if (!isTzPromptDeclined(saved.timezone, tz)) {
+          setTzMismatch({ from: saved.timezone, to: tz, newOffset: parseFloat(offset) })
+        }
         return
       }
+      // Back in sync, so drop any stale decline. A later move to the same zone is
+      // a new trip and should prompt again.
+      clearTzPromptDeclined()
       if (saved.offset == null) {
         // No prior offset recorded — save both timezone and offset, don't touch link times
         await usersApi.updateTimezone(tz, parseFloat(offset))
@@ -313,10 +323,14 @@ const [showDeleted, setShowDeleted] = useState(false)
     try {
       await usersApi.updateTimezone(tzMismatch.to, tzMismatch.newOffset)
     } catch {}
+    clearTzPromptDeclined()
     setTzMismatch(null)
   }
 
   function handleTzKeep() {
+    // Persist the decline. Without this, syncTimezone re-detects the identical
+    // mismatch on the next page load and re-prompts, forever.
+    rememberTzPromptDeclined(tzMismatch.from, tzMismatch.to)
     setTzMismatch(null)
   }
 

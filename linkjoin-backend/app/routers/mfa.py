@@ -105,11 +105,11 @@ async def verify_mfa(body: dict, request: Request):
     )
     await log_audit(email, "auth.mfa_success", ip=ip)
 
-    access_token = create_token(email)
+    from app.routers.auth import _token_pair
+
     confirmed = user.get("confirmed") == "true"
     return {
-        "access_token": access_token,
-        "token_type": "bearer",
+        **_token_pair(email),
         "email": email,
         "confirmed": confirmed,
         "account_type": user.get("account_type", "personal"),

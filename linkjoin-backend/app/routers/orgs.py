@@ -8,13 +8,15 @@ from argon2 import PasswordHasher as _PH
 from icalendar import Calendar
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Header, Query
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from jose import JWTError, jwt
-from app.auth import get_confirmed_user
+from app.auth import get_confirmed_user, get_current_user
 from app.database import motor_db
 from app.config import get_settings
 from app.models.org import CreateOrgRequest, UpdateOrgRequest
-from app.roles import require_school_admin
-from app.utils import track_event, get_school_year_start, STAFF_HIDDEN_FIELDS
+from app.roles import require_school_admin, get_accessible_org_ids
+from app.utils import (
+    track_event, get_school_year_start, STAFF_HIDDEN_FIELDS,
+    assert_public_url, UnsafeURLError,
+)
 from app.routers.attendance import compute_student_attendance_rate, _LOOKBACK_DAYS, _TARDY_THRESHOLD_MINUTES
 from app.email_service import send_email
 
@@ -35,24 +37,40 @@ router = APIRouter(prefix="/orgs", tags=["orgs"])
 _settings = get_settings()
 _bearer = HTTPBearer(auto_error=False)
 
+# One fixed message for every fetch failure. Distinguishing "connection refused"
+# from "timeout" from "404" tells a caller what is listening on an internal
+# address, which is the port-scan half of the SSRF.
+_ICAL_FETCH_ERROR = "Could not fetch calendar from that URL"
+_ICAL_MAX_REDIRECTS = 5
+
 
 async def _check_token(
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(_bearer),
     x_admin_token: str | None = Header(default=None),
 ) -> None:
-    if _settings.add_accounts_token and x_admin_token == _settings.add_accounts_token:
+    """Platform-admin gate for org creation.
+
+    This must go through get_current_user rather than decoding the JWT itself.
+    A bare jwt.decode skips all three guards that make a token a *credential*:
+    the _NON_ACCESS_CLAIMS rejection (so a pre-MFA `mfa_only` session, or an
+    emailed reset/confirm token, or a ws ticket authenticated here and MFA was
+    bypassable with the password alone), the Redis JTI blacklist (so logged-out
+    tokens kept working), and the password-change epoch (so tokens a reset was
+    meant to evict kept working).
+    """
+    # compare_digest, not ==: this is a long-lived static secret, and == returns
+    # on the first differing byte.
+    if _settings.add_accounts_token and secrets.compare_digest(
+        x_admin_token or "", _settings.add_accounts_token
+    ):
         return
     if credentials:
         try:
-            payload = jwt.decode(credentials.credentials, _settings.jwt_secret, algorithms=[_settings.jwt_algorithm])
-            email = payload.get("sub")
-            if email:
-                from app.database import motor_db as _db
-                user = await _db.login.find_one({"username": email}, {"admin": 1})
-                if user and user.get("admin") == "true":
-                    return
-        except JWTError:
-            pass
+            user = await get_current_user(credentials)
+        except HTTPException:
+            user = None
+        if user and user.get("admin") == "true":
+            return
     raise HTTPException(status_code=403, detail="Admin token or platform admin account required")
 
 
@@ -83,6 +101,10 @@ def _admin_welcome_email(org_name: str, email: str, temp_password: str, login_ur
 async def create_org(body: CreateOrgRequest, background_tasks: BackgroundTasks, _: None = Depends(_check_token)):
     if body.type not in ("school", "district"):
         raise HTTPException(status_code=422, detail="type must be 'school' or 'district'")
+    if body.parent_org_id:
+        parent = await motor_db.orgs.find_one({"org_id": body.parent_org_id}, {"type": 1})
+        if not parent or parent.get("type") != "district":
+            raise HTTPException(status_code=422, detail="parent_org_id must reference an existing district org")
     org_id = secrets.token_urlsafe(16)
     doc = {
         "org_id": org_id,
@@ -171,7 +193,7 @@ async def create_my_org(body: dict, user: dict = Depends(get_confirmed_user)):
 @router.get("/{org_id}/members")
 async def get_org_members(org_id: str, user: dict = Depends(get_confirmed_user)):
     require_school_admin(user)
-    if user.get("org_id") != org_id and user.get("role") != "district_admin":
+    if org_id not in await get_accessible_org_ids(user):
         raise HTTPException(status_code=403, detail="Access denied")
     members = []
     async for u in motor_db.login.find({"org_id": org_id}, STAFF_HIDDEN_FIELDS):
@@ -179,10 +201,38 @@ async def get_org_members(org_id: str, user: dict = Depends(get_confirmed_user))
     return members
 
 
+@router.get("/{org_id}/children")
+async def get_org_children(org_id: str, user: dict = Depends(get_confirmed_user)):
+    """Child schools of a district org, with aggregate stats for the district
+    admin dashboard. Only meaningful for a district org; returns an empty
+    list for a school (schools have no children)."""
+    require_school_admin(user)
+    if org_id not in await get_accessible_org_ids(user):
+        raise HTTPException(status_code=403, detail="Access denied")
+    children = await motor_db.orgs.find({"parent_org_id": org_id}, {"_id": 0}).to_list(None)
+    result = []
+    for child in children:
+        child_org_id = child["org_id"]
+        student_count = await motor_db.login.count_documents({"org_id": child_org_id, "role": "student"})
+        class_count = await motor_db.classes.count_documents({"org_id": child_org_id})
+        open_intervention_count = await motor_db.interventions.count_documents(
+            {"org_id": child_org_id, "status": {"$ne": "resolved"}}
+        )
+        result.append({
+            "org_id": child_org_id,
+            "name": child.get("name", ""),
+            "type": child.get("type", "school"),
+            "student_count": student_count,
+            "class_count": class_count,
+            "open_intervention_count": open_intervention_count,
+        })
+    return result
+
+
 @router.get("/{org_id}")
 async def get_org(org_id: str, user: dict = Depends(get_confirmed_user)):
     require_school_admin(user)
-    if user.get("org_id") != org_id and user.get("role") != "district_admin":
+    if org_id not in await get_accessible_org_ids(user):
         raise HTTPException(status_code=403, detail="Access denied")
     org = await motor_db.orgs.find_one({"org_id": org_id}, {"_id": 0})
     if not org:
@@ -359,19 +409,43 @@ async def import_ical(org_id: str, body: dict, user: dict = Depends(get_confirme
     if not url:
         raise HTTPException(status_code=422, detail="url is required")
 
+    # This URL is fetched by the server from inside the cloud network, so it is an
+    # SSRF primitive unless every hop is validated. Redirects are followed manually
+    # rather than by httpx, because follow_redirects=True would let a permitted
+    # host bounce us to 169.254.169.254 or localhost after the initial check.
     try:
-        async with httpx.AsyncClient(follow_redirects=True, timeout=15) as client:
-            resp = await client.get(url, headers={"User-Agent": "LinkJoin/1.0"})
+        assert_public_url(url)
+    except UnsafeURLError:
+        raise HTTPException(status_code=400, detail=_ICAL_FETCH_ERROR)
+
+    try:
+        async with httpx.AsyncClient(follow_redirects=False, timeout=15) as client:
+            current = url
+            for _ in range(_ICAL_MAX_REDIRECTS):
+                resp = await client.get(current, headers={"User-Agent": "LinkJoin/1.0"})
+                if resp.is_redirect and resp.headers.get("location"):
+                    current = str(resp.next_request.url) if resp.next_request else ""
+                    assert_public_url(current)
+                    continue
+                break
+            else:
+                raise HTTPException(status_code=400, detail=_ICAL_FETCH_ERROR)
         resp.raise_for_status()
+    except HTTPException:
+        raise
+    except UnsafeURLError:
+        raise HTTPException(status_code=400, detail=_ICAL_FETCH_ERROR)
     except httpx.HTTPStatusError as e:
         raise HTTPException(status_code=400, detail=f"Calendar fetch failed: {e.response.status_code}")
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Could not fetch calendar: {str(e)}")
+    except Exception:
+        # Deliberately not str(e): the exception text reflects connection-level
+        # detail about internal hosts and turns this into a port scanner.
+        raise HTTPException(status_code=400, detail=_ICAL_FETCH_ERROR)
 
     try:
         parsed = _parse_ical(resp.content)
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Could not parse calendar: {str(e)}")
+    except Exception:
+        raise HTTPException(status_code=400, detail="Could not parse calendar feed")
 
     update: dict = {"ical_url": url}
     if parsed["summer_start"]:
@@ -477,13 +551,25 @@ async def get_org_attendance(org_id: str, window: str = Query(default="28d"), us
         cutoff = now - timedelta(days=_LOOKBACK_DAYS)
         lookback_days = _LOOKBACK_DAYS
 
+    # Resolve every roster across the whole org in one query rather than one per
+    # student per class. This endpoint loops classes and looped students inside
+    # that, so a 50-class org averaging 25 students issued ~1,250 sequential
+    # find_one calls before it even started computing rates.
+    all_student_ids = sorted({uid for cls in classes for uid in (cls.get("student_ids") or [])})
+    email_by_user_id: dict[str, str] = {}
+    if all_student_ids:
+        async for u in motor_db.login.find(
+            {"user_id": {"$in": all_student_ids}}, {"username": 1, "user_id": 1, "_id": 0}
+        ):
+            email_by_user_id[u["user_id"]] = u["username"]
+
     result = []
     for cls in classes:
-        emails = []
-        for uid in cls.get("student_ids") or []:
-            student = await motor_db.login.find_one({"user_id": uid}, {"username": 1, "_id": 0})
-            if student:
-                emails.append(student["username"])
+        emails = [
+            email_by_user_id[uid]
+            for uid in (cls.get("student_ids") or [])
+            if uid in email_by_user_id
+        ]
 
         # Rate is expected-sessions-weighted across the roster (same math as the
         # parent portal / get_class_patterns), not on-time-joins-over-joins-attended —
@@ -535,12 +621,13 @@ async def get_leak_signal(org_id: str, user: dict = Depends(get_confirmed_user))
     if not classes:
         return {"lookback_days": _LOOKBACK_DAYS, "leak_threshold": leak_threshold, "by_teacher": [], "by_class": []}
 
-    teacher_ids = {c["teacher_id"] for c in classes if c.get("teacher_id")}
+    teacher_ids = sorted({c["teacher_id"] for c in classes if c.get("teacher_id")})
     teacher_names: dict[str, str] = {}
-    for tid in teacher_ids:
-        t = await motor_db.login.find_one({"user_id": tid}, {"username": 1, "name": 1})
-        if t:
-            teacher_names[tid] = t.get("name") or t["username"]
+    if teacher_ids:
+        async for t in motor_db.login.find(
+            {"user_id": {"$in": teacher_ids}}, {"username": 1, "name": 1, "user_id": 1, "_id": 0}
+        ):
+            teacher_names[t["user_id"]] = t.get("name") or t["username"]
 
     class_ids = [c["class_id"] for c in classes]
     cutoff = datetime.now(timezone.utc) - timedelta(days=_LOOKBACK_DAYS)
