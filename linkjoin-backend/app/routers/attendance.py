@@ -8,9 +8,10 @@ from datetime import datetime, date as date_type, timezone, timedelta
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
+from pytz import utc, timezone as pytz_timezone
 from app.auth import get_confirmed_user
 from app.database import motor_db
-from app.roles import require_teacher, require_premium
+from app.roles import require_teacher, require_premium, get_accessible_org_ids
 from app.utils import get_blackout_set, get_school_year_start, compute_session_start_utc, csv_safe
 from app.audit import log_audit
 
@@ -280,14 +281,28 @@ async def get_my_rewards(user: dict = Depends(get_confirmed_user)):
     email = user["username"]
 
     org_id = user.get("org_id")
-    tardy_threshold = _TARDY_THRESHOLD_MINUTES
+    org = None
     if org_id:
-        org = await motor_db.orgs.find_one({"org_id": org_id}, {"attendance_settings": 1})
-        org_settings = (org or {}).get("attendance_settings") or {}
-        tardy_threshold = int(org_settings.get("tardy_threshold_minutes", _TARDY_THRESHOLD_MINUTES))
+        org = await motor_db.orgs.find_one(
+            {"org_id": org_id}, {"attendance_settings": 1, "summer_end": 1}
+        )
+    org_settings = (org or {}).get("attendance_settings") or {}
+    tardy_threshold = int(org_settings.get("tardy_threshold_minutes", _TARDY_THRESHOLD_MINUTES))
 
+    # Bounded to the current school year. This was an unbounded scan of every
+    # attendance row the student had ever accumulated, loaded into memory and
+    # sorted in Python on every page load, growing without limit across years.
+    rewards_cutoff = get_school_year_start(org or {}, datetime.now(timezone.utc))
+    # Match on opened_at OR recorded_at, the same idiom every other windowed read
+    # in this module uses. Filtering on opened_at alone drops absent/excused
+    # overrides, whose opened_at is null: they would never reach
+    # _resolve_latest_records, so a superseded join would keep counting and the
+    # teacher's correction would be silently ignored.
     raw_records = []
-    async for r in motor_db.attendance.find({"student_email": email}).sort("opened_at", 1):
+    async for r in motor_db.attendance.find({
+        "student_email": email,
+        "$or": [{"opened_at": {"$gte": rewards_cutoff}}, {"recorded_at": {"$gte": rewards_cutoff}}],
+    }).sort("opened_at", 1):
         raw_records.append(r)
 
     current_records = list(_resolve_latest_records(raw_records).values())
@@ -380,7 +395,7 @@ async def get_class_attendance(class_id: str, user: dict = Depends(get_confirmed
         raise HTTPException(status_code=404, detail="Class not found")
     if user.get("role") == "teacher" and cls["teacher_id"] != user["user_id"]:
         raise HTTPException(status_code=403, detail="Access denied")
-    if user.get("role") in ("school_admin", "district_admin") and cls["org_id"] != user.get("org_id"):
+    if user.get("role") in ("school_admin", "district_admin") and cls["org_id"] not in await get_accessible_org_ids(user):
         raise HTTPException(status_code=403, detail="Access denied")
 
     records = []
@@ -475,7 +490,7 @@ async def override_class_attendance(class_id: str, body: OverrideBody, user: dic
         raise HTTPException(status_code=404, detail="Class not found")
     if user.get("role") == "teacher" and cls["teacher_id"] != user["user_id"]:
         raise HTTPException(status_code=403, detail="Access denied")
-    if user.get("role") in ("school_admin", "district_admin") and cls["org_id"] != user.get("org_id"):
+    if user.get("role") in ("school_admin", "district_admin") and cls["org_id"] not in await get_accessible_org_ids(user):
         raise HTTPException(status_code=403, detail="Access denied")
 
     try:
@@ -493,20 +508,39 @@ async def override_class_attendance(class_id: str, body: OverrideBody, user: dic
     join_time_str = (body.join_time or "").strip()
     opened_at = None
     minutes_late = None
+
+    # Everything below is anchored in the teacher's timezone, not UTC. A teacher
+    # types join_time as a local wall clock, and the class's scheduled start is
+    # local too, so comparing either against a UTC-built instant is off by the
+    # zone's offset. Worse, probing for the session start with midnight UTC lands
+    # on the PREVIOUS local day for every negative-offset zone, which resolved the
+    # wrong weekday: US/Eastern overriding a Tue at 09:05 for a 09:00 Mon-Fri class
+    # produced minutes_late = -235, and a Mon override found no session at all and
+    # silently recorded a late student as on time.
+    teacher = await motor_db.login.find_one({"user_id": cls.get("teacher_id", "")}, {"timezone": 1})
+    tz_name = (teacher or {}).get("timezone") or "UTC"
+    try:
+        tz = pytz_timezone(tz_name)
+    except Exception:
+        tz = utc
+    # Midday local, so the instant is unambiguously on `day` in the teacher's zone
+    # regardless of offset or DST.
+    day_probe = tz.localize(datetime(day.year, day.month, day.day, 12, 0)).astimezone(utc)
+
     if join_time_str:
         if not re.match(r"^\d{1,2}:\d{2}$", join_time_str):
             raise HTTPException(status_code=422, detail="join_time must be H:MM or HH:MM")
         h, m = (int(x) for x in join_time_str.split(":"))
         if not (0 <= h <= 23 and 0 <= m <= 59):
             raise HTTPException(status_code=422, detail="Invalid join_time value")
-        opened_at = datetime(day.year, day.month, day.day, h, m, tzinfo=timezone.utc)
-        teacher = await motor_db.login.find_one({"user_id": cls.get("teacher_id", "")}, {"timezone": 1})
-        tz_name = (teacher or {}).get("timezone") or "UTC"
-        day_start_probe = datetime(day.year, day.month, day.day, tzinfo=timezone.utc)
-        session_start = compute_session_start_utc(cls.get("time", ""), cls.get("days") or [], tz_name, day_start_probe)
+        opened_at = tz.localize(datetime(day.year, day.month, day.day, h, m)).astimezone(utc)
+        session_start = compute_session_start_utc(
+            cls.get("time", ""), cls.get("days") or [], tz_name, day_probe
+        )
         if session_start is not None:
-            session_start_on_day = session_start.replace(year=day.year, month=day.month, day=day.day)
-            minutes_late = round((opened_at - session_start_on_day).total_seconds() / 60)
+            # day_probe already pins this to the override's own date, so no
+            # after-the-fact date rewriting is needed.
+            minutes_late = round((opened_at - session_start).total_seconds() / 60)
         else:
             # The override's date isn't a day this class is scheduled to meet
             # (e.g. a correction entered against the wrong weekday) — a real
@@ -515,9 +549,11 @@ async def override_class_attendance(class_id: str, body: OverrideBody, user: dic
             # null with a non-null opened_at (breaks every "minutes_late > X" read).
             minutes_late = 0
     elif body.status == "present":
-        # No explicit join time given — same "on time, at day start" default as
-        # the old checkbox flow, just now reason-coded and append-only.
-        opened_at = datetime(day.year, day.month, day.day, tzinfo=timezone.utc)
+        # No explicit join time given — same "on time" default as the old checkbox
+        # flow. Anchored at local midday rather than UTC midnight so the stored
+        # instant falls on the intended calendar day in the teacher's zone, which
+        # is what get_my_rewards buckets streaks by.
+        opened_at = day_probe
         minutes_late = 0
 
     absent = body.status in ("absent", "excused")
@@ -605,11 +641,12 @@ async def excuse_attendance_record(record_id: str, body: ExcuseBody, user: dict 
     if not rec:
         raise HTTPException(status_code=404, detail="Record not found")
     cls = await motor_db.classes.find_one({"class_id": rec["class_id"]})
-    if cls:
-        if user.get("role") == "teacher" and cls.get("teacher_id") != user["user_id"]:
-            raise HTTPException(status_code=403, detail="Access denied")
-        if user.get("role") in ("school_admin", "district_admin") and cls.get("org_id") != user.get("org_id"):
-            raise HTTPException(status_code=403, detail="Access denied")
+    if not cls:
+        raise HTTPException(status_code=404, detail="Class not found")
+    if user.get("role") == "teacher" and cls.get("teacher_id") != user["user_id"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+    if user.get("role") in ("school_admin", "district_admin") and cls.get("org_id") not in await get_accessible_org_ids(user):
+        raise HTTPException(status_code=403, detail="Access denied")
     await motor_db.attendance.update_one(
         {"_id": oid},
         {"$set": {"excused": body.excused, "excuse_reason": body.excuse_reason}}
@@ -633,7 +670,7 @@ async def get_class_patterns(class_id: str, student_email: str | None = Query(de
         })
         if not assigned:
             raise HTTPException(status_code=403, detail="Access denied")
-    if user.get("role") in ("school_admin", "district_admin") and cls["org_id"] != user.get("org_id"):
+    if user.get("role") in ("school_admin", "district_admin") and cls["org_id"] not in await get_accessible_org_ids(user):
         raise HTTPException(status_code=403, detail="Access denied")
 
     # Load org-level settings (thresholds + blackout dates)
@@ -655,14 +692,14 @@ async def get_class_patterns(class_id: str, student_email: str | None = Query(de
     leak_rate, leak_total_events = await compute_leak_rate(class_id, cutoff)
     data_quality_flagged = leak_total_events >= min_sessions and leak_rate >= leak_rate_flag
 
-    # Resolve enrolled students from roster
+    # Resolve enrolled students from roster (one query, not one per student)
+    from app.routers.classes import _resolve_students
+
     enrolled_emails: set[str] = set()
     email_to_user_id: dict[str, str] = {}
-    for uid in cls.get("student_ids") or []:
-        u = await motor_db.login.find_one({"user_id": uid}, {"_id": 0, "username": 1, "user_id": 1})
-        if u:
-            enrolled_emails.add(u["username"])
-            email_to_user_id[u["username"]] = u["user_id"]
+    for u in await _resolve_students(cls.get("student_ids") or []):
+        enrolled_emails.add(u["username"])
+        email_to_user_id[u["username"]] = u["user_id"]
 
     expected_dates, metrics_by_email = await compute_class_flag_metrics(
         class_id, cls, thresholds, cutoff, enrolled_emails=enrolled_emails
@@ -784,7 +821,7 @@ async def get_class_attendance_summary(
         raise HTTPException(status_code=404, detail="Class not found")
     if user.get("role") == "teacher" and cls["teacher_id"] != user["user_id"]:
         raise HTTPException(status_code=403, detail="Access denied")
-    if user.get("role") in ("school_admin", "district_admin") and cls["org_id"] != user.get("org_id"):
+    if user.get("role") in ("school_admin", "district_admin") and cls["org_id"] not in await get_accessible_org_ids(user):
         raise HTTPException(status_code=403, detail="Access denied")
 
     org = await motor_db.orgs.find_one(
@@ -841,7 +878,7 @@ async def export_class_attendance(
         raise HTTPException(status_code=404, detail="Class not found")
     if user.get("role") == "teacher" and cls["teacher_id"] != user["user_id"]:
         raise HTTPException(status_code=403, detail="Access denied")
-    if user.get("role") in ("school_admin", "district_admin") and cls["org_id"] != user.get("org_id"):
+    if user.get("role") in ("school_admin", "district_admin") and cls["org_id"] not in await get_accessible_org_ids(user):
         raise HTTPException(status_code=403, detail="Access denied")
 
     now = datetime.now(timezone.utc)

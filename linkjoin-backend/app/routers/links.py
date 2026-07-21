@@ -15,8 +15,8 @@ from app.models.link import (
     AcceptLinkRequest,
 )
 from app.limiter import limiter
-from app.roles import SCHOOL_ADMIN_ROLES
-from app.scheduler import create_text_job, delete_text_job
+from app.roles import SCHOOL_ADMIN_ROLES, get_accessible_org_ids
+from app.scheduler import publish_link_job_change
 from app.utils import configure_data, track_event, async_next_link_id, gen_slug, compute_session_start_utc
 from app.websocket_manager import manager
 from app.email_service import send_email_batch
@@ -39,6 +39,21 @@ async def _unique_share_id() -> str:
 async def _unique_slug() -> str:
     # Same 128-bit-entropy justification as _unique_share_id() above.
     return gen_slug()
+
+
+def _iso_ts(ts) -> str:
+    """Full-precision UTC ISO timestamp.
+
+    This used to format with a hardcoded ".000Z", and the same truncated string
+    was handed back as the `next_before` pagination cursor. Page 2 then queried
+    `$lt` that rounded-down value, so every event between the truncated second and
+    the real timestamp fell into the gap and appeared on neither page.
+    """
+    if not isinstance(ts, datetime):
+        return str(ts)
+    if ts.tzinfo is None:
+        ts = ts.replace(tzinfo=timezone.utc)
+    return ts.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
 def _valid_url(url: str) -> bool:
@@ -82,7 +97,7 @@ async def resolve_class_link(slug: str, background_tasks: BackgroundTasks, user:
         role = user.get("role")
         is_rostered = bool(cls) and role == "student" and user.get("user_id") in (cls.get("student_ids") or [])
         is_owning_teacher = bool(cls) and role == "teacher" and cls.get("teacher_id") == user.get("user_id")
-        is_org_admin = bool(cls) and role in SCHOOL_ADMIN_ROLES and user.get("org_id") == cls.get("org_id")
+        is_org_admin = bool(cls) and role in SCHOOL_ADMIN_ROLES and cls.get("org_id") in await get_accessible_org_ids(user)
         if not (is_rostered or is_owning_teacher or is_org_admin):
             if role == "student":
                 await log_audit(user["username"], "attendance.roster_miss", "class", class_id)
@@ -170,11 +185,12 @@ async def get_link_history(
         except (ValueError, TypeError):
             pass
 
-    # Admins see the full org feed; everyone else sees only their own
+    # Admins see the full org feed (district admins: their own org plus child
+    # schools); everyone else sees only their own
     is_admin = role in ("school_admin", "district_admin") and org_id
     if is_admin:
         org_members = await motor_db.login.find(
-            {"org_id": org_id}, {"username": 1, "_id": 0}
+            {"org_id": {"$in": list(await get_accessible_org_ids(user))}}, {"username": 1, "_id": 0}
         ).to_list(None)
         org_emails = [m["username"] for m in org_members] or [email]
         opens_query: dict = {"username": {"$in": org_emails}}
@@ -204,7 +220,7 @@ async def get_link_history(
             "link_id": o["link_id"],
             "link_name": o.get("link_name", ""),
             "actor": o.get("username", ""),
-            "ts": ts.strftime("%Y-%m-%dT%H:%M:%S.000Z") if isinstance(ts, datetime) else str(ts),
+            "ts": _iso_ts(ts),
             "_ts": ts,
         })
     for a in audits_raw:
@@ -216,7 +232,7 @@ async def get_link_history(
             "link_id": a.get("resource_id"),
             "link_name": detail.get("name", ""),
             "actor": a.get("user", ""),
-            "ts": ts.strftime("%Y-%m-%dT%H:%M:%S.000Z") if isinstance(ts, datetime) else str(ts),
+            "ts": _iso_ts(ts),
             "_ts": ts,
         })
 
@@ -278,7 +294,7 @@ async def create_link(request: Request, body: CreateLinkRequest, user: dict = De
         doc["password"] = encrypt(body.password)
 
     await motor_db.links.insert_one(doc)
-    create_text_job(doc)
+    await publish_link_job_change("create", doc)
     await track_event("link_create", org_id=user.get("org_id"), user_id=user.get("user_id"))
     await log_audit(email, "link.create", "link", link_id, ip=request.client.host if request.client else None, detail={"name": body.name})
     await manager.broadcast(await configure_data(email), email)
@@ -345,9 +361,15 @@ async def update_link(link_id: int, request: Request, body: UpdateLinkRequest, u
         )
         await manager.broadcast(await configure_data(shared["username"]), shared["username"])
 
-    delete_text_job(existing)
-    await motor_db.links.replace_one({"username": email, "id": link_id}, doc)
-    create_text_job(doc, update=True)
+    await publish_link_job_change("delete", existing)
+    # $set, not replace_one. replace_one substitutes the whole document, so every
+    # field not rebuilt into `doc` above was silently destroyed on each edit:
+    # `password` whenever the client omitted it (the UI treats it as write-only,
+    # so editing a name wiped the meeting password), and `org_name`, which is the
+    # filter the platform-admin view queries links by. $set leaves untouched
+    # fields alone, which also covers any field added later.
+    await motor_db.links.update_one({"username": email, "id": link_id}, {"$set": doc})
+    await publish_link_job_change("create", doc, update=True)
     await track_event("link_edit", org_id=user.get("org_id"), user_id=user.get("user_id"))
     await log_audit(email, "link.update", "link", link_id, ip=request.client.host if request.client else None, detail={"name": body.name})
     await manager.broadcast(await configure_data(email), email)
@@ -373,7 +395,7 @@ async def delete_link(link_id: int, request: Request, permanent: bool = False, t
         doc.pop("_id", None)
         await del_coll.insert_one(doc)
         if type != "bookmark":
-            delete_text_job(doc)
+            await publish_link_job_change("delete", doc)
             # Remove shared copies that other users received from this link
             await motor_db.links.delete_many({"share_id": link_id})
 
@@ -399,7 +421,7 @@ async def restore_link(link_id: int, type: str = "link", user: dict = Depends(ge
     await dest.insert_one(doc)
 
     if type != "bookmark" and doc.get("text") and doc.get("text") != "false":
-        create_text_job(doc, update=True)
+        await publish_link_job_change("create", doc, update=True)
 
     if type != "bookmark":
         await log_audit(email, "link.restore", "link", link_id, detail={"name": doc.get("name", "")})
@@ -416,10 +438,10 @@ async def toggle_link(link_id: int, body: ToggleLinkRequest, user: dict = Depend
 
     active = body.active or ("false" if existing["active"] == "true" else "true")
     await motor_db.links.update_one({"username": email, "id": link_id}, {"$set": {"active": active}})
-    delete_text_job(existing)
+    await publish_link_job_change("delete", existing)
     if active == "true":
         updated = {**existing, "active": "true"}
-        create_text_job(updated, update=True)
+        await publish_link_job_change("create", updated, update=True)
     await track_event("link_edit", org_id=user.get("org_id"), user_id=user.get("user_id"))
     await log_audit(email, "link.toggle", "link", link_id, detail={"active": active, "name": existing.get("name", "")})
     await manager.broadcast(await configure_data(email), email)
@@ -521,15 +543,25 @@ async def add_link_via_share(request: Request, id: str, user: dict = Depends(get
     sid = await _unique_share_id()
     share_url = f"{_settings.app_base_url}/addlink?id={sid}"
 
-    new_doc = {k: v for k, v in target.items() if k not in ("_id", "username", "share")}
+    # slug carries a unique index and share_token is the /addlink lookup key, so
+    # neither may be inherited from the source document: copying slug made this
+    # insert raise DuplicateKeyError (a 500) for every link that had one, and a
+    # duplicated share_token makes the find_one above ambiguous. The other two
+    # copy paths already get this right (share_link, and classes._push_link_to_student).
+    new_doc = {
+        k: v for k, v in target.items()
+        if k not in ("_id", "username", "share", "share_token", "slug")
+    }
     new_doc["username"] = email
     new_doc["share_id"] = target["id"]
     new_doc["id"] = new_link_id
     new_doc["share"] = encrypt(share_url)
+    new_doc["share_token"] = sid
+    new_doc["slug"] = await _unique_slug()
 
     await motor_db.links.insert_one(new_doc)
     if new_doc.get("text") and new_doc.get("text") != "false":
-        create_text_job(new_doc, update=True)
+        await publish_link_job_change("create", new_doc, update=True)
 
     await manager.broadcast(await configure_data(email), email)
     return {"message": "Added"}
@@ -551,7 +583,7 @@ async def accept_link(body: AcceptLinkRequest, user: dict = Depends(get_confirme
         doc.pop("_id", None)
         await dest.insert_one(doc)
         if body.type != "bookmark" and doc.get("text") and doc.get("text") != "false":
-            create_text_job(doc, update=True)
+            await publish_link_job_change("create", doc, update=True)
 
     await manager.broadcast(await configure_data(email), email)
     return {"message": "Accepted" if body.accept else "Declined"}

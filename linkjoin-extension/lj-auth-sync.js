@@ -1,8 +1,12 @@
 function syncAuth() {
     const token = localStorage.getItem('lj_token')
     const email = localStorage.getItem('lj_email')
+    // The refresh token comes across too: access tokens expire in an hour, and
+    // the background worker runs between page visits, so without it the extension
+    // has no way to renew and silently stops working until the next visit.
+    const refreshToken = localStorage.getItem('lj_refresh_token')
     if (token && email) {
-        chrome.storage.local.set({ token, email })
+        chrome.storage.local.set({ token, email, ...(refreshToken ? { refresh_token: refreshToken } : {}) })
         chrome.runtime.sendMessage({ type: 'login' }).catch(() => {})
     }
     document.documentElement.setAttribute('data-lj-ext', '1')
@@ -53,7 +57,7 @@ window.addEventListener('message', (e) => {
     if (e.origin !== location.origin) return
     if (e.data?.type === 'lj:login') syncAuth()
     if (e.data?.type === 'lj:logout') {
-        chrome.storage.local.remove(['token', 'email'])
+        chrome.storage.local.remove(['token', 'email', 'refresh_token'])
         chrome.runtime.sendMessage({ type: 'logout' }).catch(() => {})
     }
 })

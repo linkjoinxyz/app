@@ -6,9 +6,13 @@ from google.oauth2 import id_token
 from google.auth.transport import requests as google_requests
 from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError, InvalidHashError
+from pymongo.errors import DuplicateKeyError
 import httpx
 from app.database import motor_db
-from app.auth import create_token, decode_token, get_confirmed_user, get_current_user, is_confirmed
+from app.auth import (
+    create_token, decode_token, get_confirmed_user, get_current_user, is_confirmed,
+    is_org_disabled, _reject_if_pre_password_change,
+)
 from app.roles import is_admin_role
 from app.limiter import limiter
 from app.models.user import RegisterRequest, LoginRequest, ResetPasswordRequest
@@ -39,6 +43,24 @@ def _normalize_number(number: str, countrycode: str = "1") -> str | None:
     if len(digits) < 11:
         digits = countrycode.lstrip("+") + digits
     return digits
+
+
+def _token_pair(email: str) -> dict:
+    """Access token plus the long-lived refresh token used to renew it.
+
+    The refresh token carries purpose="refresh", so app.auth._NON_ACCESS_CLAIMS
+    makes get_current_user reject it outright: it can renew a session but can
+    never itself act as a credential.
+    """
+    return {
+        "access_token": create_token(email),
+        "refresh_token": create_token(
+            email,
+            minutes=_settings.refresh_token_expire_minutes,
+            extra={"purpose": "refresh"},
+        ),
+        "token_type": "bearer",
+    }
 
 
 async def _blacklist_token(payload: dict) -> None:
@@ -102,7 +124,16 @@ async def register(request: Request, body: RegisterRequest, background_tasks: Ba
         if normalized:
             account["number"] = int(normalized)
 
-    await motor_db.login.insert_one(account)
+    # The find_one above is a check, not a guarantee: two concurrent registrations
+    # for the same address both pass it and both insert, leaving two login docs for
+    # one email. Every later lookup is find_one({"username": ...}) and returns an
+    # arbitrary one of them, so which password authenticates and which role/org_id
+    # applies diverge. Once login.username carries a unique index this insert is
+    # the enforcement point; until then it at least narrows the window.
+    try:
+        await motor_db.login.insert_one(account)
+    except DuplicateKeyError:
+        raise HTTPException(status_code=409, detail="email_in_use")
 
     if account["confirmed"] == "false":
         confirm_token = create_token(
@@ -117,9 +148,8 @@ async def register(request: Request, body: RegisterRequest, background_tasks: Ba
         )
         await track_event("signup", user_id=account.get("user_id"))
         await log_audit(email, "auth.register", ip=request.client.host if request.client else None)
-        access_token = create_token(email)
         return {
-            "access_token": access_token, "token_type": "bearer", "email": email, "confirmed": False,
+            **_token_pair(email), "email": email, "confirmed": False,
             "account_type": account.get("account_type", "personal"),
             "role": account.get("role"),
             "org_id": account.get("org_id"),
@@ -129,9 +159,8 @@ async def register(request: Request, body: RegisterRequest, background_tasks: Ba
 
     await track_event("signup", user_id=account.get("user_id"))
     await log_audit(email, "auth.register", ip=request.client.host if request.client else None)
-    access_token = create_token(email)
     return {
-        "access_token": access_token, "token_type": "bearer", "email": email, "confirmed": True,
+        **_token_pair(email), "email": email, "confirmed": True,
         "account_type": account.get("account_type", "personal"),
         "role": account.get("role"),
         "org_id": account.get("org_id"),
@@ -166,9 +195,8 @@ async def confirm_email(token: str):
     await _blacklist_token(payload)
     await track_event("signup", user_id=user.get("user_id"))
     user = await motor_db.login.find_one({"username": email})
-    access_token = create_token(email)
     return {
-        "access_token": access_token, "token_type": "bearer", "email": email,
+        **_token_pair(email), "email": email,
         "account_type": user.get("account_type", "personal") if user else "personal",
         "role": user.get("role") if user else None,
         "org_id": user.get("org_id") if user else None,
@@ -256,10 +284,9 @@ async def login(request: Request, body: LoginRequest):
         mfa_session = create_token(email, minutes=10, extra={"scope": "mfa_only"})
         return {"mfa_required": True, "mfa_session": mfa_session}
 
-    access_token = create_token(email)
     confirmed = is_confirmed(user)
     return {
-        "access_token": access_token, "token_type": "bearer", "email": email, "confirmed": confirmed,
+        **_token_pair(email), "email": email, "confirmed": confirmed,
         "account_type": user.get("account_type", "personal"),
         "role": user.get("role"),
         "org_id": user.get("org_id"),
@@ -280,11 +307,46 @@ async def set_password(body: dict, user: dict = Depends(get_confirmed_user)):
     if new_password != confirm_password:
         raise HTTPException(status_code=422, detail="Passwords do not match")
     email = user["username"]
+
+    # get_current_user projects `password` out, so the hash has to be re-read here.
+    account = await motor_db.login.find_one({"username": email}, {"password": 1, "must_change_password": 1})
+    if not account:
+        raise HTTPException(status_code=401, detail="User not found")
+
+    # Proving knowledge of the current password is required, otherwise a stolen
+    # access token is enough to take the account over outright. Two exemptions,
+    # both cases where there is no current password to prove:
+    #   - must_change_password: the temp password was already proven at login.
+    #   - no password hash at all: a Google-only account adding one.
+    exempt = bool(account.get("must_change_password")) or not account.get("password")
+    if not exempt:
+        current_password = body.get("current_password") or ""
+        if not current_password:
+            raise HTTPException(status_code=422, detail="current_password is required")
+        try:
+            hasher.verify(account["password"], current_password)
+        except (VerifyMismatchError, InvalidHashError):
+            raise HTTPException(status_code=401, detail="Current password is incorrect")
+
+    # password_changed_at is the session epoch (see auth._reject_if_pre_password_change):
+    # writing it evicts every token issued earlier, which is the whole point of
+    # changing a password to shake off an intruder. reset_password_with_token
+    # already does this; omitting it here left every other session alive.
     await motor_db.login.update_one(
         {"username": email},
-        {"$set": {"password": hasher.hash(new_password)}, "$unset": {"must_change_password": ""}}
+        {
+            "$set": {
+                "password": hasher.hash(new_password),
+                "password_changed_at": datetime.now(timezone.utc),
+            },
+            "$unset": {"must_change_password": ""},
+        },
     )
-    return {"ok": True}
+    await log_audit(email, "auth.password_changed")
+
+    # The caller's own token was just revoked by the epoch above, so hand back a
+    # replacement rather than bouncing them to the login screen mid-onboarding.
+    return {"ok": True, "access_token": create_token(email), "token_type": "bearer"}
 
 
 
@@ -369,10 +431,9 @@ async def google_token_auth(request: Request, body: dict):
         mfa_session = create_token(email, minutes=10, extra={"scope": "mfa_only"})
         return {"mfa_required": True, "mfa_session": mfa_session}
 
-    access_token_jwt = create_token(email)
     confirmed = is_confirmed(user)
     return {
-        "access_token": access_token_jwt, "token_type": "bearer", "email": email, "confirmed": confirmed,
+        **_token_pair(email), "email": email, "confirmed": confirmed,
         "account_type": user.get("account_type", "personal"),
         "role": user.get("role"),
         "org_id": user.get("org_id"),
@@ -428,7 +489,7 @@ async def forgot_password(request: Request, body: dict, background_tasks: Backgr
               </tr>
             </table>
             <p style="margin:0 0 6px;font-size:13px;color:#9ca3af;line-height:1.6;">
-              This link expires in 30 minutes. If you didn&#39;t request a password reset, you can safely ignore this email.
+              This link expires in {_settings.reset_token_expire_minutes} minutes. If you didn&#39;t request a password reset, you can safely ignore this email.
             </p>
           </td>
         </tr>
@@ -485,6 +546,53 @@ async def reset_password_with_token(request: Request, token: str, body: ResetPas
     await _blacklist_token(payload)
     await log_audit(email, "auth.password_changed")
     return {"message": "Password updated"}
+
+
+@router.post("/refresh")
+@limiter.limit("30/minute")
+async def refresh_access_token(request: Request, body: dict):
+    """Exchange a refresh token for a new access token.
+
+    Applies the same revocation checks as get_current_user, which the token's
+    purpose claim otherwise prevents it from going through: a refresh token that
+    has been blacklisted by logout, or that predates a password change, must not
+    be able to mint fresh credentials.
+    """
+    token = (body.get("refresh_token") or "").strip()
+    if not token:
+        raise HTTPException(status_code=422, detail="refresh_token is required")
+
+    payload = decode_token(token)
+    if payload.get("purpose") != "refresh":
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+    jti = payload.get("jti")
+    if jti:
+        try:
+            if await get_redis().exists(f"jti:{jti}"):
+                raise HTTPException(status_code=401, detail="Token revoked")
+        except HTTPException:
+            raise
+        except Exception as exc:
+            log.error("[auth] Redis jti check failed during refresh, allowing: %s", exc)
+
+    email = payload.get("sub")
+    if not email:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    user = await motor_db.login.find_one({"username": email}, {"password": 0})
+    if not user:
+        raise HTTPException(status_code=401, detail="User not found")
+
+    if _settings.enforce_password_epoch:
+        _reject_if_pre_password_change(payload, user)
+
+    if is_org_disabled(user):
+        raise HTTPException(status_code=403, detail="org_disabled")
+
+    # Rotate the refresh token too, so a leaked one has a bounded life rather than
+    # staying valid for its full original window every time it is used.
+    await _blacklist_token(payload)
+    return _token_pair(email)
 
 
 @router.post("/logout")

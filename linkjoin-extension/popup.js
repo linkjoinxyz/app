@@ -565,7 +565,7 @@ async function renderDashboard() {
 }
 
 async function handleLogout() {
-    await chrome.storage.local.remove(['token', 'email', 'links', 'alarmData'])
+    await chrome.storage.local.remove(['token', 'email', 'refresh_token', 'links', 'alarmData'])
     chrome.runtime.sendMessage({ type: 'logout' })
     renderLogin()
 }

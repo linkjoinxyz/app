@@ -6,7 +6,7 @@ from app.audit import log_audit
 from app.config import get_settings
 from app.database import motor_db
 from app.email_service import send_email
-from app.roles import require_teacher, TEACHER_ROLES
+from app.roles import require_teacher, TEACHER_ROLES, get_accessible_org_ids
 
 router = APIRouter(prefix="/interventions", tags=["interventions"])
 
@@ -163,7 +163,7 @@ def _reassignment_email_html(iv: dict) -> str:
 async def _assert_access(intervention, user):
     role = user.get("role")
     if role in ("school_admin", "district_admin"):
-        if intervention.get("org_id") != user.get("org_id"):
+        if intervention.get("org_id") not in await get_accessible_org_ids(user):
             raise HTTPException(status_code=403, detail="Access denied")
     elif role == "teacher":
         cls = await motor_db.classes.find_one({"class_id": intervention.get("class_id")})
@@ -190,7 +190,7 @@ async def get_at_risk_students(user: dict = Depends(get_confirmed_user)):
     from app.routers.attendance import compute_class_flag_metrics, resolve_org_thresholds
 
     if role in ("school_admin", "district_admin"):
-        class_docs = await motor_db.classes.find({"org_id": user.get("org_id")}).to_list(None)
+        class_docs = await motor_db.classes.find({"org_id": {"$in": list(await get_accessible_org_ids(user))}}).to_list(None)
     else:
         class_docs = await motor_db.classes.find({"teacher_id": user.get("user_id")}).to_list(None)
 
@@ -276,7 +276,7 @@ async def list_interventions(
             filt["assignee_notified"] = False
     else:
         if role in ("school_admin", "district_admin"):
-            filt["org_id"] = user.get("org_id")
+            filt["org_id"] = {"$in": list(await get_accessible_org_ids(user))}
         else:
             teacher_classes = await motor_db.classes.find(
                 {"teacher_id": user.get("user_id")}, {"class_id": 1}
@@ -327,7 +327,7 @@ async def create_intervention(body: dict, user: dict = Depends(get_confirmed_use
     role = user.get("role")
     if role == "teacher" and cls.get("teacher_id") != user.get("user_id"):
         raise HTTPException(status_code=403, detail="Access denied")
-    if role in ("school_admin", "district_admin") and cls.get("org_id") != user.get("org_id"):
+    if role in ("school_admin", "district_admin") and cls.get("org_id") not in await get_accessible_org_ids(user):
         raise HTTPException(status_code=403, detail="Access denied")
 
     # One active intervention per student+class+flag_type

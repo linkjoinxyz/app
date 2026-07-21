@@ -17,7 +17,7 @@ function ProgressDots({ step, total }) {
 }
 
 function StepSetPassword({ onNext, onBack }) {
-  const { clearMustChangePassword } = useAuth()
+  const { clearMustChangePassword, refreshAuth } = useAuth()
   const [phase, setPhase] = useState('form') // 'form' | 'verify'
   const [newPw, setNewPw] = useState('')
   const [confirmPw, setConfirmPw] = useState('')
@@ -36,7 +36,11 @@ function StepSetPassword({ onNext, onBack }) {
     if (phone.replace(/\D/g, '').length < 7) { setErr('Enter a valid phone number.'); return }
     setSaving(true); setErr('')
     try {
-      await apiPost('/auth/set-password', { new_password: newPw, confirm_password: confirmPw })
+      // Setting a password stamps the session epoch server-side, which revokes
+      // the token this page is holding. The response carries a replacement, and
+      // it has to be swapped in before the next call or that call 401s.
+      const res = await apiPost('/auth/set-password', { new_password: newPw, confirm_password: confirmPw })
+      if (res?.access_token) refreshAuth({ access_token: res.access_token })
       await apiPatch('/users/mfa', { enable: true, phone: fullPhone() })
       setPhase('verify')
     } catch (e) {

@@ -1,10 +1,55 @@
 import asyncio
+import ipaddress
+import logging
 import secrets
+import socket
 from datetime import datetime, date, timedelta, timezone
+from urllib.parse import urlparse
 from pymongo import ReturnDocument
 from pytz import utc, timezone as pytz_timezone
 from app.database import sync_db, motor_db
 from app.encryption import decrypt
+
+log = logging.getLogger(__name__)
+
+# Ceiling for the platform-admin cross-org view. Large enough to be useful, small
+# enough that one connect cannot exhaust a worker.
+_ADMIN_VIEW_LIMIT = 2000
+
+
+class UnsafeURLError(ValueError):
+    """A user-supplied URL that the server must not fetch."""
+
+
+def assert_public_url(url: str) -> None:
+    """Reject a URL the server should never make an outbound request to.
+
+    Anything user-supplied that gets fetched server-side is an SSRF primitive:
+    the app runs inside a cloud network with an instance-metadata endpoint on
+    169.254.169.254 and its own Redis/Mongo reachable on private addresses.
+    Call this on the initial URL *and* on every redirect hop, since a permitted
+    host can 302 to a forbidden one.
+
+    Raises UnsafeURLError, which the caller should surface as a fixed message.
+    """
+    parsed = urlparse(url)
+    if parsed.scheme != "https":
+        raise UnsafeURLError("URL must use https")
+    host = parsed.hostname
+    if not host:
+        raise UnsafeURLError("URL has no host")
+
+    try:
+        # Every A/AAAA record, not just the first: a DNS name may resolve to a
+        # mix of public and private addresses.
+        infos = socket.getaddrinfo(host, parsed.port or 443, proto=socket.IPPROTO_TCP)
+    except socket.gaierror:
+        raise UnsafeURLError("Could not resolve host")
+
+    for info in infos:
+        ip = ipaddress.ip_address(info[4][0])
+        if not ip.is_global or ip.is_multicast:
+            raise UnsafeURLError("URL resolves to a non-public address")
 
 
 # Projection for `login` docs returned to staff (school/district/platform admins)
@@ -58,8 +103,8 @@ async def track_event(event: str, org_id: str | None = None, user_id: str | None
             "org_id": org_id,
             "user_id": user_id,
         })
-    except Exception:
-        pass
+    except Exception as exc:
+        log.error("[analytics] failed to record event=%s: %s", event, exc)
 
 
 _PLATFORM_PATTERNS = [
@@ -136,11 +181,15 @@ async def configure_data(email: str) -> dict:
     if user.get("admin") == "true" and user.get("admin_view") == "true":
         org = user.get("org_name", "")
         keys = ["links", "deleted-links", "bookmarks", "deleted-bookmarks"]
+        # All four are scoped by org_name and capped. Three of them used to run
+        # with NO filter and to_list(None), pulling every document in those
+        # collections for every user on the platform into one worker's memory --
+        # on a path that runs on WebSocket connect and after most link mutations.
         results = await asyncio.gather(
-            motor_db.links.find({"org_name": org}).to_list(None),
-            motor_db.deleted_links.find().to_list(None),
-            motor_db.bookmarks.find().to_list(None),
-            motor_db.deleted_bookmarks.find().to_list(None),
+            motor_db.links.find({"org_name": org}).limit(_ADMIN_VIEW_LIMIT).to_list(None),
+            motor_db.deleted_links.find({"org_name": org}).limit(_ADMIN_VIEW_LIMIT).to_list(None),
+            motor_db.bookmarks.find({"org_name": org}).limit(_ADMIN_VIEW_LIMIT).to_list(None),
+            motor_db.deleted_bookmarks.find({"org_name": org}).limit(_ADMIN_VIEW_LIMIT).to_list(None),
         )
         raw = dict(zip(keys, results))
         raw["pending-links"] = []

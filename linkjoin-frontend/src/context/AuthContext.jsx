@@ -73,6 +73,9 @@ export function AuthProvider({ children }) {
 
   const login = useCallback((accessToken, userEmail, isConfirmed = false, meta = {}) => {
     localStorage.setItem('lj_token', accessToken)
+    // Access tokens expire in an hour; this is what silently renews them (see
+    // refreshSession in api/client.js). Absent on older responses, so guard.
+    if (meta.refresh_token) localStorage.setItem('lj_refresh_token', meta.refresh_token)
     localStorage.setItem('lj_email', userEmail)
     localStorage.setItem('lj_confirmed', isConfirmed ? 'true' : 'false')
     localStorage.setItem('lj_account_type', meta.account_type || 'personal')
@@ -105,6 +108,7 @@ export function AuthProvider({ children }) {
 
   const refreshAuth = useCallback((data) => {
     if (data.access_token !== undefined) { localStorage.setItem('lj_token', data.access_token); setToken(data.access_token) }
+    if (data.refresh_token !== undefined) { localStorage.setItem('lj_refresh_token', data.refresh_token) }
     if (data.account_type !== undefined) { localStorage.setItem('lj_account_type', data.account_type); setAccountType(data.account_type) }
     if (data.role !== undefined) {
       if (data.role) localStorage.setItem('lj_role', data.role); else localStorage.removeItem('lj_role')
@@ -129,6 +133,7 @@ export function AuthProvider({ children }) {
   const logout = useCallback(async () => {
     await apiFetch('/auth/logout', { method: 'POST' }).catch(() => {})
     localStorage.removeItem('lj_token')
+    localStorage.removeItem('lj_refresh_token')
     localStorage.removeItem('lj_email')
     localStorage.removeItem('lj_confirmed')
     localStorage.removeItem('lj_account_type')

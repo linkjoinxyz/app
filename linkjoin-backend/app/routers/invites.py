@@ -1,11 +1,11 @@
 import secrets
 from datetime import datetime, timezone, timedelta
 from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException
-from app.auth import create_token, get_confirmed_user, get_current_user
+from app.auth import create_token, get_confirmed_user, get_current_user, is_confirmed
 from app.config import get_settings
 from app.database import motor_db
 from app.email_service import send_email
-from app.roles import TEACHER_ROLES, require_school_admin
+from app.roles import TEACHER_ROLES, require_school_admin, get_accessible_org_ids
 from app.audit import log_audit
 from app.utils import track_event
 
@@ -199,7 +199,7 @@ async def list_invites(user: dict = Depends(get_confirmed_user)):
             org_id = user.get("org_id")
             if not org_id:
                 return []
-            query = {"org_id": org_id}
+            query = {"org_id": {"$in": list(await get_accessible_org_ids(user))}}
 
     async for inv in motor_db.invites.find(query, {"_id": 0}).sort("created_at", -1).limit(200):
         expires = inv.get("expires_at")
@@ -271,10 +271,29 @@ async def accept_invite(token: str, body: dict, user: dict = Depends(get_current
     if invite.get("email") and invite["email"] != user["username"]:
         raise HTTPException(status_code=403, detail="This invite was sent to a different email address")
 
-    await motor_db.login.update_one(
-        {"username": user["username"]},
-        {"$set": {"account_type": "institutional", "role": invite["role"], "org_id": invite["org_id"], "confirmed": "true"}},
-    )
+    updates: dict = {
+        "account_type": "institutional",
+        "role": invite["role"],
+        "org_id": invite["org_id"],
+    }
+
+    # Only an invite addressed to a specific mailbox proves the holder controls
+    # that address. student_class invites are reusable join codes with email=None
+    # and are shared openly, so marking `confirmed` on one let anyone register
+    # against an address they do not own, skip the confirmation email entirely,
+    # and unlock every get_confirmed_user endpoint.
+    if invite.get("email"):
+        updates["confirmed"] = "true"
+
+    # Accepting a join code must not silently demote an existing higher-privileged
+    # account: a district_admin who opened a student code lost their own org.
+    _ROLE_RANK = {"student": 0, "parent": 0, "teacher": 1, "school_admin": 2, "district_admin": 3}
+    current_rank = _ROLE_RANK.get(user.get("role") or "", -1)
+    if _ROLE_RANK.get(invite["role"], -1) < current_rank:
+        updates.pop("role")
+        updates.pop("org_id")
+
+    await motor_db.login.update_one({"username": user["username"]}, {"$set": updates})
 
     if invite.get("class_id"):
         await motor_db.classes.update_one(
@@ -296,15 +315,18 @@ async def accept_invite(token: str, body: dict, user: dict = Depends(get_current
     await log_audit(user["username"], f"invite.accept.{invite['type']}", detail={"token": token})
     await track_event("invite_accepted", org_id=invite.get("org_id"), user_id=user.get("user_id"))
 
-    new_token = create_token(user["username"])
+    from app.routers.auth import _token_pair
+
+    # Report what was actually written, not what the invite asked for: role/org_id
+    # are held back when the invite would demote the account, and `confirmed` only
+    # flips for an invite addressed to a specific mailbox.
     return {
-        "access_token": new_token,
-        "token_type": "bearer",
+        **_token_pair(user["username"]),
         "email": user["username"],
-        "confirmed": True,
+        "confirmed": bool(updates.get("confirmed")) or is_confirmed(user),
         "account_type": "institutional",
-        "role": invite["role"],
-        "org_id": invite["org_id"],
+        "role": updates.get("role", user.get("role")),
+        "org_id": updates.get("org_id", user.get("org_id")),
     }
 
 

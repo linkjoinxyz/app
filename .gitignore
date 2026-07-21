@@ -19,3 +19,14 @@ linkjoin-backend/__pycache__/
 linkjoin-backend/venv/
 linkjoin-backend/jobs.sqlite
 .vercel
+
+# Packaged extension builds. These are regenerated from linkjoin-extension/ and
+# go stale silently: the committed zip was built before the manifest OAuth client
+# id was set, so it did not match the source it claims to package.
+dist/
+linkjoin-extension.zip
+linkjoin-extension-firefox.zip
+
+# Machine-local agent settings (permissions etc). .claude/settings.json and any
+# shared skills are intentionally tracked.
+.claude/settings.local.json
