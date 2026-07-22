@@ -524,14 +524,14 @@ async function renderDashboard() {
             </button>` : ''}
         </div>
         <div class="user-email">${escHtml(auth.email)}</div>
-        ${isPremium ? `
-        <button class="scan-btn" id="scan-btn">
+        <button class="scan-btn" id="scan-btn"${isPremium ? '' : ' disabled'}>
             <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
                 <circle cx="6" cy="6" r="4.5"/>
                 <line x1="9.5" y1="9.5" x2="13" y2="13"/>
             </svg>
             Scan this page
-        </button>` : ''}
+        </button>
+        ${isPremium ? '' : '<button class="scan-upgrade" id="scan-upgrade">Upgrade to scan meetings from any page</button>'}
         <div class="meetings-section">
             <div class="section-label">Upcoming meetings</div>
             <div id="meetings-list"><p class="muted-msg">Loading...</p></div>
@@ -543,6 +543,9 @@ async function renderDashboard() {
     document.getElementById('logout-btn').addEventListener('click', handleLogout)
     document.getElementById('settings-btn')?.addEventListener('click', renderSettings)
     document.getElementById('scan-btn')?.addEventListener('click', handleScan)
+    document.getElementById('scan-upgrade')?.addEventListener('click', () => {
+        chrome.tabs.create({ url: `${APP_URL}/pricing` })
+    })
 
     const data = await apiFetch('/links')
     const list = document.getElementById('meetings-list')

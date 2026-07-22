@@ -569,3 +569,34 @@ input:focus {
 .period-btn:hover { border-color: var(--lightblue); }
 
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* Free accounts see the scan button disabled with an upgrade link beneath it,
+   rather than nothing at all: hiding it entirely left no in-product signal that
+   the feature exists. The button is genuinely disabled, so the click cannot
+   reach handleScan and take a 403 back. */
+.scan-btn:disabled {
+    opacity: 0.45;
+    cursor: default;
+}
+.scan-btn:hover:not(:disabled) {
+    border-color: var(--lightblue);
+}
+.scan-upgrade {
+    display: block;
+    width: calc(100% - 32px);
+    margin: 4px 16px 2px;
+    padding: 0;
+    background: none;
+    border: 0;
+    color: var(--lightblue);
+    font-family: inherit;
+    font-size: 11px;
+    font-weight: 500;
+    text-align: center;
+    cursor: pointer;
+    opacity: 0.85;
+}
+.scan-upgrade:hover {
+    opacity: 1;
+    text-decoration: underline;
+}
