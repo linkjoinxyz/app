@@ -79,6 +79,44 @@ async function apiFetch(path, options = {}, _retried = false) {
     }
 }
 
+// --- Entitlement ---
+// AI meeting detection is Premium. Rather than let a free user trigger it and
+// get a 403 back, both entry points (the popup's Scan button and the content
+// script's auto-analyze on Gmail/Outlook) ask here first and simply do not offer
+// it. Mirrors roles.is_premium on the server; the server still enforces.
+const _ENTITLEMENT_TTL_MS = 60 * 60 * 1000
+
+export function _computeIsPremium(me) {
+    if (!me) return false
+    if (me.account_type === 'institutional') return true
+    if (me.premium_status === 'active' || me.premium_status === 'grandfathered') return true
+    if (me.premium_status === 'trial' && me.trial_end) {
+        // The server serializes Mongo datetimes without a timezone suffix even
+        // though they are UTC; force the UTC reading or this drifts by the
+        // viewer's offset near expiry.
+        const raw = me.trial_end
+        const iso = /[zZ]|[+-]\d\d:\d\d$/.test(raw) ? raw : `${raw}Z`
+        return new Date(iso) > new Date()
+    }
+    return false
+}
+
+async function getIsPremium({ force = false } = {}) {
+    const { entitlement } = await chrome.storage.local.get(['entitlement'])
+    if (!force && entitlement && Date.now() - entitlement.at < _ENTITLEMENT_TTL_MS) {
+        return entitlement.isPremium
+    }
+    const me = await apiFetch('/users/me')
+    if (!me || me.__error) {
+        // Unknown rather than false: on a transient failure keep the last known
+        // answer instead of silently hiding a paying user's features.
+        return entitlement ? entitlement.isPremium : false
+    }
+    const isPremium = _computeIsPremium(me)
+    await chrome.storage.local.set({ entitlement: { isPremium, at: Date.now() } })
+    return isPremium
+}
+
 // --- WebSocket ---
 
 async function createWebsocket() {
@@ -329,6 +367,9 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     if (msg.type === 'login') {
         if (webSocket) webSocket.close()
         createWebsocket()
+        // Re-read entitlement: a different account may have just signed in, and
+        // a stale cache would show or hide Premium features for the wrong user.
+        getIsPremium({ force: true })
     }
     if (msg.type === 'logout') {
         if (webSocket) {
@@ -341,9 +382,14 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
             reconnectTimer = null
         }
         chrome.alarms.clearAll()
+        chrome.storage.local.remove('entitlement')
     }
     if (msg.type === 'getLinks') {
         apiFetch('/links').then(result => sendResponse(result || null))
+        return true
+    }
+    if (msg.type === 'getIsPremium') {
+        getIsPremium().then(isPremium => sendResponse({ isPremium }))
         return true
     }
     if (msg.type === 'extractMeeting') {

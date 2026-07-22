@@ -71,6 +71,38 @@ async function apiFetch(path, options = {}, _retried = false) {
     }
 }
 
+// --- Entitlement ---
+// AI meeting detection is Premium. The content script asks here before offering
+// to scan, so a free account never sees an "Analyzing…" spinner that can only
+// end in a 403. Mirrors roles.is_premium on the server; the server still enforces.
+const _ENTITLEMENT_TTL_MS = 60 * 60 * 1000
+
+function _computeIsPremium(me) {
+    if (!me) return false
+    if (me.account_type === 'institutional') return true
+    if (me.premium_status === 'active' || me.premium_status === 'grandfathered') return true
+    if (me.premium_status === 'trial' && me.trial_end) {
+        // Server sends Mongo datetimes without a timezone suffix even though they
+        // are UTC; force the UTC reading or this drifts by the viewer's offset.
+        const raw = me.trial_end
+        const iso = /[zZ]|[+-]\d\d:\d\d$/.test(raw) ? raw : `${raw}Z`
+        return new Date(iso) > new Date()
+    }
+    return false
+}
+
+async function getIsPremium({ force = false } = {}) {
+    const { entitlement } = await chrome.storage.local.get(['entitlement'])
+    if (!force && entitlement && Date.now() - entitlement.at < _ENTITLEMENT_TTL_MS) {
+        return entitlement.isPremium
+    }
+    const me = await apiFetch('/users/me')
+    if (!me || me.__error) return entitlement ? entitlement.isPremium : false
+    const isPremium = _computeIsPremium(me)
+    await chrome.storage.local.set({ entitlement: { isPremium, at: Date.now() } })
+    return isPremium
+}
+
 // --- WebSocket ---
 
 async function createWebsocket() {
@@ -373,6 +405,10 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     }
     if (msg.type === 'getLinks') {
         apiFetch('/links').then(result => sendResponse(result || null))
+        return true
+    }
+    if (msg.type === 'getIsPremium') {
+        getIsPremium().then(isPremium => sendResponse({ isPremium }))
         return true
     }
     if (msg.type === 'extractMeeting') {

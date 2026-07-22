@@ -5,6 +5,26 @@ const BASE_URL = 'https://linkjoin.xyz'
 const MEETING_PATH_SRC = '(?:[a-z0-9-]+\\.)*(?:zoom\\.us\\/(?:j|my|w|s|webinar)\\/|meet\\.google\\.com\\/[a-z-]{3,}|teams\\.microsoft\\.com\\/l\\/meetup-join\\/|webex\\.com\\/meet\\/|gotomeeting\\.com\\/join\\/)[^\\s"\'<>]*'
 const MEETING_RE = new RegExp('https?:\\/\\/' + MEETING_PATH_SRC, 'i')
 
+// AI meeting detection is Premium. Resolved once per page rather than per email:
+// this content script runs on every Gmail/Outlook thread, and a free account
+// should never see an "Analyzing…" spinner that can only end in a 403.
+// The background worker caches the answer; the server still enforces.
+let _isPremium = null
+async function isPremium() {
+    if (_isPremium === null) {
+        try {
+            const res = await chrome.runtime.sendMessage({ type: 'getIsPremium' })
+            _isPremium = Boolean(res?.isPremium)
+        } catch {
+            // Extension context invalidated (an update mid-session), or the
+            // worker is asleep. Treat as not entitled: the worst case is a free
+            // feature set, not a broken scan.
+            _isPremium = false
+        }
+    }
+    return _isPremium
+}
+
 const DAYS_ALL = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 const REPEAT_OPTIONS = ['never', 'week', 'month', '2 times', '3 times', '4 times']
 const REPEAT_LABELS = {
@@ -151,6 +171,10 @@ async function processEmailBody(bodyEl) {
         if (!chrome?.storage?.local) return
         const { ljAutoDetect = true } = await chrome.storage.local.get('ljAutoDetect')
         if (!ljAutoDetect) return
+        // Auto-detect IS the Premium "Email meeting detection" feature, overlay
+        // and all — not just the AI extraction inside it. A free account gets no
+        // overlay rather than an empty one it cannot populate.
+        if (!(await isPremium())) return
         const msgContainer = bodyEl.closest('[data-message-id]')
         const msgId = msgContainer?.dataset?.messageId
         if (msgId && seen.has(msgId)) return
@@ -165,6 +189,7 @@ async function processEmailBody(bodyEl) {
         let linksData = null
         try { linksData = await chrome.runtime.sendMessage({ type: 'getLinks' }) } catch {}
         if (linksData?.links?.some(l => l.link && urlsMatch(l.link, detectedLink))) return
+
 
         const subject = getEmailSubject()
         const text = bodyEl.textContent || ''
@@ -252,6 +277,8 @@ if (IS_OUTLOOK) {
 
             const { ljAutoDetect = true } = await chrome.storage.local.get('ljAutoDetect')
             if (!ljAutoDetect) return
+            // Premium gate, same as the Gmail path above.
+            if (!(await isPremium())) return
 
             if (document.getElementById('lj-overlay') || document.getElementById('lj-analyzing')) return
 

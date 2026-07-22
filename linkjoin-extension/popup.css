@@ -642,3 +642,20 @@ input:focus {
 .text-btn:hover {
     color: var(--lightblue);
 }
+
+/* Free accounts see the scan button locked rather than hidden: hiding it left no
+   in-product signal that the feature exists. Clicking routes to /pricing, and
+   handleScan is unreachable without entitlement, so the 403 path stays closed. */
+.scan-btn--locked {
+    opacity: 0.45;
+    /* The "no entry" cursor. Note this needs the button to NOT carry the real
+       `disabled` attribute: browsers suppress cursor styles on disabled controls,
+       and a disabled button fires no click, which would break the upgrade route. */
+    cursor: not-allowed;
+}
+.scan-btn--locked:hover {
+    opacity: 0.6;
+}
+.scan-btn:hover:not(.scan-btn--locked) {
+    border-color: var(--lightblue);
+}

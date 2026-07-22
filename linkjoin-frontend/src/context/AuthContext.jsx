@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useCallback, useEffect } from 'react'
 import { apiFetch } from '../api/client.js'
+import { trialDaysRemaining } from '../utils.js'
 
 const AuthContext = createContext(null)
 
@@ -38,6 +39,8 @@ export function AuthProvider({ children }) {
   // UX precomputation only — never trusted for real access control, which always
   // lives server-side via require_premium(). Institutional accounts don't carry
   // premium_status at all, so accountType covers them here.
+  const trialDaysLeft = premiumStatus === 'trial' ? trialDaysRemaining(trialEnd) : null
+
   const isPremium = accountType === 'institutional'
     || premiumStatus === 'active'
     || premiumStatus === 'grandfathered'
@@ -182,7 +185,7 @@ export function AuthProvider({ children }) {
       onboardingDone, markOnboardingDone,
       mustChangePassword, clearMustChangePassword,
       mfaEnabled, setMfaEnabled, mfaSetupRequired,
-      premiumStatus, trialEnd, isPremium,
+      premiumStatus, trialEnd, isPremium, trialDaysLeft,
       login, logout, refreshAuth,
     }}>
       {children}

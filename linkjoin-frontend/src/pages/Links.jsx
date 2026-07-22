@@ -20,7 +20,7 @@ import WhatsNewModal from '../components/WhatsNewModal.jsx'
 import GrandfatheredThanksModal from '../components/GrandfatheredThanksModal.jsx'
 import TrialWelcomeModal from '../components/TrialWelcomeModal.jsx'
 import TeacherSetupModal from '../components/TeacherSetupModal.jsx'
-import { rememberTzPromptDeclined, isTzPromptDeclined, clearTzPromptDeclined, isReturningUser } from '../utils.js'
+import { rememberTzPromptDeclined, isTzPromptDeclined, clearTzPromptDeclined, isReturningUser, isTrialForExistingAccount } from '../utils.js'
 import '../styles/links.css'
 import '../styles/new_links.css'
 import '../styles/calendar-panel.css'
@@ -215,6 +215,7 @@ const [showDeleted, setShowDeleted] = useState(false)
   const [showGrandfatheredThanks, setShowGrandfatheredThanks] = useState(false)
   const [showTrialWelcome, setShowTrialWelcome] = useState(false)
   const [trialEnd, setTrialEnd] = useState(null)
+  const [trialForExisting, setTrialForExisting] = useState(false)
   const [modifiedNames, setModifiedNames] = useState([])
   const [popupBanner, setPopupBanner] = useState(null) // null | 'checking' | 'blocked'
   const [obClasses, setObClasses] = useState([])
@@ -249,6 +250,7 @@ const [showDeleted, setShowDeleted] = useState(false)
       setUser(u)
       if (u && u.premium_status === 'trial' && !u.trial_welcome_seen) {
         setTrialEnd(u.trial_end || null)
+        setTrialForExisting(isTrialForExistingAccount(u))
         setShowTrialWelcome(true)
       } else if (u && u.premium_status === 'grandfathered' && !u.grandfathered_note_seen) {
         setShowGrandfatheredThanks(true)
@@ -662,7 +664,11 @@ const [showDeleted, setShowDeleted] = useState(false)
       )}
 
 {showTrialWelcome && !loading && (
-        <TrialWelcomeModal trialEnd={trialEnd} onClose={() => setShowTrialWelcome(false)} />
+        <TrialWelcomeModal
+          trialEnd={trialEnd}
+          existingAccount={trialForExisting}
+          onClose={() => setShowTrialWelcome(false)}
+        />
       )}
 
       {showGrandfatheredThanks && !loading && (

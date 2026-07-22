@@ -2,6 +2,21 @@ const BASE_URL = 'https://linkjoin.xyz'
 
 const MEETING_RE = /https?:\/\/(?:[a-z0-9-]+\.)?(?:zoom\.us\/j\/|meet\.google\.com\/[a-z-]{3,}|teams\.microsoft\.com\/l\/meetup-join\/|webex\.com\/meet\/|gotomeeting\.com\/join\/)[^\s"'<>]*/i
 
+// AI meeting detection is Premium. Resolved once per page rather than per email.
+// The background worker caches the answer; the server still enforces.
+let _isPremium = null
+async function isPremium() {
+    if (_isPremium === null) {
+        try {
+            const res = await chrome.runtime.sendMessage({ type: 'getIsPremium' })
+            _isPremium = Boolean(res?.isPremium)
+        } catch {
+            _isPremium = false
+        }
+    }
+    return _isPremium
+}
+
 const DAYS_ALL = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 const REPEAT_OPTIONS = ['never', 'week', 'month', '2 times', '3 times', '4 times']
 const REPEAT_LABELS = {
@@ -129,6 +144,9 @@ async function processEmailBody(bodyEl) {
         if (!chrome?.storage?.local) return
         const { ljAutoDetect = true } = await chrome.storage.local.get('ljAutoDetect')
         if (!ljAutoDetect) return
+        // Auto-detect IS the Premium "Email meeting detection" feature, overlay
+        // and all. A free account gets no overlay rather than an empty one.
+        if (!(await isPremium())) return
         const msgContainer = bodyEl.closest('[data-message-id]')
         const msgId = msgContainer?.dataset?.messageId
         if (msgId && seen.has(msgId)) return
@@ -230,6 +248,9 @@ if (IS_OUTLOOK) {
 
             const { ljAutoDetect = true } = await chrome.storage.local.get('ljAutoDetect')
             if (!ljAutoDetect) return
+            // Auto-detect IS the Premium "Email meeting detection" feature, overlay
+            // and all. A free account gets no overlay rather than an empty one.
+            if (!(await isPremium())) return
 
             if (document.getElementById('lj-overlay') || document.getElementById('lj-analyzing')) return
 

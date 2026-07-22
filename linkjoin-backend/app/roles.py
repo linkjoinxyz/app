@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from fastapi import HTTPException
 
 TEACHER_ROLES = {"teacher", "school_admin", "district_admin"}
@@ -63,3 +63,45 @@ def is_premium(user: dict) -> bool:
 def require_premium(user: dict) -> None:
     if not is_premium(user):
         raise HTTPException(status_code=403, detail="Premium required")
+
+
+TRIAL_DAYS = 14
+
+
+async def ensure_trial_started(user: dict) -> dict:
+    """Start a 14-day Premium trial for a pre-launch account on its next sign-in.
+
+    Personal accounts created before Premium existed carry no premium_status at
+    all, so is_premium above reads them as expired and every Premium feature
+    403s. Rather than backfilling them to a permanent grant, the trial starts
+    when each person actually signs in, so the clock reflects their real first
+    exposure to the features rather than the date a migration happened to run.
+
+    No expiry job is needed: is_premium checks trial_end on every call, so access
+    lapses on its own 14 days later.
+
+    Mutates and returns the passed dict so the caller's copy stays accurate.
+    """
+    if user.get("account_type") == "institutional":
+        return user  # school plans are entitled outright
+    if user.get("premium_status"):
+        return user  # already trialing, active, grandfathered or expired
+
+    from app.database import motor_db
+
+    now = datetime.now(timezone.utc)
+    fields = {
+        "premium_status": "trial",
+        "trial_start": now,
+        "trial_end": now + timedelta(days=TRIAL_DAYS),
+        # Drives the existing "Your 14-day free trial has started" modal.
+        "trial_welcome_seen": False,
+    }
+    # Matches missing OR null, and re-asserting it means two concurrent logins
+    # cannot both start a trial and reset the clock.
+    await motor_db.login.update_one(
+        {"username": user["username"], "premium_status": None},
+        {"$set": fields},
+    )
+    user.update(fields)
+    return user
