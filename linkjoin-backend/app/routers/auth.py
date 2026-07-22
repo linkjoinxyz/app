@@ -13,7 +13,7 @@ from app.auth import (
     create_token, decode_token, get_confirmed_user, get_current_user, is_confirmed,
     is_org_disabled, _reject_if_pre_password_change,
 )
-from app.roles import is_admin_role
+from app.roles import is_admin_role, ensure_trial_started
 from app.limiter import limiter
 from app.models.user import RegisterRequest, LoginRequest, ResetPasswordRequest
 from app.config import get_settings
@@ -271,6 +271,11 @@ async def login(request: Request, body: LoginRequest):
     if user.get("offset") is None:
         await motor_db.login.update_one({"username": email}, {"$set": {"offset": "0.0"}})
 
+    # Pre-launch accounts have no premium_status, so every Premium feature 403s
+    # for them. Start their trial here, on the sign-in that actually brings them
+    # back, rather than backfilling everyone from a migration.
+    await ensure_trial_started(user)
+
     await track_event("login", org_id=user.get("org_id"), user_id=user.get("user_id"))
     ip = request.client.host if request.client else None
     await log_audit(email, "auth.login", ip=ip)
@@ -421,6 +426,10 @@ async def google_token_auth(request: Request, body: dict):
         await motor_db.login.insert_one(account)
         await track_event("signup", user_id=account.get("user_id"))
         user = account
+
+    # Same as the password path: a pre-launch account signing in via Google
+    # starts its trial here.
+    await ensure_trial_started(user)
 
     admin_role = is_admin_role(user)
     force_mfa = user.get("mfa_enabled") or (admin_role and user.get("number"))

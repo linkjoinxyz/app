@@ -105,6 +105,11 @@ async def verify_mfa(body: dict, request: Request):
     )
     await log_audit(email, "auth.mfa_success", ip=ip)
 
+    # Login only completes here for an MFA account, so this is where a pre-launch
+    # personal account with MFA enabled starts its trial.
+    from app.roles import ensure_trial_started
+    await ensure_trial_started(user)
+
     from app.routers.auth import _token_pair
 
     confirmed = user.get("confirmed") == "true"
