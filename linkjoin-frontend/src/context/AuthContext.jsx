@@ -23,6 +23,11 @@ export function AuthProvider({ children }) {
   const [mfaEnabled, setMfaEnabledState] = useState(() => localStorage.getItem('lj_mfa_enabled') === 'true')
   const [premiumStatus, setPremiumStatus] = useState(() => localStorage.getItem('lj_premium_status') || null)
   const [trialEnd, setTrialEnd] = useState(() => localStorage.getItem('lj_trial_end') || null)
+  // Mirrors the gate in auth.get_confirmed_user: an admin with neither MFA
+  // enrolled nor a phone number is 403'd on everything outside a small
+  // self-service allowlist. Computed from /users/me (which stays reachable) so it
+  // survives a refresh, not just the login response.
+  const [mfaSetupRequired, setMfaSetupRequired] = useState(false)
 
   const isTeacher = TEACHER_ROLES.has(role)
   const isOrgAdmin = ADMIN_ROLES.has(role)
@@ -68,6 +73,10 @@ export function AuthProvider({ children }) {
       setMfaEnabledState(mfa)
       setPremiumStatus(premStatus)
       setTrialEnd(trEnd)
+      // Same condition the server applies. `number` counts because an admin with
+      // a phone gets MFA-challenged at login even before running the enable flow.
+      const adminRole = adm || r === 'school_admin' || r === 'district_admin'
+      setMfaSetupRequired(Boolean(adminRole) && !mfa && !data.number)
     }).catch(() => {})
   }, [token])
 
@@ -172,7 +181,7 @@ export function AuthProvider({ children }) {
       isAdmin, isTeacher, isOrgAdmin,
       onboardingDone, markOnboardingDone,
       mustChangePassword, clearMustChangePassword,
-      mfaEnabled, setMfaEnabled,
+      mfaEnabled, setMfaEnabled, mfaSetupRequired,
       premiumStatus, trialEnd, isPremium,
       login, logout, refreshAuth,
     }}>
