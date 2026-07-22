@@ -212,33 +212,123 @@ async def configure_data(email: str) -> dict:
     return {key: _clean_items(items) for key, items in raw.items()}
 
 
-def compute_session_start_utc(class_time: str, class_days: list, tz_name: str, now_utc: datetime) -> datetime | None:
-    """Timezone-correct instant a class session starts today, if today is scheduled.
+# ── Class schedule resolution ────────────────────────────────────────────────
+# The single place that answers "does this class meet on date D" and "when does
+# its session start". Previously this logic existed as compute_session_start_utc
+# plus six copy-pasted expected-dates comprehensions that disagreed with each
+# other about blackout dates, range inclusivity and future clamping.
+#
+# NOTE the Mon=0 convention here matches date.weekday() and the class/attendance
+# code. It is deliberately NOT the Sun=0 family used by get_text_time below,
+# users.daylight_savings and ai.py for link/SMS scheduling. Do not merge them.
+DAY_TO_WEEKDAY = {"Mon": 0, "Tue": 1, "Wed": 2, "Thu": 3, "Fri": 4, "Sat": 5, "Sun": 6}
+_WEEKDAY_TO_DAY = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")  # index == date.weekday()
 
-    Port of the class-start computation in scheduler.check_absences(); reused wherever
-    minutes_late/on-time status needs to be derived from a class's time+days+teacher tz.
-    Returns None if class_time is unset/unparseable or today isn't a scheduled day.
+
+def _override_map(cls: dict) -> dict[str, dict]:
+    """Latest override per date. Last entry wins, so a duplicate left by a legacy
+    write or a racing pull-then-push resolves deterministically rather than
+    depending on array order."""
+    return {o["date"]: o for o in (cls.get("schedule_overrides") or []) if o.get("date")}
+
+
+def class_meets_on(cls: dict, day: date, blackout_dates=frozenset(), _ov: dict | None = None) -> bool:
+    """Does this class hold a session on `day`?
+
+    Keys on `days` only, deliberately NOT on `time`. Every expected-dates caller
+    counts sessions for classes that have days configured but no time, so making
+    membership depend on time would silently zero those attendance rates.
+
+    Precedence: a per-date `cancelled` override, then an org blackout, then
+    weekday membership. A blackout beats a `late_start` (the school is closed; a
+    later bell does not help). An override on a date the class does not normally
+    meet is inert: overrides modify sessions, they never create them.
     """
-    if not class_time or not class_days:
+    class_days = cls.get("days") or []
+    if not class_days:
+        return False
+    ds = day.isoformat()
+    ov = (_ov if _ov is not None else _override_map(cls)).get(ds)
+    if ov and ov.get("type") == "cancelled":
+        return False
+    if ds in blackout_dates:
+        return False
+    return _WEEKDAY_TO_DAY[day.weekday()] in class_days
+
+
+def session_time_on(cls: dict, day: date, blackout_dates=frozenset()) -> str | None:
+    """Effective local start time "H:MM" for `day`, or None when there is no
+    session or the class has no configured time."""
+    ov_map = _override_map(cls)
+    if not class_meets_on(cls, day, blackout_dates, _ov=ov_map):
+        return None
+    ov = ov_map.get(day.isoformat())
+    if ov and ov.get("type") == "late_start" and ov.get("time"):
+        return ov["time"]
+    return cls.get("time") or None
+
+
+def session_start_utc(cls: dict, day: date, tz_name: str, blackout_dates=frozenset()) -> datetime | None:
+    """The UTC instant this class's session on `day` starts, or None.
+
+    Takes a real date, so callers no longer need the midday-local probe that
+    previously worked around compute_session_start_utc only understanding "today".
+    """
+    t = session_time_on(cls, day, blackout_dates)
+    if not t:
         return None
     try:
-        h, m = (int(x) for x in class_time.split(":"))
+        h, m = (int(x) for x in t.split(":"))
     except (ValueError, TypeError):
         return None
     try:
         tz = pytz_timezone(tz_name or "UTC")
     except Exception:
         tz = utc
+    return tz.localize(datetime(day.year, day.month, day.day, h, m, 0)).astimezone(utc)
 
-    day_abbrs = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
-    now_local = now_utc.astimezone(tz)
-    today_local = now_local.date()
-    today_abbr = day_abbrs[today_local.weekday()]
-    if today_abbr not in class_days:
-        return None
 
-    class_start_local = tz.localize(datetime(today_local.year, today_local.month, today_local.day, h, m, 0))
-    return class_start_local.astimezone(utc)
+def today_session_start_utc(
+    cls: dict, tz_name: str, now_utc: datetime, blackout_dates=frozenset()
+) -> tuple[date, datetime | None]:
+    """(local calendar day, session start UTC or None) for "today" in the class's
+    timezone.
+
+    The local day is returned because callers need it, and getting it from the
+    UTC instant is wrong: for a negative-offset zone an evening session's UTC
+    timestamp lands on the next calendar day, which is how record_date drifted
+    out of alignment with the expected-dates builders.
+    """
+    try:
+        tz = pytz_timezone(tz_name or "UTC")
+    except Exception:
+        tz = utc
+    local_day = now_utc.astimezone(tz).date()
+    return local_day, session_start_utc(cls, local_day, tz_name, blackout_dates)
+
+
+def expected_session_dates(
+    cls: dict, start: date, end: date, blackout_dates=frozenset(), through: date | None = None
+) -> list[str]:
+    """Sorted ISO dates in the INCLUSIVE range [start, end] on which this class
+    holds a session, minus org blackouts and per-date cancellations.
+
+    `through` clamps the tail; pass today to exclude sessions that have not
+    happened yet. Inclusive on both ends so the off-by-one between the old
+    range(28) and range(29) callers is visible at the call site instead of hidden
+    in a loop bound.
+    """
+    out: list[str] = []
+    if end < start:
+        return out
+    stop = min(end, through) if through is not None else end
+    ov_map = _override_map(cls)
+    d = start
+    while d <= stop:
+        if class_meets_on(cls, d, blackout_dates, _ov=ov_map):
+            out.append(d.isoformat())
+        d += timedelta(days=1)
+    return out
 
 
 def get_blackout_set(org: dict) -> set[str]:

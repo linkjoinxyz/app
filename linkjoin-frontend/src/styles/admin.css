@@ -2866,3 +2866,48 @@ button.iv-status-pill { cursor: pointer; }
 [data-theme="light"] .ti-search-input { color: #0f172a; }
 [data-theme="light"] .ti-search-input::placeholder { color: rgba(15,23,42,0.35); }
 [data-theme="light"] .ti-search-clear { color: rgba(15,23,42,0.3); }
+
+/* ── Class schedule tab ──────────────────────────────────────────────────── */
+/* A class with no schedule silently records no attendance and sends no alerts,
+   so the warning has to be loud where the schedule is set. */
+.admin-warning {
+  background: rgba(234, 179, 8, 0.10);
+  border: 1px solid rgba(234, 179, 8, 0.35);
+  color: #a16207;
+  border-radius: 8px;
+  padding: 12px 14px;
+  font-size: 13px;
+  line-height: 1.5;
+  margin-bottom: 18px;
+}
+.admin-hint {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.62);
+  margin: 0 0 14px;
+  line-height: 1.55;
+  max-width: 68ch;
+}
+.admin-divider {
+  border: 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  margin: 26px 0 20px;
+}
+.detail-tab-badge--warn {
+  background: #eab308;
+  color: #1a1a1a;
+  font-weight: 700;
+}
+
+[data-theme="light"] .admin-hint { color: rgba(15, 23, 42, 0.66); }
+[data-theme="light"] .admin-divider { border-top-color: rgba(0, 0, 0, 0.1); }
+[data-theme="light"] .admin-warning { color: #92400e; background: rgba(234, 179, 8, 0.14); }
+
+/* The academic calendar card renders .cal-date-list as a div; the class schedule
+   tab uses a real <ul> for the override list, which picks up the browser's
+   default list padding and indents it past the form above. Scoped to ul so the
+   existing calendar card is untouched. */
+ul.cal-date-list {
+  list-style: none;
+  padding-left: 0;
+  margin-bottom: 0;
+}

@@ -16,7 +16,7 @@ from app.auth import get_confirmed_user
 from app.config import get_settings
 from app.database import motor_db
 from app.roles import require_teacher, require_school_admin
-from app.utils import get_blackout_set
+from app.utils import get_blackout_set, expected_session_dates
 
 router = APIRouter(prefix="/integrations", tags=["integrations"])
 
@@ -31,7 +31,6 @@ _SCOPES = " ".join([
     "email",
 ])
 _LOOKBACK_DAYS = 28
-_DAY_TO_WEEKDAY = {'Sun': 6, 'Mon': 0, 'Tue': 1, 'Wed': 2, 'Thu': 3, 'Fri': 4, 'Sat': 5}
 
 
 class ConnectBody(BaseModel):
@@ -120,20 +119,16 @@ async def _gc_patch(access_token: str, path: str, body: dict, update_mask: str) 
 def _compute_scores(cls: dict, records_by_email: dict, enrolled_emails: set, blackout_dates: set) -> dict[str, int]:
     """
     Returns {student_email: score_0_to_100} using the rolling attendance-rate model.
-    Mirrors the logic in attendance.py patterns endpoint.
+    Shares expected_session_dates with the attendance surfaces, so an LMS grade
+    cannot disagree with the rate a teacher sees.
     """
-    from datetime import date as date_type
     now = datetime.now(timezone.utc)
     cutoff = now - timedelta(days=_LOOKBACK_DAYS)
 
-    class_days = cls.get("days") or []
-    scheduled_weekdays = {_DAY_TO_WEEKDAY[d] for d in class_days if d in _DAY_TO_WEEKDAY}
-    expected_dates_set: set[str] = {
-        (cutoff + timedelta(days=i)).strftime("%Y-%m-%d")
-        for i in range(_LOOKBACK_DAYS)
-        if (cutoff + timedelta(days=i)).weekday() in scheduled_weekdays
-        and (cutoff + timedelta(days=i)).strftime("%Y-%m-%d") not in blackout_dates
-    }
+    expected_dates_set: set[str] = set(expected_session_dates(
+        cls, cutoff.date(), (cutoff + timedelta(days=_LOOKBACK_DAYS - 1)).date(),
+        blackout_dates, through=now.date(),
+    ))
     expected_count = len(expected_dates_set)
     class_excused = cls.get("excused_absences") or []
 

@@ -17,7 +17,10 @@ from app.models.link import (
 from app.limiter import limiter
 from app.roles import SCHOOL_ADMIN_ROLES, get_accessible_org_ids
 from app.scheduler import publish_link_job_change
-from app.utils import configure_data, track_event, async_next_link_id, gen_slug, compute_session_start_utc
+from app.utils import (
+    configure_data, track_event, async_next_link_id, gen_slug,
+    today_session_start_utc, get_blackout_set,
+)
 from app.websocket_manager import manager
 from app.email_service import send_email_batch
 from app.config import get_settings
@@ -108,13 +111,22 @@ async def resolve_class_link(slug: str, background_tasks: BackgroundTasks, user:
             teacher = await motor_db.login.find_one({"user_id": cls.get("teacher_id", "")}, {"timezone": 1})
             tz_name = (teacher or {}).get("timezone") or "UTC"
             now_utc = datetime.now(timezone.utc)
-            session_start = compute_session_start_utc(cls.get("time", ""), cls.get("days") or [], tz_name, now_utc)
+            org = await motor_db.orgs.find_one(
+                {"org_id": cls.get("org_id", "")},
+                {"blackout_dates": 1, "summer_start": 1, "summer_end": 1},
+            )
+            # No session, no attendance row: a join on a blackout date or a
+            # cancelled date is not a missed or attended session, it is not a
+            # session at all. A late_start date measures lateness from the late bell.
+            local_day, session_start = today_session_start_utc(
+                cls, tz_name, now_utc, get_blackout_set(org or {})
+            )
             if session_start is not None:
-                # Match on record_date (the class's local calendar day), not a UTC
-                # timestamp range — session_start's local evening can fall on the
-                # *next* UTC day for negative-offset timezones, which would make a
-                # UTC-midnight-aligned window miss the very row it just inserted.
-                record_date = session_start.strftime("%Y-%m-%d")
+                # Match on record_date (the class's LOCAL calendar day). Deriving it
+                # from the UTC instant instead, as this did, stamps tomorrow's date
+                # for an evening class in a negative-offset zone and drifts out of
+                # alignment with every expected-dates builder, which uses local dates.
+                record_date = local_day.isoformat()
                 existing = await motor_db.attendance.find_one({
                     "class_id": class_id,
                     "student_email": user["username"],

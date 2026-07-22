@@ -1,11 +1,16 @@
 import secrets
+from datetime import date as date_type, datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
+from app.audit import log_audit
 from app.auth import get_confirmed_user
 from app.database import motor_db
-from app.models.class_ import CreateClassRequest, UpdateClassRequest, AddStudentsRequest
+from app.models.class_ import (
+    CreateClassRequest, UpdateClassRequest, AddStudentsRequest, ScheduleOverrideBody,
+)
 from app.roles import require_teacher, require_school_admin, TEACHER_ROLES, get_accessible_org_ids
-from app.utils import async_next_link_id, ensure_link_slug, _clean_items
+from app.scheduler import publish_link_job_change
+from app.utils import async_next_link_id, ensure_link_slug, _clean_items, _WEEKDAY_TO_DAY
 from app.websocket_manager import manager
 from app.utils import configure_data
 
@@ -160,11 +165,54 @@ async def get_class_links(cls: dict = Depends(get_authorized_class)):
     return {"links": _clean_items(links)}
 
 
+async def propagate_schedule_to_links(cls: dict, time: str | None, days: list | None) -> int:
+    """Push a class's schedule down onto its links and every student's copy.
+
+    The class is authoritative for *when the session is*, but the link is what
+    actually opens the meeting (useAutoOpen matches on link.time/link.days) and
+    what the SMS reminder cron is built from (_schedule_text_jobs). Left
+    unsynced, a class at 09:00 whose link says 09:05 opens five minutes late for
+    every student and records all of them tardy, permanently, with no visible
+    cause. Returns the number of link documents rewritten.
+    """
+    link_ids = cls.get("link_ids") or []
+    if not link_ids or (time is None and days is None):
+        return 0
+
+    fields = {}
+    if time is not None:
+        fields["time"] = time
+    if days is not None:
+        fields["days"] = list(days)
+
+    # The teacher's originals, plus the copies pushed to each student, which
+    # carry share_id == the original's id (see _push_link_to_student).
+    targets = await motor_db.links.find(
+        {"$or": [{"id": {"$in": link_ids}}, {"share_id": {"$in": link_ids}}]}
+    ).to_list(None)
+
+    updated = 0
+    for link in targets:
+        if all(link.get(k) == v for k, v in fields.items()):
+            continue  # already in step; don't churn scheduler jobs for nothing
+        # Deregister against the OLD shape before mutating: delete_text_job derives
+        # job ids from the link's current days, so doing this after the write would
+        # leave the old day's job orphaned and firing at the old time.
+        await publish_link_job_change("delete", link)
+        await motor_db.links.update_one(
+            {"username": link["username"], "id": link["id"]}, {"$set": fields}
+        )
+        await publish_link_job_change("create", {**link, **fields}, update=True)
+        updated += 1
+    return updated
+
+
 @router.put("/{class_id}")
 async def update_class(body: UpdateClassRequest, cls: dict = Depends(get_authorized_class)):
     updates = {k: v for k, v in body.model_dump().items() if v is not None}
     if updates:
         await motor_db.classes.update_one({"class_id": cls["class_id"]}, {"$set": updates})
+        await propagate_schedule_to_links(cls, updates.get("time"), updates.get("days"))
     return {"message": "Updated"}
 
 
@@ -245,13 +293,25 @@ async def add_class_link(link_id: int, user: dict = Depends(get_confirmed_user),
         return {"message": "Link already in class"}
 
     await motor_db.classes.update_one({"class_id": class_id}, {"$push": {"link_ids": link_id}})
-    await motor_db.links.update_one(
-        {"id": link_id, "username": user["username"]},
-        {"$set": {"class_id": class_id, "class_name": cls["name"], "link_type": "supplemental"}},
-    )
-    link["class_id"] = class_id
-    link["class_name"] = cls["name"]
-    link["link_type"] = "supplemental"
+
+    stamp: dict = {"class_id": class_id, "class_name": cls["name"], "link_type": "supplemental"}
+    # Adopt the class's schedule on attach. The class is authoritative, so a link
+    # joining a class takes the class's time/days rather than keeping its own and
+    # opening at a different moment than attendance is measured from.
+    if cls.get("time"):
+        stamp["time"] = cls["time"]
+    if cls.get("days"):
+        stamp["days"] = list(cls["days"])
+
+    had_job = link.get("text") and link.get("text") != "false"
+    if had_job and ("time" in stamp or "days" in stamp):
+        await publish_link_job_change("delete", link)
+
+    await motor_db.links.update_one({"id": link_id, "username": user["username"]}, {"$set": stamp})
+    link.update(stamp)
+
+    if had_job and ("time" in stamp or "days" in stamp):
+        await publish_link_job_change("create", link, update=True)
 
     students = await _resolve_students(cls.get("student_ids", []))
     for s in students:
@@ -297,3 +357,78 @@ async def remove_excused_absence(body: ExcuseAbsenceBody, cls: dict = Depends(ge
         {"$pull": {"excused_absences": entry}}
     )
     return {"ok": True}
+
+
+# A class meets ~180 days a year and org-wide closures are handled by the org
+# calendar, so real usage is tens of entries. The cap exists for the same reason
+# the roster check above does: this array is read on every attendance
+# computation, and an unbounded one skews the rate math and bloats a document
+# that is loaded on hot paths.
+_MAX_SCHEDULE_OVERRIDES = 400
+
+
+@router.put("/{class_id}/schedule-override", status_code=200)
+async def set_schedule_override(
+    body: ScheduleOverrideBody,
+    user: dict = Depends(get_confirmed_user),
+    cls: dict = Depends(get_authorized_class),
+):
+    """Create or replace the one-off schedule exception for a single date."""
+    existing = cls.get("schedule_overrides") or []
+    if len(existing) >= _MAX_SCHEDULE_OVERRIDES and not any(o.get("date") == body.date for o in existing):
+        raise HTTPException(
+            status_code=409,
+            detail=f"This class already has {_MAX_SCHEDULE_OVERRIDES} schedule overrides.",
+        )
+
+    entry = {
+        "date": body.date,
+        "type": body.type,
+        "time": body.time,
+        "reason": body.reason.strip(),
+        "set_by": user.get("user_id"),
+        "set_at": datetime.now(timezone.utc),
+    }
+
+    # Pull-then-push rather than $addToSet: these subdocs carry type/time/reason,
+    # so set semantics would happily let one date hold both a cancelled and a
+    # late_start entry and leave the resolver picking whichever came back first.
+    # Mongo cannot $pull and $push the same array in one update. The gap between
+    # the two writes leaves the date with no override, which is the pre-existing
+    # state, so the failure mode is benign.
+    await motor_db.classes.update_one(
+        {"class_id": cls["class_id"]}, {"$pull": {"schedule_overrides": {"date": body.date}}}
+    )
+    await motor_db.classes.update_one(
+        {"class_id": cls["class_id"]}, {"$push": {"schedule_overrides": entry}}
+    )
+
+    await log_audit(
+        user["username"], "class.schedule_override.set", "class", cls["class_id"],
+        detail={"date": body.date, "type": body.type, "time": body.time},
+    )
+
+    # An override on a weekday the class never meets is accepted but inert, and
+    # the caller is told so. Rejecting instead would strand an override that can
+    # no longer be deleted once a teacher drops that weekday from the schedule.
+    day = date_type.fromisoformat(body.date)
+    meets = _WEEKDAY_TO_DAY[day.weekday()] in (cls.get("days") or [])
+    return {"ok": True, "override": {k: v for k, v in entry.items() if k != "set_at"}, "meets": meets}
+
+
+@router.delete("/{class_id}/schedule-override/{date}", status_code=200)
+async def remove_schedule_override(date: str, user: dict = Depends(get_confirmed_user),
+                                   cls: dict = Depends(get_authorized_class)):
+    try:
+        date_type.fromisoformat(date)
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=422, detail="date must be YYYY-MM-DD")
+    result = await motor_db.classes.update_one(
+        {"class_id": cls["class_id"]}, {"$pull": {"schedule_overrides": {"date": date}}}
+    )
+    if result.modified_count:
+        await log_audit(
+            user["username"], "class.schedule_override.remove", "class", cls["class_id"],
+            detail={"date": date},
+        )
+    return {"ok": True, "removed": bool(result.modified_count)}
