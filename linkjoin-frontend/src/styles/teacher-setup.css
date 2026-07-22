@@ -188,3 +188,11 @@ textarea.ts-input {
 @media (max-width: 520px) {
   .ts-modal { padding: 28px 22px 22px; }
 }
+
+.ts-hint {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.45);
+  margin: 8px 0 0;
+  line-height: 1.5;
+}
+[data-theme="light"] .ts-hint { color: rgba(15, 23, 42, 0.62); }

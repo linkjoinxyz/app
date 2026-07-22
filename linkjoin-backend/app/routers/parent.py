@@ -9,7 +9,7 @@ from app.routers.attendance import (
     _TARDY_THRESHOLD_MINUTES,
     _record_date_str,
 )
-from app.utils import get_blackout_set
+from app.utils import get_blackout_set, expected_session_dates
 
 router = APIRouter(prefix="/parent", tags=["parent"])
 
@@ -22,7 +22,6 @@ def formatDate(date_str: str) -> str:
         return _date(y, mo, d).strftime("%b %-d, %Y")
     except Exception:
         return date_str
-_DAY_TO_WEEKDAY = {'Sun': 6, 'Mon': 0, 'Tue': 1, 'Wed': 2, 'Thu': 3, 'Fri': 4, 'Sat': 5}
 
 
 def _require_parent(user: dict) -> None:
@@ -109,10 +108,14 @@ async def get_child_classes(student_id: str, user: dict = Depends(get_confirmed_
         class_id = cls["class_id"]
         class_days = cls.get("days") or []
 
-        org = await motor_db.orgs.find_one({"org_id": cls.get("org_id", "")}, {"attendance_settings": 1})
+        org = await motor_db.orgs.find_one(
+            {"org_id": cls.get("org_id", "")},
+            {"attendance_settings": 1, "blackout_dates": 1, "summer_start": 1, "summer_end": 1},
+        )
         tardy_threshold = int((org or {}).get("attendance_settings", {}).get("tardy_threshold_minutes", _TARDY_THRESHOLD_MINUTES))
         stats = await compute_student_attendance_rate(
-            class_id, cls, student_email, cutoff, _RATE_LOOKBACK_DAYS, tardy_threshold
+            class_id, cls, student_email, cutoff, _RATE_LOOKBACK_DAYS, tardy_threshold,
+            get_blackout_set(org or {}),
         )
         attended = stats["sessions"]
         tardy = stats["tardy"]
@@ -193,18 +196,18 @@ async def get_child_attendance(student_id: str, limit: int = 20, offset: int = 0
             records_map[key] = r
 
     # Build per-class scheduled dates within the lookback window up to today,
-    # excluding org blackout/summer dates like every teacher-facing surface
-    # (attendance.py:360,576,832) and using the org's configured tardy
-    # threshold instead of a hardcoded value.
+    # excluding org blackout/summer dates and per-date cancellations, and using
+    # the org's configured tardy threshold instead of a hardcoded value. This now
+    # shares expected_session_dates with every teacher-facing surface, so the
+    # numbers a parent sees cannot drift from the ones the teacher sees.
     class_info: dict = {}
     org_cache: dict = {}
     async for cls in motor_db.classes.find(
         {"student_ids": student_id},
-        {"class_id": 1, "name": 1, "days": 1, "org_id": 1, "_id": 0},
+        # time and schedule_overrides are needed by the resolver.
+        {"class_id": 1, "name": 1, "days": 1, "time": 1, "schedule_overrides": 1, "org_id": 1, "_id": 0},
     ):
-        class_days = cls.get("days") or []
-        scheduled_weekdays = {_DAY_TO_WEEKDAY[d] for d in class_days if d in _DAY_TO_WEEKDAY}
-        if not scheduled_weekdays:
+        if not (cls.get("days") or []):
             continue
 
         org_id = cls.get("org_id", "")
@@ -216,12 +219,10 @@ async def get_child_attendance(student_id: str, limit: int = 20, offset: int = 0
         blackout_dates = get_blackout_set(org)
         tardy_threshold = int((org.get("attendance_settings") or {}).get("tardy_threshold_minutes", _TARDY_THRESHOLD_MINUTES))
 
-        scheduled_dates = {
-            (cutoff + timedelta(days=i)).strftime("%Y-%m-%d")
-            for i in range(_LOOKBACK_DAYS + 1)
-            if (cutoff + timedelta(days=i)).weekday() in scheduled_weekdays
-            and (cutoff + timedelta(days=i)).date() <= now.date()
-        } - blackout_dates
+        scheduled_dates = set(expected_session_dates(
+            cls, cutoff.date(), (cutoff + timedelta(days=_LOOKBACK_DAYS)).date(),
+            blackout_dates, through=now.date(),
+        ))
         class_info[cls["class_id"]] = {
             "class_name": cls["name"], "scheduled_dates": scheduled_dates, "tardy_threshold": tardy_threshold,
         }

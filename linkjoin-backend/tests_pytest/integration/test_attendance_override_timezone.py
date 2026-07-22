@@ -1,23 +1,24 @@
 """override_class_attendance built its timestamps in UTC while a teacher enters
 join_time as a local wall clock and a class's scheduled start is local too.
 
-Two consequences for any negative-UTC-offset teacher:
-  - the session-start probe used midnight UTC, which is the PREVIOUS local day,
-    so compute_session_start_utc resolved the wrong weekday. For a Mon-Fri class,
-    a Monday override found no scheduled session and minutes_late was forced to 0,
-    silently recording a late student as on time.
-  - join_time was stamped tzinfo=utc, so a 09:05 join against a 09:00 class in
-    US/Eastern computed minutes_late = -235 instead of 5.
+For any negative-UTC-offset teacher the session-start probe used midnight UTC,
+which is the PREVIOUS local day, so the wrong weekday was resolved: a Monday
+override on a Mon-Fri class found no session and forced minutes_late to 0,
+silently recording a late student as on time, and a Tuesday override computed
+-235 instead of 5.
 
+The probe is gone; session_start_utc now takes the override's own date directly.
 These assert on the stored attendance row, which is what every downstream tardy
-count, flag, and parent-facing rate reads.
+count, flag and parent-facing rate reads, plus the resolver itself for the
+timezone edges that are awkward to reach through the endpoint.
 """
 import secrets
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
 import pytest
 
 from app.database import motor_db
+from app.utils import session_start_utc, session_time_on
 
 # 2026-07-20 is a Monday, 2026-07-21 a Tuesday.
 _MONDAY = "2026-07-20"
@@ -93,11 +94,13 @@ async def _override(as_user, teacher, cls, student, date_str, join_time):
     )
 
 
+# ── through the endpoint ─────────────────────────────────────────────────────
+
 @pytest.mark.parametrize("date_str", [_MONDAY, _TUESDAY])
 async def test_five_minutes_late_records_as_five(
     as_user, eastern_teacher, morning_class, student_in_class, date_str
 ):
-    """The headline bug: this recorded -235 on Tuesday and 0 on Monday."""
+    """The headline bug: this recorded 0 on Monday and -235 on Tuesday."""
     rec = await _override(as_user, eastern_teacher, morning_class, student_in_class, date_str, "09:05")
     assert rec["minutes_late"] == 5
 
@@ -125,3 +128,59 @@ async def test_opened_at_lands_on_the_intended_local_day(
         opened = opened.replace(tzinfo=timezone.utc)
     assert opened.astimezone(timezone.utc).hour == 13
     assert opened.astimezone(timezone.utc).strftime("%Y-%m-%d") == _MONDAY
+
+
+async def test_late_start_override_moves_the_bell(
+    as_user, eastern_teacher, morning_class, student_in_class
+):
+    """A student arriving at the late bell is on time, not 90 minutes late."""
+    await motor_db.classes.update_one(
+        {"class_id": morning_class["class_id"]},
+        {"$set": {"schedule_overrides": [{"date": _MONDAY, "type": "late_start", "time": "10:30"}]}},
+    )
+    rec = await _override(as_user, eastern_teacher, morning_class, student_in_class, _MONDAY, "10:30")
+    assert rec["minutes_late"] == 0
+
+
+# ── the resolver directly ────────────────────────────────────────────────────
+
+def _cls(**over):
+    return {"time": "09:00", "days": ["Mon", "Tue", "Wed", "Thu", "Fri"], **over}
+
+
+def test_resolver_uses_the_requested_date_not_today():
+    """The whole point of replacing the midday-local day_probe."""
+    start = session_start_utc(_cls(), date(2026, 7, 20), "US/Eastern")
+    assert start == datetime(2026, 7, 20, 13, 0, tzinfo=timezone.utc)
+
+
+def test_resolver_survives_a_dst_boundary():
+    """2026-03-08 is the US spring-forward date; 09:00 local is 13:00 UTC after
+    it and 14:00 UTC before, so a fixed offset would be an hour out."""
+    before = session_start_utc(_cls(), date(2026, 3, 6), "US/Eastern")  # Friday, EST
+    after = session_start_utc(_cls(), date(2026, 3, 9), "US/Eastern")   # Monday, EDT
+    assert before.hour == 14
+    assert after.hour == 13
+
+
+def test_unknown_timezone_falls_back_to_utc_rather_than_raising():
+    start = session_start_utc(_cls(), date(2026, 7, 20), "Not/AZone")
+    assert start == datetime(2026, 7, 20, 9, 0, tzinfo=timezone.utc)
+
+
+def test_late_start_wins_over_the_class_time():
+    cls = _cls(schedule_overrides=[{"date": "2026-07-20", "type": "late_start", "time": "10:30"}])
+    assert session_time_on(cls, date(2026, 7, 20)) == "10:30"
+    assert session_start_utc(cls, date(2026, 7, 20), "US/Eastern").hour == 14  # 10:30 EDT
+
+
+def test_cancelled_and_blackout_yield_no_session():
+    cancelled = _cls(schedule_overrides=[{"date": "2026-07-20", "type": "cancelled"}])
+    assert session_start_utc(cancelled, date(2026, 7, 20), "US/Eastern") is None
+    assert session_start_utc(_cls(), date(2026, 7, 20), "US/Eastern", {"2026-07-20"}) is None
+
+
+def test_blackout_beats_a_late_start():
+    """School closed outranks a later bell."""
+    cls = _cls(schedule_overrides=[{"date": "2026-07-20", "type": "late_start", "time": "10:30"}])
+    assert session_start_utc(cls, date(2026, 7, 20), "US/Eastern", {"2026-07-20"}) is None

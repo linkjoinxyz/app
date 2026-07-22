@@ -14,9 +14,14 @@ FIXED_SESSION_START = datetime(2026, 3, 2, 14, 0, 0, tzinfo=timezone.utc)  # a M
 
 @pytest.fixture(autouse=True)
 def _fixed_session_start(monkeypatch):
+    # today_session_start_utc returns (local calendar day, session start UTC).
+    # The local day is what record_date is now derived from, instead of the UTC
+    # instant, so it is pinned here alongside the start.
     monkeypatch.setattr(
-        "app.routers.links.compute_session_start_utc",
-        lambda class_time, class_days, tz_name, now_utc: FIXED_SESSION_START,
+        "app.routers.links.today_session_start_utc",
+        lambda cls, tz_name, now_utc, blackout=frozenset(): (
+            FIXED_SESSION_START.date(), FIXED_SESSION_START,
+        ),
     )
 
 

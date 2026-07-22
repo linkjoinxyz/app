@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { apiFetch } from '../api/client.js'
+import { TimeOfDayInput, DayPicker, toUTC } from './schedule/ScheduleControls.jsx'
 import '../styles/teacher-setup.css'
 
 const TOTAL_STEPS = 3
@@ -20,6 +21,13 @@ function StepDots({ step }) {
 export default function TeacherSetupModal({ onDone }) {
   const [step, setStep] = useState(0)
   const [className, setClassName] = useState('')
+  // Collected at creation rather than left empty. A class with no schedule
+  // records no attendance, sends no absence alerts or parent reminders, and
+  // reports 100% attendance for everyone, all silently.
+  const [hour, setHour] = useState('')
+  const [minute, setMinute] = useState('00')
+  const [period, setPeriod] = useState('AM')
+  const [days, setDays] = useState(['Mon', 'Tue', 'Wed', 'Thu', 'Fri'])
   const [meetingUrl, setMeetingUrl] = useState('')
   const [meetingName, setMeetingName] = useState('')
   const [studentEmails, setStudentEmails] = useState('')
@@ -36,10 +44,15 @@ export default function TeacherSetupModal({ onDone }) {
 
   async function handleStep1() {
     if (!className.trim()) { setError('Class name is required.'); return }
+    if (!hour) { setError('Enter the time this class starts.'); return }
+    if (!days.length) { setError('Pick at least one day this class meets.'); return }
     setError('')
     setLoading(true)
     try {
-      const cls = await apiFetch('/classes', { method: 'POST', body: JSON.stringify({ name: className.trim() }) })
+      const cls = await apiFetch('/classes', {
+        method: 'POST',
+        body: JSON.stringify({ name: className.trim(), time: toUTC(hour, minute, period), days }),
+      })
       setClassId(cls.class_id)
       setMeetingName(className.trim())
       setStep(1)
@@ -57,7 +70,15 @@ export default function TeacherSetupModal({ onDone }) {
     try {
       const link = await apiFetch('/links', {
         method: 'POST',
-        body: JSON.stringify({ name: meetingName.trim() || className.trim(), link: meetingUrl.trim(), time: '', days: [], repeats: 'never' }),
+        // The link inherits the class's schedule so it opens when the session
+        // actually starts, which is also what attendance is measured against.
+        body: JSON.stringify({
+          name: meetingName.trim() || className.trim(),
+          link: meetingUrl.trim(),
+          time: toUTC(hour, minute, period),
+          days,
+          repeats: 'week',
+        }),
       })
       const newLinkId = link.id ?? link.link_id
       setLinkId(newLinkId)
@@ -130,6 +151,28 @@ export default function TeacherSetupModal({ onDone }) {
                     onKeyDown={e => e.key === 'Enter' && handleStep1()}
                     autoFocus
                   />
+                </div>
+                <div className="ts-field">
+                  <label className="ts-label">Starts at</label>
+                  <TimeOfDayInput
+                    hour={hour} minute={minute} period={period}
+                    onChange={({ hour: h, minute: m, period: p }) => {
+                      setHour(h); setMinute(m); setPeriod(p); setError('')
+                    }}
+                  />
+                </div>
+                <div className="ts-field">
+                  <label className="ts-label">Meets on</label>
+                  <DayPicker
+                    days={days}
+                    onToggle={d => {
+                      setDays(prev => (prev.includes(d) ? prev.filter(x => x !== d) : [...prev, d]))
+                      setError('')
+                    }}
+                  />
+                  <p className="ts-hint">
+                    Attendance and lateness are measured from this time.
+                  </p>
                   {error && <p className="ts-error">{error}</p>}
                 </div>
                 <div className="ts-actions">

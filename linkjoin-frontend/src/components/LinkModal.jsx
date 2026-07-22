@@ -1,11 +1,10 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { linksApi } from '../api/links.js'
 import { useModalClose } from '../hooks/useModalClose.js'
+import { ALL_DAYS, DAY_LABELS, toUTC, fromUTC } from './schedule/ScheduleControls.jsx'
 import '../styles/modal.css'
 import '../styles/link.css'
 
-const ALL_DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
-const DAY_LABELS = { Sun: 'Su', Mon: 'M', Tue: 'Tu', Wed: 'W', Thu: 'Th', Fri: 'F', Sat: 'Sa' }
 const TEXT_OPTIONS = ['false', '5', '10', '15', '20', '30', '45', '60']
 const TEXT_LABELS = { false: 'Never', '5': '5 min', '10': '10 min', '15': '15 min', '20': '20 min', '30': '30 min', '45': '45 min', '60': '60 min' }
 
@@ -63,26 +62,15 @@ function nextDateForDays(days) {
   return `${String(target.getMonth() + 1).padStart(2, '0')}/${String(target.getDate()).padStart(2, '0')}/${target.getFullYear()}`
 }
 
-function toUTC(hour, minute, period) {
-  let h = parseInt(hour) || 0
-  const m = parseInt(minute) || 0
-  if (period === 'PM' && h !== 12) h += 12
-  if (period === 'AM' && h === 12) h = 0
-  return `${h}:${String(m).padStart(2, '0')}`
-}
 
-function fromUTC(time24) {
-  if (!time24) return { hour: '', minute: '00', period: 'AM' }
-  const [h, m] = time24.split(':').map(Number)
-  const period = h >= 12 ? 'PM' : 'AM'
-  const hour = h % 12 || 12
-  return { hour: String(hour), minute: String(m).padStart(2, '0'), period }
-}
 
 export default function LinkModal({ visible, editLink, onClose, onSuccess, prefillDays, prefillDate, defaultAutoOpen = true, allLinks = [] }) {
   const isEdit = Boolean(editLink)
   const { closing, handleClose } = useModalClose(onClose)
 
+  // The class owns the schedule for links attached to it; the server propagates
+  // class.time/days down onto them, so editing time/days here would just be
+  // overwritten and would silently disagree with what attendance measures.
   const isClassLinked = isEdit && Boolean(editLink?.class_id)
 
   const [name, setName] = useState('')
@@ -284,12 +272,24 @@ export default function LinkModal({ visible, editLink, onClose, onSuccess, prefi
           />
         </div>
 
+        {/* A link that belongs to a class takes its schedule FROM the class, which
+            is what attendance is measured against. Editing it here would let the
+            link open at a different moment than the session officially starts and
+            record every student tardy by the difference. */}
+        {isClassLinked && (
+          <div className="modal-section modal-note">
+            Schedule is set by <strong>{editLink.class_name || 'the class'}</strong>.
+            Change it in the class&rsquo;s Schedule tab and it will update here.
+          </div>
+        )}
+
         <div className="modal-section">
           <span className="modal-field-tag">Time</span>
-          <div className="modal-time-row">
+          <div className={`modal-time-row${isClassLinked ? ' modal-locked' : ''}`}>
             <input
               className="modal-time-input"
               placeholder="1"
+              disabled={isClassLinked}
               value={hour}
               onKeyDown={e => {
                 if (['Backspace', 'Delete', 'ArrowLeft', 'ArrowRight', 'Tab'].includes(e.key)) return
@@ -308,6 +308,7 @@ export default function LinkModal({ visible, editLink, onClose, onSuccess, prefi
               ref={minuteRef}
               className="modal-time-input"
               placeholder="00"
+              disabled={isClassLinked}
               value={minute}
               onKeyDown={e => {
                 if (['Backspace', 'Delete', 'ArrowLeft', 'ArrowRight', 'Tab'].includes(e.key)) return
@@ -320,7 +321,7 @@ export default function LinkModal({ visible, editLink, onClose, onSuccess, prefi
             />
             <span
               className="modal-time-period"
-              onClick={() => setPeriod(p => p === 'AM' ? 'PM' : 'AM')}
+              onClick={() => { if (!isClassLinked) setPeriod(p => p === 'AM' ? 'PM' : 'AM') }}
             >{period}</span>
           </div>
         </div>
@@ -328,10 +329,11 @@ export default function LinkModal({ visible, editLink, onClose, onSuccess, prefi
         {repeats !== 'day' && repeats !== 'month' && (
           <div className="modal-section">
             <span className="modal-field-tag">Days</span>
-            <div className="modal-days">
+            <div className={`modal-days${isClassLinked ? ' modal-locked' : ''}`}>
               {ALL_DAYS.map(day => (
                 <button
                   key={day}
+                  disabled={isClassLinked}
                   className={`modal-day-btn${days.includes(day) ? ' selected' : ''}`}
                   onClick={() => toggleDay(day)}
                 >{DAY_LABELS[day]}</button>

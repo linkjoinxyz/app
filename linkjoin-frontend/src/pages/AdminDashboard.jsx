@@ -5,6 +5,7 @@ import { apiGet, apiPost, apiDelete, apiPatch, apiPut, apiDownload } from '../ap
 import SideNav from '../components/SideNav.jsx'
 import LinkModal from '../components/LinkModal.jsx'
 import HistoryPanel from '../components/HistoryPanel.jsx'
+import ClassScheduleTab from '../components/schedule/ClassScheduleTab.jsx'
 import countryCodes from '../../public/country_codes.json'
 import '../styles/admin.css'
 
@@ -897,6 +898,7 @@ function ClassDetail({ cls, onBack, onUpdate, onViewStudent }) {
       <div className="detail-tab-bar">
         {[
           { key: 'links',        label: 'Links' },
+          { key: 'schedule',     label: 'Schedule', warn: !cls.time || !(cls.days || []).length },
           { key: 'students',     label: 'Students' },
           { key: 'attendance',   label: 'Attendance' },
           { key: 'patterns',     label: 'Patterns' },
@@ -910,6 +912,9 @@ function ClassDetail({ cls, onBack, onUpdate, onViewStudent }) {
           >
             {t.label}
             {t.badge ? <span className="detail-tab-badge">{t.badge}</span> : null}
+            {/* A class with no schedule records no attendance and sends no
+                alerts, and does so silently. Surface it on the tab itself. */}
+            {t.warn ? <span className="detail-tab-badge detail-tab-badge--warn" title="No schedule set">!</span> : null}
           </button>
         ))}
       </div>
@@ -919,6 +924,28 @@ function ClassDetail({ cls, onBack, onUpdate, onViewStudent }) {
         {detailLoading ? (
           <div className="admin-spinner-wrap"><div className="admin-spinner" /></div>
         ) : <>
+
+        {/* Schedule tab */}
+        {classTab === 'schedule' && (
+          <ClassScheduleTab
+            cls={cls}
+            onSaved={async () => {
+              // Refetch the class AND its links. The class write propagates onto
+              // the links server-side, so refreshing only the class leaves the
+              // Links tab showing the old time — and because that field is now
+              // read-only, it reads as a bug rather than stale state.
+              const [fresh, linksRes] = await Promise.all([
+                apiGet(`/classes/${cls.class_id}`).catch(() => null),
+                apiGet(`/classes/${cls.class_id}/links`).catch(() => null),
+              ])
+              if (fresh) onUpdate(fresh)
+              if (linksRes?.links) {
+                setAllLinks(linksRes.links)
+                setClassLinks(linksRes.links)
+              }
+            }}
+          />
+        )}
 
         {/* Links tab */}
         {classTab === 'links' && (

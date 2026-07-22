@@ -164,14 +164,14 @@ async def test_check_absences_one_bad_class_does_not_abort_others(monkeypatch):
     await _make_class(bad_class_id, teacher_id, [student_id], time_str=class_start.strftime("%H:%M"), family_alerts=True)
     await _make_class(good_class_id, teacher_id, [student_id], time_str=class_start.strftime("%H:%M"), family_alerts=True)
 
-    orig_compute = scheduler_module.compute_session_start_utc
-    def _boom(class_time, *a, **kw):
-        if class_time == class_start.strftime("%H:%M") and _boom.calls == 0:
+    orig_compute = scheduler_module.today_session_start_utc
+    def _boom(cls, *a, **kw):
+        if cls.get("time") == class_start.strftime("%H:%M") and _boom.calls == 0:
             _boom.calls += 1
             raise RuntimeError("simulated crash in one class")
-        return orig_compute(class_time, *a, **kw)
+        return orig_compute(cls, *a, **kw)
     _boom.calls = 0
-    monkeypatch.setattr(scheduler_module, "compute_session_start_utc", _boom)
+    monkeypatch.setattr(scheduler_module, "today_session_start_utc", _boom)
     monkeypatch.setattr("app.email_service.send_email", lambda *a, **k: None)
 
     await check_absences()  # must not raise despite the first class blowing up

@@ -33,12 +33,23 @@ async def _make_link(username: str, link_id: int, **extra):
 
 @pytest.fixture(autouse=True)
 async def _slug_unique_index():
-    """Production carries links.slug as a unique sparse index; the test database
-    does not, because httpx's ASGITransport never runs the app's lifespan (the
-    conftest comment claiming otherwise is mistaken, and `index_information()` on
-    linkjoin_test comes back empty). Without the constraint the duplicate-slug
-    insert this module exists to catch simply succeeds, so create it here.
+    """Guarantee links.slug carries the unique sparse index production has.
+
+    The test database does not necessarily have it: httpx's ASGITransport never
+    runs the app's lifespan, so the index creation in main.py does not fire
+    (the conftest comment claiming lifespan runs is mistaken). Without the
+    constraint the duplicate-slug insert this module exists to catch simply
+    succeeds and the test proves nothing.
+
+    It may equally already exist, as `slug_1`, if anyone has pointed a real
+    server at this database. So adopt an existing index on that key rather than
+    creating a second one, which would fail with IndexOptionsConflict.
     """
+    existing = await motor_db.links.index_information()
+    already = any(info.get("key") == [("slug", 1)] for info in existing.values())
+    if already:
+        yield
+        return
     await motor_db.links.create_index("slug", unique=True, sparse=True, name="slug_1_test")
     yield
     await motor_db.links.drop_index("slug_1_test")
