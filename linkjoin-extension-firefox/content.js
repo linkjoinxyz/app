@@ -144,6 +144,9 @@ async function processEmailBody(bodyEl) {
         if (!chrome?.storage?.local) return
         const { ljAutoDetect = true } = await chrome.storage.local.get('ljAutoDetect')
         if (!ljAutoDetect) return
+        // Auto-detect IS the Premium "Email meeting detection" feature, overlay
+        // and all. A free account gets no overlay rather than an empty one.
+        if (!(await isPremium())) return
         const msgContainer = bodyEl.closest('[data-message-id]')
         const msgId = msgContainer?.dataset?.messageId
         if (msgId && seen.has(msgId)) return
@@ -161,12 +164,6 @@ async function processEmailBody(bodyEl) {
 
         const subject = getEmailSubject()
         const text = bodyEl.textContent || ''
-        // Premium gate: skip the scan entirely for a free account and go straight
-        // to the overlay with the detected link. Adding a meeting by hand is free.
-        if (!(await isPremium())) {
-            showOverlay({}, detectedLink)
-            return
-        }
         showAnalyzing()
 
         const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone
@@ -251,6 +248,9 @@ if (IS_OUTLOOK) {
 
             const { ljAutoDetect = true } = await chrome.storage.local.get('ljAutoDetect')
             if (!ljAutoDetect) return
+            // Auto-detect IS the Premium "Email meeting detection" feature, overlay
+            // and all. A free account gets no overlay rather than an empty one.
+            if (!(await isPremium())) return
 
             if (document.getElementById('lj-overlay') || document.getElementById('lj-analyzing')) return
 
@@ -267,12 +267,6 @@ if (IS_OUTLOOK) {
 
             const subject = getOutlookSubject()
             const text = bodyEl.textContent || ''
-            // Premium gate: skip the scan entirely for a free account and go straight
-            // to the overlay with the detected link. Adding a meeting by hand is free.
-            if (!(await isPremium())) {
-                showOverlay({}, detectedLink)
-                return
-            }
             showAnalyzing()
 
             const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone

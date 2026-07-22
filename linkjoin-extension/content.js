@@ -171,6 +171,10 @@ async function processEmailBody(bodyEl) {
         if (!chrome?.storage?.local) return
         const { ljAutoDetect = true } = await chrome.storage.local.get('ljAutoDetect')
         if (!ljAutoDetect) return
+        // Auto-detect IS the Premium "Email meeting detection" feature, overlay
+        // and all — not just the AI extraction inside it. A free account gets no
+        // overlay rather than an empty one it cannot populate.
+        if (!(await isPremium())) return
         const msgContainer = bodyEl.closest('[data-message-id]')
         const msgId = msgContainer?.dataset?.messageId
         if (msgId && seen.has(msgId)) return
@@ -186,14 +190,6 @@ async function processEmailBody(bodyEl) {
         try { linksData = await chrome.runtime.sendMessage({ type: 'getLinks' }) } catch {}
         if (linksData?.links?.some(l => l.link && urlsMatch(l.link, detectedLink))) return
 
-        // AI extraction is Premium. For a free account, skip the scan entirely
-        // and go straight to the overlay with the detected link: adding a meeting
-        // by hand is free, so this keeps that working without an "Analyzing…"
-        // spinner that can only end in a 403 and an upsell on every thread.
-        if (!(await isPremium())) {
-            showOverlay({}, detectedLink)
-            return
-        }
 
         const subject = getEmailSubject()
         const text = bodyEl.textContent || ''
@@ -281,6 +277,8 @@ if (IS_OUTLOOK) {
 
             const { ljAutoDetect = true } = await chrome.storage.local.get('ljAutoDetect')
             if (!ljAutoDetect) return
+            // Premium gate, same as the Gmail path above.
+            if (!(await isPremium())) return
 
             if (document.getElementById('lj-overlay') || document.getElementById('lj-analyzing')) return
 
@@ -294,12 +292,6 @@ if (IS_OUTLOOK) {
             if (linksData?.links?.some(l => l.link && urlsMatch(l.link, detectedLink))) return
 
             if (document.getElementById('lj-overlay') || document.getElementById('lj-analyzing')) return
-
-            // Premium gate, same as the Gmail path above.
-            if (!(await isPremium())) {
-                showOverlay({}, detectedLink)
-                return
-            }
 
             const subject = getOutlookSubject()
             const text = bodyEl.textContent || ''
