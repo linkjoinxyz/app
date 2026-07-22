@@ -298,16 +298,28 @@ async def update_parent_contact(
 
 @router.get("/parent-contact/{student_user_id}")
 async def get_parent_contact(student_user_id: str, user: dict = Depends(get_confirmed_user)):
+    # Teachers need this: contacting a parent about an absence is the whole point
+    # of the absence workflow, and the class page requests it for every student on
+    # the roster. Restricting it to admins meant the teacher-facing UI 403'd on
+    # every row. Teachers are scoped to their own students, admins to their org
+    # hierarchy — the same split get_student_profile below already applies.
     role = user.get("role", "")
-    if role not in ("school_admin", "district_admin"):
-        raise HTTPException(status_code=403, detail="Admin access required")
+    if role not in ("teacher", "school_admin", "district_admin"):
+        raise HTTPException(status_code=403, detail="Access denied")
     student = await motor_db.login.find_one(
         {"user_id": student_user_id},
         {"parent_phone": 1, "parent_phone_country": 1, "parent_email": 1, "parent_name": 1, "org_id": 1, "_id": 0},
     )
     if not student:
         raise HTTPException(status_code=404, detail="Student not found")
-    if student.get("org_id") not in await get_accessible_org_ids(user):
+
+    if role == "teacher":
+        teacher_classes = await motor_db.classes.find(
+            {"teacher_id": user["user_id"]}, {"student_ids": 1}
+        ).to_list(None)
+        if student_user_id not in {uid for c in teacher_classes for uid in (c.get("student_ids") or [])}:
+            raise HTTPException(status_code=403, detail="Student not in your classes")
+    elif student.get("org_id") not in await get_accessible_org_ids(user):
         raise HTTPException(status_code=403, detail="Student not in your organization")
     result = {k: v for k, v in student.items() if k != "org_id"}
     linked_parents = []

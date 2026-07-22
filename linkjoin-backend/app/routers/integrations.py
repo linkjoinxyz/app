@@ -16,7 +16,7 @@ from app.auth import get_confirmed_user
 from app.config import get_settings
 from app.database import motor_db
 from app.roles import require_teacher, require_school_admin
-from app.utils import get_blackout_set, expected_session_dates
+from app.utils import get_blackout_set, expected_session_dates, lookback_cutoff
 
 router = APIRouter(prefix="/integrations", tags=["integrations"])
 
@@ -123,7 +123,7 @@ def _compute_scores(cls: dict, records_by_email: dict, enrolled_emails: set, bla
     cannot disagree with the rate a teacher sees.
     """
     now = datetime.now(timezone.utc)
-    cutoff = now - timedelta(days=_LOOKBACK_DAYS)
+    cutoff = lookback_cutoff(now, _LOOKBACK_DAYS)
 
     expected_dates_set: set[str] = set(expected_session_dates(
         cls, cutoff.date(), (cutoff + timedelta(days=_LOOKBACK_DAYS - 1)).date(),
