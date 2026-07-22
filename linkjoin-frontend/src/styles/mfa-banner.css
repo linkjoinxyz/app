@@ -1,0 +1,33 @@
+.mfa-banner {
+  /* fixed + a very high z-index, matching .inc-banner in incident.css: route
+     content paints from y=0 (the extension-install strip lives inside it), so a
+     sticky banner in normal flow gets covered. */
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 11px 18px;
+  background: #7c2d12;
+  color: #fff5ed;
+  font-size: 13.5px;
+  line-height: 1.45;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+.mfa-banner-text { flex: 1 1 320px; }
+.mfa-banner-btn {
+  flex: 0 0 auto;
+  background: #fff5ed;
+  color: #7c2d12;
+  border: 0;
+  border-radius: 6px;
+  padding: 7px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.mfa-banner-btn:hover { background: #fff; }

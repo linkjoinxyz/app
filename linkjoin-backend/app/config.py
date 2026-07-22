@@ -28,12 +28,21 @@ class Settings(BaseSettings):
     # deploy plus a manual Azure restart; this makes it an app-setting change.
     enforce_password_epoch: bool = True
     jwt_algorithm: str = "HS256"
-    # Was 10080 (7 days). The access token lives in localStorage, so an injection
-    # that reads it previously yielded a week of access; a short window plus a
-    # refresh token bounds that without forcing daily re-login. The refresh token
-    # carries purpose="refresh", which get_current_user already refuses to accept
-    # as a credential via _NON_ACCESS_CLAIMS.
-    access_token_expire_minutes: int = 60
+    # TEMPORARILY BACK AT 7 DAYS. This was cut to 60 minutes, paired with the
+    # refresh token below, to bound what an injection that reads localStorage can
+    # do with a stolen access token. That broke every INSTALLED browser extension:
+    # the published build (v0.3.3) copies only `token` from the page and returns
+    # null on a 401, with no refresh path, so it died 60 minutes after the user
+    # last opened the web app. The refresh support exists in linkjoin-extension/
+    # but ships to users only via a Chrome Web Store update.
+    #
+    # Restore to 60 once the new extension build has reached most installs. The
+    # refresh flow is already live and the web app already uses it, so lowering
+    # this is a one-line change plus an Azure restart.
+    #
+    # Override without a deploy by setting ACCESS_TOKEN_EXPIRE_MINUTES in the
+    # Azure app settings.
+    access_token_expire_minutes: int = 10080
     refresh_token_expire_minutes: int = 10080  # 7 days
     reset_token_expire_minutes: int = 60
     confirm_token_expire_minutes: int = 60

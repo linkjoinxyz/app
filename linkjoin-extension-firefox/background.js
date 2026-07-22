@@ -12,7 +12,43 @@ async function getAuth() {
     return token ? { token, email: email || '' } : null
 }
 
-async function apiFetch(path, options = {}) {
+// Access tokens are short-lived. This worker runs between page visits, so
+// without a renewal path its stored token simply goes stale and every alarm,
+// websocket ticket and link fetch fails until the user opens the web app again.
+// Single in-flight promise: several alarms can fire at once and each refresh
+// rotates (and thus invalidates) the previous refresh token.
+let refreshInFlight = null
+
+async function refreshSession() {
+    const { refresh_token: refreshToken } = await chrome.storage.local.get(['refresh_token'])
+    if (!refreshToken) return null
+    if (!refreshInFlight) {
+        refreshInFlight = (async () => {
+            try {
+                const res = await fetch(`${BASE_URL}/auth/refresh`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ refresh_token: refreshToken }),
+                })
+                if (!res.ok) return null
+                const data = await res.json()
+                if (!data?.access_token) return null
+                await chrome.storage.local.set({
+                    token: data.access_token,
+                    ...(data.refresh_token ? { refresh_token: data.refresh_token } : {}),
+                })
+                return data.access_token
+            } catch {
+                return null
+            } finally {
+                refreshInFlight = null
+            }
+        })()
+    }
+    return refreshInFlight
+}
+
+async function apiFetch(path, options = {}, _retried = false) {
     const auth = await getAuth()
     if (!auth) return null
     try {
@@ -24,6 +60,10 @@ async function apiFetch(path, options = {}) {
                 ...(options.headers || {}),
             },
         })
+        if (res.status === 401 && !_retried && !path.startsWith('/auth/')) {
+            const fresh = await refreshSession()
+            if (fresh) return apiFetch(path, options, true)
+        }
         if (!res.ok) return null
         return await res.json()
     } catch {
