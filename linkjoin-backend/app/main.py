@@ -138,7 +138,14 @@ async def lifespan(app: FastAPI):
     # Ensure hot-path indexes exist (idempotent). Independent, so run concurrently
     # instead of one round-trip at a time — this used to serialize ~46 index
     # checks on every cold start.
-    await asyncio.gather(
+    #
+    # Gathered with return_exceptions=True below, because a failed index must
+    # never stop the app from booting. It previously could: a bare
+    # create_index("ts") sitting alongside a TTL index on the same key raises
+    # IndexOptionsConflict depending on which was created first, and that escaped
+    # the gather and killed startup outright. A missing index is a slow query; a
+    # refusal to boot is an outage.
+    _index_coros = (
         motor_db.links.create_index("username"),
         motor_db.links.create_index("share_token", sparse=True),
         motor_db.links.create_index([("username", 1), ("id", 1)]),
@@ -151,8 +158,8 @@ async def lifespan(app: FastAPI):
         motor_db.deleted_links.create_index("username"),
         motor_db.audit_logs.create_index([("user", 1), ("ts", -1)]),
         motor_db.audit_logs.create_index([("user", 1), ("resource_type", 1), ("ts", -1)]),
-        motor_db.audit_logs.create_index("ts"),
-        # TTL: audit logs expire after 730 days (24 months per DPA)
+        # TTL: audit logs expire after 730 days (24 months per DPA). This also
+        # serves as the plain index on ts; declaring a bare one too conflicts.
         _soft_index(motor_db.audit_logs.create_index("ts", expireAfterSeconds=63072000, name="ts_ttl_730d")),
         # TTL: MFA challenges expire after 10 minutes
         _soft_index(
@@ -194,7 +201,7 @@ async def lifespan(app: FastAPI):
         motor_db.classes.create_index("student_ids"),
         motor_db.incidents.create_index("status"),
         motor_db.incidents.create_index("started_at"),
-        motor_db.status_checks.create_index("ts"),
+        # Doubles as the plain ts index, as above.
         _soft_index(
             motor_db.status_checks.create_index("ts", expireAfterSeconds=7948800, name="status_checks_ttl_92d")
         ),
@@ -206,6 +213,9 @@ async def lifespan(app: FastAPI):
             )
         ),
     )
+    for _result in await asyncio.gather(*_index_coros, return_exceptions=True):
+        if isinstance(_result, Exception):
+            log.warning("[startup] index creation failed: %s", _result)
 
     # NOTE: the user_id backfill that used to live here has moved to
     # scripts/backfill_user_ids.py. It scanned the whole login collection on every

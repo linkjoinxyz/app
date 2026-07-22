@@ -15,7 +15,7 @@ from app.models.org import CreateOrgRequest, UpdateOrgRequest
 from app.roles import require_school_admin, get_accessible_org_ids
 from app.utils import (
     track_event, get_school_year_start, STAFF_HIDDEN_FIELDS,
-    assert_public_url, UnsafeURLError,
+    assert_public_url, UnsafeURLError, get_blackout_set,
 )
 from app.routers.attendance import compute_student_attendance_rate, _LOOKBACK_DAYS, _TARDY_THRESHOLD_MINUTES
 from app.email_service import send_email
@@ -541,8 +541,14 @@ async def get_org_attendance(org_id: str, window: str = Query(default="28d"), us
     if not classes:
         return {"classes": [], "window": window}
 
-    org = await motor_db.orgs.find_one({"org_id": org_id}, {"attendance_settings": 1, "summer_end": 1})
+    # One org load hoisted above the per-class loop below, which then reuses both
+    # the threshold and the blackout set for every class and every student.
+    org = await motor_db.orgs.find_one(
+        {"org_id": org_id},
+        {"attendance_settings": 1, "summer_end": 1, "summer_start": 1, "blackout_dates": 1},
+    )
     tardy_threshold = int((org or {}).get("attendance_settings", {}).get("tardy_threshold_minutes", _TARDY_THRESHOLD_MINUTES))
+    blackout_dates = get_blackout_set(org or {})
     now = datetime.now(timezone.utc)
     if window == "school_year":
         cutoff = get_school_year_start(org or {}, now)
@@ -577,7 +583,7 @@ async def get_org_attendance(org_id: str, window: str = Query(default="28d"), us
         total = on_time = late = expected_total = 0
         for email in emails:
             stats = await compute_student_attendance_rate(
-                cls["class_id"], cls, email, cutoff, lookback_days, tardy_threshold
+                cls["class_id"], cls, email, cutoff, lookback_days, tardy_threshold, blackout_dates
             )
             total += stats["sessions"]
             on_time += stats["on_time"]

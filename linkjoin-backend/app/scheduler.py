@@ -11,7 +11,7 @@ from pymongo.errors import DuplicateKeyError
 from pytz import utc, timezone as pytz_timezone
 from app.config import get_settings
 from app.database import sync_db, motor_db
-from app.utils import get_text_time, get_blackout_set, compute_session_start_utc
+from app.utils import get_text_time, get_blackout_set, today_session_start_utc, session_time_on
 
 _settings = get_settings()
 scheduler = AsyncIOScheduler(timezone=utc, jobstores={"default": MemoryJobStore()})
@@ -376,7 +376,7 @@ async def check_absences() -> None:
     from app.database import motor_db
 
     now_utc = datetime.now(timezone.utc)
-    today_date = now_utc.strftime("%Y-%m-%d")
+    org_cache: dict = {}
 
     async for cls in motor_db.classes.find({"family_alerts": True}):
         try:
@@ -388,19 +388,36 @@ async def check_absences() -> None:
             teacher = await motor_db.login.find_one({"user_id": cls.get("teacher_id", "")}, {"timezone": 1})
             tz_name = (teacher or {}).get("timezone") or "UTC"
 
-            class_start_utc = compute_session_start_utc(class_time_str, class_days, tz_name, now_utc)
+            # The org load has to happen before resolving the session now, since
+            # blackouts and cancellations are part of "does this class meet".
+            # Cached per tick so this stays one query per org rather than per class.
+            org_id = cls.get("org_id", "")
+            if org_id not in org_cache:
+                org_cache[org_id] = await motor_db.orgs.find_one(
+                    {"org_id": org_id},
+                    {"blackout_dates": 1, "summer_start": 1, "summer_end": 1, "brand_name": 1, "name": 1},
+                ) or {}
+            org = org_cache[org_id]
+
+            # today_date used to be derived in UTC and compared against a local
+            # session, so the blackout check was off by a day for negative-offset
+            # zones. Both are local now, and the blackout/cancellation test lives
+            # inside the resolver rather than as a separate check below.
+            today_local, class_start_utc = today_session_start_utc(
+                cls, tz_name, now_utc, get_blackout_set(org)
+            )
+            today_date = today_local.isoformat()
             if class_start_utc is None:
                 continue
             delta = now_utc.replace(tzinfo=None) - class_start_utc.replace(tzinfo=None)
             if not (timedelta(minutes=30) <= delta <= timedelta(minutes=90)):
                 continue
 
-            org = await motor_db.orgs.find_one({"org_id": cls.get("org_id", "")}, {"blackout_dates": 1, "summer_start": 1, "summer_end": 1, "brand_name": 1, "name": 1})
-            if today_date in get_blackout_set(org or {}):
-                continue
-
-            brand_name = (org or {}).get("brand_name") or (org or {}).get("name") or "LinkJoin"
-            h, m = (int(x) for x in class_time_str.split(":"))
+            brand_name = org.get("brand_name") or org.get("name") or "LinkJoin"
+            # The effective time for today, so a late-start day tells the parent the
+            # late bell rather than the usual one.
+            effective_time = session_time_on(cls, today_local, get_blackout_set(org)) or class_time_str
+            h, m = (int(x) for x in effective_time.split(":"))
             hour12 = h % 12 or 12
             ampm = "AM" if h < 12 else "PM"
             class_time_display = f"{hour12}:{m:02d} {ampm}"
@@ -507,11 +524,11 @@ async def check_absences() -> None:
 
 async def send_class_reminders() -> None:
     """Every-5-min job: text/email parents who opted in, ~10 min before their child's class."""
-    from datetime import datetime, timezone, timedelta
+    from datetime import datetime, timezone
     from app.database import motor_db
 
     now_utc = datetime.now(timezone.utc)
-    today_date = now_utc.strftime("%Y-%m-%d")
+    org_cache: dict = {}
 
     # ponytail: family_alerts is a teacher-facing absence-alert switch (see
     # AdminDashboard.jsx "Family absence alerts" toggle) — reminders are opted
@@ -526,18 +543,29 @@ async def send_class_reminders() -> None:
             teacher = await motor_db.login.find_one({"user_id": cls.get("teacher_id", "")}, {"timezone": 1})
             tz_name = (teacher or {}).get("timezone") or "UTC"
 
-            class_start_utc = compute_session_start_utc(class_time_str, class_days, tz_name, now_utc)
+            # Org first: blackouts and cancellations are part of resolving whether
+            # there is a session at all. Cached per tick, one query per org.
+            org_id = cls.get("org_id", "")
+            if org_id not in org_cache:
+                org_cache[org_id] = await motor_db.orgs.find_one(
+                    {"org_id": org_id},
+                    {"blackout_dates": 1, "summer_start": 1, "summer_end": 1, "brand_name": 1, "name": 1},
+                ) or {}
+            org = org_cache[org_id]
+
+            # Local day, not the UTC one the old blackout comparison used. On a
+            # late-start date this fires 10 minutes before the LATE bell.
+            today_local, class_start_utc = today_session_start_utc(
+                cls, tz_name, now_utc, get_blackout_set(org)
+            )
+            today_date = today_local.isoformat()
             if class_start_utc is None:
                 continue
             minutes_until = (class_start_utc.replace(tzinfo=None) - now_utc.replace(tzinfo=None)).total_seconds() / 60
             if not (8 <= minutes_until <= 13):
                 continue
 
-            org = await motor_db.orgs.find_one({"org_id": cls.get("org_id", "")}, {"blackout_dates": 1, "summer_start": 1, "summer_end": 1, "brand_name": 1, "name": 1})
-            if today_date in get_blackout_set(org or {}):
-                continue
-
-            brand_name = (org or {}).get("brand_name") or (org or {}).get("name") or "LinkJoin"
+            brand_name = org.get("brand_name") or org.get("name") or "LinkJoin"
             class_name = cls.get("name", "class")
 
             # Three nested per-record queries collapsed into three bulk ones: the

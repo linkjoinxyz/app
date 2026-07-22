@@ -1218,3 +1218,19 @@
     opacity: 0.5;
     cursor: default;
 }
+
+/* Schedule fields are read-only on a link that belongs to a class: the class is
+   authoritative and the server propagates its schedule down onto the link. */
+.modal-locked {
+  opacity: 0.55;
+  pointer-events: none;
+}
+.modal-note {
+  font-size: 12px;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.55);
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+[data-theme="light"] .modal-note { color: rgba(15, 23, 42, 0.7); background: rgba(0, 0, 0, 0.04); }

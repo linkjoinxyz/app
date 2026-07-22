@@ -12,7 +12,10 @@ from pytz import utc, timezone as pytz_timezone
 from app.auth import get_confirmed_user
 from app.database import motor_db
 from app.roles import require_teacher, require_premium, get_accessible_org_ids
-from app.utils import get_blackout_set, get_school_year_start, compute_session_start_utc, csv_safe
+from app.utils import (
+    get_blackout_set, get_school_year_start, csv_safe,
+    expected_session_dates, session_start_utc,
+)
 from app.audit import log_audit
 
 log = logging.getLogger(__name__)
@@ -39,7 +42,6 @@ class OverrideBody(BaseModel):
     note: str | None = None
     join_time: str | None = None  # optional "H:MM"/"HH:MM", applied to the whole selection
 
-_DAY_TO_WEEKDAY = {'Sun': 6, 'Mon': 0, 'Tue': 1, 'Wed': 2, 'Thu': 3, 'Fri': 4, 'Sat': 5}
 _LOOKBACK_DAYS = 28
 _TARDY_THRESHOLD_MINUTES = 5
 _TARDY_RATE_FLAG = 0.33
@@ -102,18 +104,21 @@ async def compute_student_session_counts(
 
 
 async def compute_student_attendance_rate(
-    class_id: str, cls: dict, student_email: str, cutoff: datetime, lookback_days: int, tardy_threshold: int
+    class_id: str, cls: dict, student_email: str, cutoff: datetime, lookback_days: int,
+    tardy_threshold: int, blackout_dates: set[str] = frozenset(),
 ) -> dict:
     """Single-student sessions/tardy/expected/attendance_rate over [cutoff, now) —
     same excused-absence-aware math as get_class_patterns, factored out so other
     surfaces (e.g. the parent portal) show the same numbers teachers see."""
-    class_days = cls.get("days") or []
-    scheduled_weekdays = {_DAY_TO_WEEKDAY[d] for d in class_days if d in _DAY_TO_WEEKDAY}
-    expected_dates = [
-        (cutoff + timedelta(days=i)).strftime("%Y-%m-%d")
-        for i in range(lookback_days)
-        if (cutoff + timedelta(days=i)).weekday() in scheduled_weekdays
-    ]
+    now = datetime.now(timezone.utc)
+    # Blackouts and cancelled dates now leave the denominator. Previously this
+    # counted them as expected sessions while the missed_dates list rendered
+    # beside it subtracted them, so a student's rate and their missed days
+    # disagreed. Rates rise for orgs that configure closures.
+    expected_dates = expected_session_dates(
+        cls, cutoff.date(), (cutoff + timedelta(days=lookback_days - 1)).date(),
+        blackout_dates, through=now.date(),
+    )
     expected_count = len(expected_dates)
     expected_dates_set = set(expected_dates)
 
@@ -197,13 +202,10 @@ async def compute_class_flag_metrics(
     blackout_dates = thresholds["blackout_dates"]
     tardy_threshold = thresholds["tardy_threshold"]
 
-    class_days = cls.get("days") or []
-    scheduled_weekdays = {_DAY_TO_WEEKDAY[d] for d in class_days if d in _DAY_TO_WEEKDAY}
-    expected_dates = [
-        (cutoff + timedelta(days=i)).strftime("%Y-%m-%d")
-        for i in range(_LOOKBACK_DAYS)
-        if (cutoff + timedelta(days=i)).weekday() in scheduled_weekdays
-    ]
+    expected_dates = expected_session_dates(
+        cls, cutoff.date(), (cutoff + timedelta(days=_LOOKBACK_DAYS - 1)).date(),
+        blackout_dates, through=datetime.now(timezone.utc).date(),
+    )
     expected_dates_set = set(expected_dates)
     expected_count = len(expected_dates)
     class_excused_absences = cls.get("excused_absences") or []
@@ -238,7 +240,10 @@ async def compute_class_flag_metrics(
         } | (override_excused_dates & expected_dates_set))
         effective_expected = max(expected_count - len(student_excused_dates), 0)
         attendance_rate = min(total / effective_expected, 1.0) if effective_expected > 0 else 1.0
-        missed_dates = sorted(expected_dates_set - joined_dates - student_excused_dates - blackout_dates)
+        # expected_dates_set already excludes blackouts and cancellations, so the
+        # old "- blackout_dates" here is redundant; the denominator above now
+        # agrees with this list instead of contradicting it.
+        missed_dates = sorted(expected_dates_set - joined_dates - student_excused_dates)
         excused_absence_dates = sorted(student_excused_dates)
 
         metrics[email] = {
@@ -429,16 +434,15 @@ async def get_class_attendance(class_id: str, user: dict = Depends(get_confirmed
     # Fill in absences: for every scheduled class day in the recent lookback
     # window, any roster student with no record at all gets a synthetic
     # "absent" row instead of just being missing from the table.
-    class_days = cls.get("days") or []
-    scheduled_weekdays = {_DAY_TO_WEEKDAY[d] for d in class_days if d in _DAY_TO_WEEKDAY}
-    expected_dates = [
-        (cutoff + timedelta(days=i)).strftime("%Y-%m-%d")
-        for i in range(_LOOKBACK_DAYS)
-        if (cutoff + timedelta(days=i)).weekday() in scheduled_weekdays
-    ]
-
     org = await motor_db.orgs.find_one({"org_id": cls.get("org_id", "")}, {"blackout_dates": 1, "summer_start": 1, "summer_end": 1})
     blackout_dates = get_blackout_set(org or {})
+    # Blackouts and cancelled dates are excluded here rather than skipped inside
+    # the loop below, so a cancelled session stops manufacturing absent rows.
+    expected_dates = expected_session_dates(
+        cls, cutoff.date(), (cutoff + timedelta(days=_LOOKBACK_DAYS - 1)).date(),
+        blackout_dates, through=now.date(),
+    )
+
     excused_by_email: dict[str, set] = defaultdict(set)
     for e in cls.get("excused_absences") or []:
         excused_by_email[e.get("student_email")].add(e.get("date"))
@@ -447,8 +451,6 @@ async def get_class_attendance(class_id: str, user: dict = Depends(get_confirmed
     roster = await _resolve_students(cls.get("student_ids", []))
 
     for date_str in expected_dates:
-        if date_str in blackout_dates:
-            continue
         for s in roster:
             email = s["username"]
             if (email, date_str) in present_combos:
@@ -512,20 +514,25 @@ async def override_class_attendance(class_id: str, body: OverrideBody, user: dic
     # Everything below is anchored in the teacher's timezone, not UTC. A teacher
     # types join_time as a local wall clock, and the class's scheduled start is
     # local too, so comparing either against a UTC-built instant is off by the
-    # zone's offset. Worse, probing for the session start with midnight UTC lands
-    # on the PREVIOUS local day for every negative-offset zone, which resolved the
-    # wrong weekday: US/Eastern overriding a Tue at 09:05 for a 09:00 Mon-Fri class
-    # produced minutes_late = -235, and a Mon override found no session at all and
-    # silently recorded a late student as on time.
+    # zone's offset. A US/Eastern teacher overriding a Tue at 09:05 for a 09:00
+    # Mon-Fri class used to produce minutes_late = -235, and a Mon override found
+    # no session at all and silently recorded a late student as on time.
     teacher = await motor_db.login.find_one({"user_id": cls.get("teacher_id", "")}, {"timezone": 1})
     tz_name = (teacher or {}).get("timezone") or "UTC"
     try:
         tz = pytz_timezone(tz_name)
     except Exception:
         tz = utc
-    # Midday local, so the instant is unambiguously on `day` in the teacher's zone
-    # regardless of offset or DST.
-    day_probe = tz.localize(datetime(day.year, day.month, day.day, 12, 0)).astimezone(utc)
+
+    org = await motor_db.orgs.find_one(
+        {"org_id": cls.get("org_id", "")},
+        {"blackout_dates": 1, "summer_start": 1, "summer_end": 1},
+    )
+    blackout_dates = get_blackout_set(org or {})
+    # session_start_utc takes the override's own date directly, which is what the
+    # old midday-local "day_probe" was faking. It also honours a late_start or
+    # cancelled override for that date.
+    session_start = session_start_utc(cls, day, tz_name, blackout_dates)
 
     if join_time_str:
         if not re.match(r"^\d{1,2}:\d{2}$", join_time_str):
@@ -534,12 +541,7 @@ async def override_class_attendance(class_id: str, body: OverrideBody, user: dic
         if not (0 <= h <= 23 and 0 <= m <= 59):
             raise HTTPException(status_code=422, detail="Invalid join_time value")
         opened_at = tz.localize(datetime(day.year, day.month, day.day, h, m)).astimezone(utc)
-        session_start = compute_session_start_utc(
-            cls.get("time", ""), cls.get("days") or [], tz_name, day_probe
-        )
         if session_start is not None:
-            # day_probe already pins this to the override's own date, so no
-            # after-the-fact date rewriting is needed.
             minutes_late = round((opened_at - session_start).total_seconds() / 60)
         else:
             # The override's date isn't a day this class is scheduled to meet
@@ -550,10 +552,13 @@ async def override_class_attendance(class_id: str, body: OverrideBody, user: dic
             minutes_late = 0
     elif body.status == "present":
         # No explicit join time given — same "on time" default as the old checkbox
-        # flow. Anchored at local midday rather than UTC midnight so the stored
-        # instant falls on the intended calendar day in the teacher's zone, which
-        # is what get_my_rewards buckets streaks by.
-        opened_at = day_probe
+        # flow. Prefer the session's real start; fall back to local midday when the
+        # class has no time configured. Either way it is anchored in the teacher's
+        # zone rather than at UTC midnight, so the stored instant falls on the
+        # intended calendar day, which is what get_my_rewards buckets streaks by.
+        opened_at = session_start or tz.localize(
+            datetime(day.year, day.month, day.day, 12, 0)
+        ).astimezone(utc)
         minutes_late = 0
 
     absent = body.status in ("absent", "excused")
@@ -825,9 +830,11 @@ async def get_class_attendance_summary(
         raise HTTPException(status_code=403, detail="Access denied")
 
     org = await motor_db.orgs.find_one(
-        {"org_id": cls.get("org_id", "")}, {"attendance_settings": 1, "summer_end": 1}
+        {"org_id": cls.get("org_id", "")},
+        {"attendance_settings": 1, "summer_end": 1, "summer_start": 1, "blackout_dates": 1},
     )
     tardy_threshold = int((org or {}).get("attendance_settings", {}).get("tardy_threshold_minutes", _TARDY_THRESHOLD_MINUTES))
+    blackout_dates = get_blackout_set(org or {})
     now = datetime.now(timezone.utc)
     if window == "school_year":
         cutoff = get_school_year_start(org or {}, now)
@@ -850,7 +857,7 @@ async def get_class_attendance_summary(
         # portal), not on-time-joins-over-joins-attended — sessions/on_time/late
         # stay as raw counts from compute_student_session_counts above.
         rate_stats = await compute_student_attendance_rate(
-            class_id, cls, email, cutoff, lookback_days, tardy_threshold
+            class_id, cls, email, cutoff, lookback_days, tardy_threshold, blackout_dates
         )
         students.append({
             "student_email": email,
@@ -912,16 +919,17 @@ async def export_class_attendance(
         (date_str, email): r for (email, date_str), r in _resolve_latest_records(raw_export_records).items()
     }
 
-    # Expected session dates (class days minus blackouts)
-    class_days = cls.get("days") or []
-    scheduled_weekdays = {_DAY_TO_WEEKDAY[d] for d in class_days if d in _DAY_TO_WEEKDAY}
-    days_total = (end_dt.date() - start_dt.date()).days + 1
-    session_dates: list[tuple[str, str]] = []
-    for i in range(days_total):
-        d = start_dt + timedelta(days=i)
-        ds = d.strftime("%Y-%m-%d")
-        if d.weekday() in scheduled_weekdays and ds not in blackout_dates:
-            session_dates.append((ds, d.strftime("%a")))
+    # Expected session dates (class days minus blackouts and cancellations).
+    # `through` clamps the tail: unlike the fixed 28-day windows elsewhere, the
+    # caller supplies end_dt here and can ask for a range extending into the
+    # future, which previously produced phantom rows for sessions yet to happen.
+    session_dates: list[tuple[str, str]] = [
+        (ds, date_type.fromisoformat(ds).strftime("%a"))
+        for ds in expected_session_dates(
+            cls, start_dt.date(), end_dt.date(), blackout_dates,
+            through=datetime.now(timezone.utc).date(),
+        )
+    ]
 
     # Build per-student excused absence date sets for CSV status labels
     class_excused_absences: list[dict] = cls.get("excused_absences") or []
