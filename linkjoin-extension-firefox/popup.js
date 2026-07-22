@@ -511,7 +511,6 @@ async function renderDashboard() {
             </svg>
             Scan this page
         </button>
-        ${isPremium ? '' : '<button class="scan-upgrade" id="scan-upgrade">Upgrade to scan meetings from any page</button>'}
         <div class="meetings-section">
             <div class="section-label">Upcoming meetings</div>
             <div id="meetings-list"><p class="muted-msg">Loading...</p></div>
@@ -527,7 +526,6 @@ async function renderDashboard() {
     // reached without entitlement, so the 403 path stays closed.
     const openPricing = () => chrome.tabs.create({ url: `${APP_URL}/pricing` })
     document.getElementById('scan-btn')?.addEventListener('click', isPremium ? handleScan : openPricing)
-    document.getElementById('scan-upgrade')?.addEventListener('click', openPricing)
 
     const data = await apiFetch('/links')
     const list = document.getElementById('meetings-list')
