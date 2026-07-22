@@ -6,6 +6,7 @@ import SideNav from '../components/SideNav.jsx'
 import LinkModal from '../components/LinkModal.jsx'
 import HistoryPanel from '../components/HistoryPanel.jsx'
 import ClassScheduleTab from '../components/schedule/ClassScheduleTab.jsx'
+import { parseServerDate } from '../utils.js'
 import countryCodes from '../../public/country_codes.json'
 import '../styles/admin.css'
 
@@ -1066,7 +1067,7 @@ function ClassDetail({ cls, onBack, onUpdate, onViewStudent }) {
                         {s.username}
                         {rec && rec.source === 'linkjoin_click' && (
                           <span style={{ fontSize: 11, opacity: 0.5, marginLeft: 6 }}>
-                            already joined via LinkJoin{rec.opened_at ? ` at ${rec.opened_at.slice(11, 16)}` : ''}
+                            already joined via LinkJoin{rec.opened_at ? ` at ${parseServerDate(rec.opened_at)?.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}` : ''}
                           </span>
                         )}
                       </label>
@@ -1296,9 +1297,12 @@ function ClassDetail({ cls, onBack, onUpdate, onViewStudent }) {
                   {attendance.map((r, i) => {
                     // opened_at is null on an absent/excused override — fall back to
                     // record_date (always set) so the row doesn't show the 1970 epoch.
-                    const dt = new Date(r.opened_at || r.record_date)
-                    const dateStr = dt.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
-                    const timeStr = dt.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
+                    // parseServerDate, not new Date: the server sends naive UTC, which
+                    // new Date() reads as local and renders as the raw UTC clock (a
+                    // 9:00 AM Central class showing as 2:00 PM).
+                    const dt = parseServerDate(r.opened_at || r.record_date)
+                    const dateStr = dt ? dt.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : ''
+                    const timeStr = dt ? dt.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }) : ''
                     const tardyThreshold = patterns?.thresholds?.tardy_threshold_minutes ?? 5
                     const late = r.minutes_late
                     const isTardy = !r.absent && late > tardyThreshold

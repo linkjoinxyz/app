@@ -1,11 +1,12 @@
 import secrets
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from app.auth import get_confirmed_user
 from app.audit import log_audit
 from app.config import get_settings
 from app.database import motor_db
 from app.email_service import send_email
+from app.utils import lookback_cutoff
 from app.roles import require_teacher, TEACHER_ROLES, get_accessible_org_ids
 
 router = APIRouter(prefix="/interventions", tags=["interventions"])
@@ -207,7 +208,7 @@ async def get_at_risk_students(user: dict = Depends(get_confirmed_user)):
     open_keys = {(iv["class_id"], iv["student_email"], iv["flag_type"]) for iv in open_ivs}
 
     now = datetime.now(timezone.utc)
-    cutoff = now - timedelta(days=_LOOKBACK_DAYS)
+    cutoff = lookback_cutoff(now, _LOOKBACK_DAYS)
 
     # Classes can span multiple orgs (district_admin, or a teacher assigned
     # across schools), so thresholds are resolved per-class's own org_id —

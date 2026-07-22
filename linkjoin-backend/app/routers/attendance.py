@@ -14,7 +14,7 @@ from app.database import motor_db
 from app.roles import require_teacher, require_premium, get_accessible_org_ids
 from app.utils import (
     get_blackout_set, get_school_year_start, csv_safe,
-    expected_session_dates, session_start_utc,
+    expected_session_dates, session_start_utc, lookback_cutoff,
 )
 from app.audit import log_audit
 
@@ -405,7 +405,7 @@ async def get_class_attendance(class_id: str, user: dict = Depends(get_confirmed
 
     records = []
     now = datetime.now(timezone.utc)
-    cutoff = now - timedelta(days=_LOOKBACK_DAYS)
+    cutoff = lookback_cutoff(now, _LOOKBACK_DAYS)
     raw_records = await motor_db.attendance.find({
         "class_id": class_id,
         "$or": [{"opened_at": {"$gte": cutoff}}, {"recorded_at": {"$gte": cutoff}}],
@@ -692,7 +692,7 @@ async def get_class_patterns(class_id: str, student_email: str | None = Query(de
     leak_rate_flag = float(org_settings.get("leak_rate_flag", _LEAK_RATE_FLAG))
 
     now = datetime.now(timezone.utc)
-    cutoff = now - timedelta(days=_LOOKBACK_DAYS)
+    cutoff = lookback_cutoff(now, _LOOKBACK_DAYS)
 
     leak_rate, leak_total_events = await compute_leak_rate(class_id, cutoff)
     data_quality_flagged = leak_total_events >= min_sessions and leak_rate >= leak_rate_flag
@@ -840,7 +840,7 @@ async def get_class_attendance_summary(
         cutoff = get_school_year_start(org or {}, now)
         lookback_days = (now.date() - cutoff.date()).days + 1
     else:
-        cutoff = now - timedelta(days=_LOOKBACK_DAYS)
+        cutoff = lookback_cutoff(now, _LOOKBACK_DAYS)
         lookback_days = _LOOKBACK_DAYS
 
     counts = await compute_student_session_counts(class_id, cutoff, tardy_threshold)

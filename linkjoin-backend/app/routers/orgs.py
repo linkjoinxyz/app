@@ -15,7 +15,7 @@ from app.models.org import CreateOrgRequest, UpdateOrgRequest
 from app.roles import require_school_admin, get_accessible_org_ids
 from app.utils import (
     track_event, get_school_year_start, STAFF_HIDDEN_FIELDS,
-    assert_public_url, UnsafeURLError, get_blackout_set,
+    assert_public_url, UnsafeURLError, get_blackout_set, lookback_cutoff,
 )
 from app.routers.attendance import compute_student_attendance_rate, _LOOKBACK_DAYS, _TARDY_THRESHOLD_MINUTES
 from app.email_service import send_email
@@ -554,7 +554,7 @@ async def get_org_attendance(org_id: str, window: str = Query(default="28d"), us
         cutoff = get_school_year_start(org or {}, now)
         lookback_days = (now.date() - cutoff.date()).days + 1
     else:
-        cutoff = now - timedelta(days=_LOOKBACK_DAYS)
+        cutoff = lookback_cutoff(now, _LOOKBACK_DAYS)
         lookback_days = _LOOKBACK_DAYS
 
     # Resolve every roster across the whole org in one query rather than one per

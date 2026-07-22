@@ -1234,3 +1234,11 @@
   padding: 10px 12px;
 }
 [data-theme="light"] .modal-note { color: rgba(15, 23, 42, 0.7); background: rgba(0, 0, 0, 0.04); }
+
+/* Premium tag in What's New. Only rendered for accounts that are not on a school
+   plan; org members are entitled to everything, so they see no upsell. */
+.whats-new-premium {
+  font-weight: 500;
+  opacity: 0.55;
+  font-size: 0.9em;
+}
