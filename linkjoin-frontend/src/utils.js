@@ -54,6 +54,34 @@ export function isReturningUser(user, releasedAt = WHATS_NEW_RELEASED) {
   return created ? created < new Date(releasedAt) : true
 }
 
+// --- Trial helpers -------------------------------------------------------------
+
+/** Whole days left on a trial, floored at 0. */
+export function trialDaysRemaining(trialEnd, now = new Date()) {
+  const end = parseServerDate(trialEnd)
+  if (!end) return null
+  return Math.max(0, Math.ceil((end.getTime() - now.getTime()) / 86400000))
+}
+
+/**
+ * Did this trial start on an account that already existed?
+ *
+ * A new signup gets its trial at registration, so trial_start and created_at are
+ * the same moment. A pre-launch account gets one on its next login instead
+ * (roles.ensure_trial_started), which is days-to-years after it was created —
+ * and the oldest of them have no created_at at all, since the field postdates
+ * them. Those people have been using LinkJoin for a while, so greeting them with
+ * "Welcome to LinkJoin" reads as if we have forgotten them.
+ */
+export function isTrialForExistingAccount(user) {
+  if (!user) return false
+  if (!user.created_at) return true // predates the field, so certainly not new
+  const created = parseServerDate(user.created_at)
+  const started = parseServerDate(user.trial_start)
+  if (!created || !started) return false
+  return started.getTime() - created.getTime() > 86400000 // more than a day apart
+}
+
 // --- Timezone-change prompt ---------------------------------------------------
 // When this device's IANA timezone differs from the saved one, Links.jsx offers to
 // shift the user's link times. Declining used to be React state only, so the same

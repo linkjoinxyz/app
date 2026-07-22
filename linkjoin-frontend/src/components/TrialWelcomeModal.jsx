@@ -1,5 +1,6 @@
 import { useModalClose } from '../hooks/useModalClose.js'
 import { usersApi } from '../api/users.js'
+import { trialDaysRemaining } from '../utils.js'
 import '../styles/modal.css'
 
 const TRIAL_FEATURES = [
@@ -11,19 +12,9 @@ const TRIAL_FEATURES = [
   'Attendance history & streaks',
 ]
 
-function daysRemaining(trialEnd) {
-  if (!trialEnd) return 14
-  // Backend serializes Mongo-read datetimes without a timezone suffix (naive),
-  // even though they're stored as UTC — force UTC interpretation here so this
-  // doesn't drift by the user's UTC offset.
-  const iso = /[zZ]|[+-]\d\d:\d\d$/.test(trialEnd) ? trialEnd : `${trialEnd}Z`
-  const ms = new Date(iso).getTime() - Date.now()
-  return Math.max(1, Math.ceil(ms / (24 * 60 * 60 * 1000)))
-}
-
-export default function TrialWelcomeModal({ trialEnd, onClose }) {
+export default function TrialWelcomeModal({ trialEnd, existingAccount = false, onClose }) {
   const { closing, handleClose } = useModalClose(onClose)
-  const days = daysRemaining(trialEnd)
+  const days = trialDaysRemaining(trialEnd) || 14
 
   function dismiss() {
     usersApi.markTrialWelcomeSeen().catch(() => {})
@@ -37,15 +28,18 @@ export default function TrialWelcomeModal({ trialEnd, onClose }) {
           <img src="/images/crown.svg" alt="" width="22" height="22" />
         </div>
         <div className="whats-new-header">
-          <div className="upgrade-modal-eyebrow">Welcome to LinkJoin</div>
+          <div className="upgrade-modal-eyebrow">
+            {existingAccount ? 'A gift for being here early' : 'Welcome to LinkJoin'}
+          </div>
           <div className="modal-title" style={{ margin: 0, paddingLeft: 0 }}>
             Your {days}-day free trial has started
           </div>
         </div>
 
         <p className="whats-new-desc" style={{ padding: '0 4px 8px' }}>
-          You have full access to every Premium feature for the next {days} days, no card
-          required. Here's what's included:
+          {existingAccount
+            ? `Thanks for using LinkJoin. We've added Premium features since you signed up, so here's ${days} days to try all of them, no card required:`
+            : `You have full access to every Premium feature for the next ${days} days, no card required. Here's what's included:`}
         </p>
 
         <ul className="whats-new-list trial-welcome-list">
