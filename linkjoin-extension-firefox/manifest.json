@@ -1,7 +1,7 @@
 {
   "name": "LinkJoin",
   "description": "Organize and automatically open virtual meetings.",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "manifest_version": 3,
   "browser_specific_settings": {
     "gecko": {

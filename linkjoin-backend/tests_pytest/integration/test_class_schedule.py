@@ -71,8 +71,11 @@ async def student():
 async def cls_with_link(teacher, student):
     """A class, the teacher's link, and the copy pushed to the student."""
     class_id = secrets.token_urlsafe(12)
-    link_id = 995001
-    student_link_id = 995002
+    # Random rather than fixed: every run shares one Atlas database, so two
+    # concurrent runs (two CI jobs, or CI plus a local run) collided on hardcoded
+    # ids and each teardown deleted the other's fixture links mid-test.
+    link_id = secrets.randbelow(9_000_000) + 1_000_000
+    student_link_id = link_id + 1
 
     await motor_db.links.insert_one({
         "username": teacher["username"], "id": link_id, "name": "Homeroom",

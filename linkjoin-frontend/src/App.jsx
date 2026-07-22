@@ -51,6 +51,7 @@ import Notes from './pages/Notes.jsx'
 import AdminOnboarding from './pages/AdminOnboarding.jsx'
 import { Analytics } from '@vercel/analytics/react'
 import IncidentBanner from './components/IncidentBanner.jsx'
+import MfaSetupBanner from './components/MfaSetupBanner.jsx'
 import Status from './pages/Status.jsx'
 import ApiDocs from './pages/ApiDocs.jsx'
 import SLA from './pages/SLA.jsx'
@@ -119,7 +120,7 @@ function PlatformAdminRoute({ children }) {
 
 function AppInner() {
   useDarkMode()
-  return <IncidentBanner />
+  return <><MfaSetupBanner /><IncidentBanner /></>
 }
 
 export default function App() {

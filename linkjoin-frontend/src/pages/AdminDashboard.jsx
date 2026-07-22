@@ -2659,7 +2659,7 @@ function TeacherView() {
   const [activeTab, setActiveTab] = useState('classes')
 
   useEffect(() => {
-    apiGet('/classes').then(cls => setClasses(cls)).finally(() => setLoading(false))
+    apiGet('/classes').then(cls => setClasses(cls)).catch(() => {}).finally(() => setLoading(false))
   }, [])
 
   function handleUpdate(fresh) {
@@ -3584,7 +3584,7 @@ function SchoolAdminView() {
   const parentCsvFileRef = useRef(null)
 
   useEffect(() => {
-    apiGet('/classes').then(cls => setClasses(cls)).finally(() => setLoading(false))
+    apiGet('/classes').then(cls => setClasses(cls)).catch(() => {}).finally(() => setLoading(false))
     apiGet('/interventions').then(ivs => setOpenCases(Array.isArray(ivs) ? ivs : [])).catch(() => {})
     if (orgId) {
       apiGet(`/orgs/${orgId}`).then(org => { setBrandName(org.brand_name || ''); setOrgName(org.name || '') }).catch(() => {})
