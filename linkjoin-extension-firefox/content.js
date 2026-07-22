@@ -2,6 +2,21 @@ const BASE_URL = 'https://linkjoin.xyz'
 
 const MEETING_RE = /https?:\/\/(?:[a-z0-9-]+\.)?(?:zoom\.us\/j\/|meet\.google\.com\/[a-z-]{3,}|teams\.microsoft\.com\/l\/meetup-join\/|webex\.com\/meet\/|gotomeeting\.com\/join\/)[^\s"'<>]*/i
 
+// AI meeting detection is Premium. Resolved once per page rather than per email.
+// The background worker caches the answer; the server still enforces.
+let _isPremium = null
+async function isPremium() {
+    if (_isPremium === null) {
+        try {
+            const res = await chrome.runtime.sendMessage({ type: 'getIsPremium' })
+            _isPremium = Boolean(res?.isPremium)
+        } catch {
+            _isPremium = false
+        }
+    }
+    return _isPremium
+}
+
 const DAYS_ALL = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 const REPEAT_OPTIONS = ['never', 'week', 'month', '2 times', '3 times', '4 times']
 const REPEAT_LABELS = {
@@ -146,6 +161,12 @@ async function processEmailBody(bodyEl) {
 
         const subject = getEmailSubject()
         const text = bodyEl.textContent || ''
+        // Premium gate: skip the scan entirely for a free account and go straight
+        // to the overlay with the detected link. Adding a meeting by hand is free.
+        if (!(await isPremium())) {
+            showOverlay({}, detectedLink)
+            return
+        }
         showAnalyzing()
 
         const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone
@@ -246,6 +267,12 @@ if (IS_OUTLOOK) {
 
             const subject = getOutlookSubject()
             const text = bodyEl.textContent || ''
+            // Premium gate: skip the scan entirely for a free account and go straight
+            // to the overlay with the detected link. Adding a meeting by hand is free.
+            if (!(await isPremium())) {
+                showOverlay({}, detectedLink)
+                return
+            }
             showAnalyzing()
 
             const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone

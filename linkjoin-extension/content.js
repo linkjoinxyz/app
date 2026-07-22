@@ -5,6 +5,26 @@ const BASE_URL = 'https://linkjoin.xyz'
 const MEETING_PATH_SRC = '(?:[a-z0-9-]+\\.)*(?:zoom\\.us\\/(?:j|my|w|s|webinar)\\/|meet\\.google\\.com\\/[a-z-]{3,}|teams\\.microsoft\\.com\\/l\\/meetup-join\\/|webex\\.com\\/meet\\/|gotomeeting\\.com\\/join\\/)[^\\s"\'<>]*'
 const MEETING_RE = new RegExp('https?:\\/\\/' + MEETING_PATH_SRC, 'i')
 
+// AI meeting detection is Premium. Resolved once per page rather than per email:
+// this content script runs on every Gmail/Outlook thread, and a free account
+// should never see an "Analyzing…" spinner that can only end in a 403.
+// The background worker caches the answer; the server still enforces.
+let _isPremium = null
+async function isPremium() {
+    if (_isPremium === null) {
+        try {
+            const res = await chrome.runtime.sendMessage({ type: 'getIsPremium' })
+            _isPremium = Boolean(res?.isPremium)
+        } catch {
+            // Extension context invalidated (an update mid-session), or the
+            // worker is asleep. Treat as not entitled: the worst case is a free
+            // feature set, not a broken scan.
+            _isPremium = false
+        }
+    }
+    return _isPremium
+}
+
 const DAYS_ALL = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 const REPEAT_OPTIONS = ['never', 'week', 'month', '2 times', '3 times', '4 times']
 const REPEAT_LABELS = {
@@ -166,6 +186,15 @@ async function processEmailBody(bodyEl) {
         try { linksData = await chrome.runtime.sendMessage({ type: 'getLinks' }) } catch {}
         if (linksData?.links?.some(l => l.link && urlsMatch(l.link, detectedLink))) return
 
+        // AI extraction is Premium. For a free account, skip the scan entirely
+        // and go straight to the overlay with the detected link: adding a meeting
+        // by hand is free, so this keeps that working without an "Analyzing…"
+        // spinner that can only end in a 403 and an upsell on every thread.
+        if (!(await isPremium())) {
+            showOverlay({}, detectedLink)
+            return
+        }
+
         const subject = getEmailSubject()
         const text = bodyEl.textContent || ''
         showAnalyzing()
@@ -265,6 +294,12 @@ if (IS_OUTLOOK) {
             if (linksData?.links?.some(l => l.link && urlsMatch(l.link, detectedLink))) return
 
             if (document.getElementById('lj-overlay') || document.getElementById('lj-analyzing')) return
+
+            // Premium gate, same as the Gmail path above.
+            if (!(await isPremium())) {
+                showOverlay({}, detectedLink)
+                return
+            }
 
             const subject = getOutlookSubject()
             const text = bodyEl.textContent || ''
