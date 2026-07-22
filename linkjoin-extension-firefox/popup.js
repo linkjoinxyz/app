@@ -504,7 +504,7 @@ async function renderDashboard() {
             </button>` : ''}
         </div>
         <div class="user-email">${escHtml(auth.email)}</div>
-        <button class="scan-btn" id="scan-btn"${isPremium ? '' : ' disabled'}>
+        <button class="scan-btn${isPremium ? '' : ' scan-btn--locked'}" id="scan-btn"${isPremium ? '' : ' aria-disabled="true" title="Upgrade to scan meetings"'}>
             <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
                 <circle cx="6" cy="6" r="4.5"/>
                 <line x1="9.5" y1="9.5" x2="13" y2="13"/>
@@ -522,10 +522,12 @@ async function renderDashboard() {
     })
     document.getElementById('logout-btn').addEventListener('click', handleLogout)
     document.getElementById('settings-btn')?.addEventListener('click', renderSettings)
-    document.getElementById('scan-btn')?.addEventListener('click', handleScan)
-    document.getElementById('scan-upgrade')?.addEventListener('click', () => {
-        chrome.tabs.create({ url: `${APP_URL}/pricing` })
-    })
+    // Locked accounts get the pricing page instead of the scan, so the button is
+    // an upgrade affordance rather than a dead control. handleScan is never
+    // reached without entitlement, so the 403 path stays closed.
+    const openPricing = () => chrome.tabs.create({ url: `${APP_URL}/pricing` })
+    document.getElementById('scan-btn')?.addEventListener('click', isPremium ? handleScan : openPricing)
+    document.getElementById('scan-upgrade')?.addEventListener('click', openPricing)
 
     const data = await apiFetch('/links')
     const list = document.getElementById('meetings-list')

@@ -647,11 +647,17 @@ input:focus {
    rather than nothing at all: hiding it entirely left no in-product signal that
    the feature exists. The button is genuinely disabled, so the click cannot
    reach handleScan and take a 403 back. */
-.scan-btn:disabled {
+.scan-btn--locked {
     opacity: 0.45;
-    cursor: default;
+    /* The "no entry" cursor. Note this needs the button to NOT carry the real
+       `disabled` attribute: browsers suppress cursor styles on disabled controls,
+       and a disabled button fires no click, which would break the upgrade route. */
+    cursor: not-allowed;
 }
-.scan-btn:hover:not(:disabled) {
+.scan-btn--locked:hover {
+    opacity: 0.6;
+}
+.scan-btn:hover:not(.scan-btn--locked) {
     border-color: var(--lightblue);
 }
 .scan-upgrade {
