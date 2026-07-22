@@ -225,6 +225,20 @@ DAY_TO_WEEKDAY = {"Mon": 0, "Tue": 1, "Wed": 2, "Thu": 3, "Fri": 4, "Sat": 5, "S
 _WEEKDAY_TO_DAY = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")  # index == date.weekday()
 
 
+def lookback_cutoff(now: datetime, days: int) -> datetime:
+    """Start of the lookback window, floored to midnight.
+
+    expected_session_dates works in whole calendar days, so a record query using
+    the raw instant disagrees with it on the oldest day: a session held earlier
+    in the day than the current clock time falls outside `opened_at >= cutoff`
+    while its date is still listed as expected. Every dashboard then showed a
+    phantom absence for every student on the oldest visible day, which ticks
+    forward daily. Flooring makes the window "the last N calendar days", which is
+    what the date-based half already assumed.
+    """
+    return (now - timedelta(days=days)).replace(hour=0, minute=0, second=0, microsecond=0)
+
+
 def _override_map(cls: dict) -> dict[str, dict]:
     """Latest override per date. Last entry wins, so a duplicate left by a legacy
     write or a racing pull-then-push resolves deterministically rather than

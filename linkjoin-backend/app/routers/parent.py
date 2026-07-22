@@ -9,7 +9,7 @@ from app.routers.attendance import (
     _TARDY_THRESHOLD_MINUTES,
     _record_date_str,
 )
-from app.utils import get_blackout_set, expected_session_dates
+from app.utils import get_blackout_set, expected_session_dates, lookback_cutoff
 
 router = APIRouter(prefix="/parent", tags=["parent"])
 
@@ -101,7 +101,7 @@ async def get_child_classes(student_id: str, user: dict = Depends(get_confirmed_
     student_email = student["username"]
 
     now = datetime.now(timezone.utc)
-    cutoff = now - timedelta(days=_RATE_LOOKBACK_DAYS)
+    cutoff = lookback_cutoff(now, _RATE_LOOKBACK_DAYS)
 
     result = []
     async for cls in motor_db.classes.find({"student_ids": student_id}, {"_id": 0}):
@@ -166,7 +166,7 @@ async def get_child_attendance(student_id: str, limit: int = 20, offset: int = 0
     student_email = student["username"]
 
     now = datetime.now(timezone.utc)
-    cutoff = now - timedelta(days=_LOOKBACK_DAYS)
+    cutoff = lookback_cutoff(now, _LOOKBACK_DAYS)
 
     def _ts(r: dict):
         t = r.get("recorded_at") or r.get("opened_at")

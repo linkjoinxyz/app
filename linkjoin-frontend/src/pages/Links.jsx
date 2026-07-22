@@ -20,7 +20,7 @@ import WhatsNewModal from '../components/WhatsNewModal.jsx'
 import GrandfatheredThanksModal from '../components/GrandfatheredThanksModal.jsx'
 import TrialWelcomeModal from '../components/TrialWelcomeModal.jsx'
 import TeacherSetupModal from '../components/TeacherSetupModal.jsx'
-import { rememberTzPromptDeclined, isTzPromptDeclined, clearTzPromptDeclined } from '../utils.js'
+import { rememberTzPromptDeclined, isTzPromptDeclined, clearTzPromptDeclined, isReturningUser } from '../utils.js'
 import '../styles/links.css'
 import '../styles/new_links.css'
 import '../styles/calendar-panel.css'
@@ -252,7 +252,12 @@ const [showDeleted, setShowDeleted] = useState(false)
         setShowTrialWelcome(true)
       } else if (u && u.premium_status === 'grandfathered' && !u.grandfathered_note_seen) {
         setShowGrandfatheredThanks(true)
-      } else if (u && !u.whats_new_seen) {
+      } else if (u && !u.whats_new_seen && isReturningUser(u)) {
+        // Returning users only. Nothing is "new" to someone who just got their
+        // account: personal signups are covered by the trial-welcome modal (which
+        // marks whats_new_seen too), but institutional users are created by the
+        // import and invite flows with neither flag set, so every student,
+        // teacher and admin a school onboards used to get this on first login.
         setShowWhatsNew(true)
       }
       if (u && !u.popup_check_done && window.innerWidth > 768) runPopupCheck()
