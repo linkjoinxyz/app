@@ -8,6 +8,7 @@ loading, since env vars set here take precedence over .env file values but we
 only set the one key that needs to differ for tests.
 """
 import os
+import secrets
 from pathlib import Path
 
 
@@ -31,6 +32,19 @@ from httpx import AsyncClient, ASGITransport
 from app.main import app
 from app.database import motor_db
 from app.auth import get_confirmed_user, get_current_user
+
+# Unique per pytest session. Test modules that tear down by identifier prefix
+# must include this in both the identifiers they create and the regex they
+# delete by.
+#
+# Every run shares one Atlas database (isolated by name, not by run), so a
+# teardown keyed on a static prefix like "^rewards-test-" deletes the in-flight
+# fixtures of any OTHER run executing at the same time — a second CI job, or CI
+# overlapping a developer's local pytest. That produced exactly the failures
+# seen on main: rewards lost its attendance rows mid-test and reported 0
+# sessions, and the scheduler test lost the class it was asserting on. Both
+# passed in isolation and on re-run, which is what a cross-run delete looks like.
+RUN_ID = secrets.token_hex(4)
 
 
 @pytest.fixture(scope="session")

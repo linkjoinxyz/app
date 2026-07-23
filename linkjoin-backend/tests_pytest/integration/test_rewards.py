@@ -13,19 +13,20 @@ from datetime import datetime, timedelta, timezone
 import pytest
 
 from app.database import motor_db
+from tests_pytest.conftest import RUN_ID
 
 
 @pytest.fixture(autouse=True)
 async def _cleanup():
     yield
-    await motor_db.attendance.delete_many({"student_email": {"$regex": "^rewards-test-"}})
-    await motor_db.login.delete_many({"username": {"$regex": "^rewards-test-"}})
+    await motor_db.attendance.delete_many({"student_email": {"$regex": f"^rewards-test-{RUN_ID}-"}})
+    await motor_db.login.delete_many({"username": {"$regex": f"^rewards-test-{RUN_ID}-"}})
 
 
 @pytest.fixture
 async def institutional_student_user():
     doc = {
-        "username": f"rewards-test-{secrets.token_hex(4)}@test.lincoln.edu",
+        "username": f"rewards-test-{RUN_ID}-{secrets.token_hex(4)}@test.lincoln.edu",
         "user_id": secrets.token_urlsafe(12),
         "account_type": "institutional",
         "role": "student",
@@ -41,7 +42,7 @@ async def institutional_student_user():
 @pytest.fixture
 async def personal_student_no_premium():
     doc = {
-        "username": f"rewards-test-{secrets.token_hex(4)}@example.com",
+        "username": f"rewards-test-{RUN_ID}-{secrets.token_hex(4)}@example.com",
         "user_id": secrets.token_urlsafe(12),
         "account_type": "personal",
         "role": "student",

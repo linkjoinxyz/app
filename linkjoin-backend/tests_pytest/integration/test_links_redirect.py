@@ -7,9 +7,13 @@ from datetime import datetime, timezone
 import pytest
 
 from app.database import motor_db
+from tests_pytest.conftest import RUN_ID
 from app.encryption import encrypt
 
 FIXED_SESSION_START = datetime(2026, 3, 2, 14, 0, 0, tzinfo=timezone.utc)  # a Monday
+
+# Per-run, so a concurrent run's teardown cannot delete this run's links.
+_OWNER = f"owner-{RUN_ID}@test.lincoln.edu"
 
 
 @pytest.fixture(autouse=True)
@@ -28,14 +32,14 @@ def _fixed_session_start(monkeypatch):
 @pytest.fixture(autouse=True)
 async def _cleanup_test_classes_and_links():
     yield
-    await motor_db.classes.delete_many({"class_id": {"$regex": "^class-"}})
-    await motor_db.links.delete_many({"username": "owner@test.lincoln.edu"})
-    await motor_db.attendance.delete_many({"class_id": {"$regex": "^class-"}})
-    await motor_db.audit_logs.delete_many({"resource_id": {"$regex": "^class-"}})
+    await motor_db.classes.delete_many({"class_id": {"$regex": f"^class-{RUN_ID}-"}})
+    await motor_db.links.delete_many({"username": _OWNER})
+    await motor_db.attendance.delete_many({"class_id": {"$regex": f"^class-{RUN_ID}-"}})
+    await motor_db.audit_logs.delete_many({"resource_id": {"$regex": f"^class-{RUN_ID}-"}})
 
 
 async def _make_class(student_ids, teacher_id="teacher-fixture"):
-    class_id = f"class-{secrets.token_hex(6)}"
+    class_id = f"class-{RUN_ID}-{secrets.token_hex(6)}"
     doc = {
         "class_id": class_id,
         "name": "Algebra II",
@@ -54,7 +58,7 @@ async def _make_link(*, class_id=None, class_name=None):
     doc = {
         "slug": slug,
         "id": secrets.randbelow(10_000_000),
-        "username": "owner@test.lincoln.edu",
+        "username": _OWNER,
         "link": encrypt("https://zoom.us/j/1234567890"),
         "name": "Class Meeting",
         "class_id": class_id,

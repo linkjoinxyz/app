@@ -371,11 +371,12 @@ def delete_text_job(link: dict) -> None:
             scheduler.remove_job(job_id)
 
 
-async def check_absences() -> None:
+async def check_absences(now_utc=None) -> None:
     from datetime import datetime, timezone, timedelta
     from app.database import motor_db
 
-    now_utc = datetime.now(timezone.utc)
+    # now_utc is injectable so tests can pin it; APScheduler calls with no args.
+    now_utc = now_utc or datetime.now(timezone.utc)
     org_cache: dict = {}
 
     async for cls in motor_db.classes.find({"family_alerts": True}):
@@ -522,12 +523,13 @@ async def check_absences() -> None:
             log.exception("[absence] check_absences failed for class %s", cls.get("class_id"))
 
 
-async def send_class_reminders() -> None:
+async def send_class_reminders(now_utc=None) -> None:
     """Every-5-min job: text/email parents who opted in, ~10 min before their child's class."""
     from datetime import datetime, timezone
     from app.database import motor_db
 
-    now_utc = datetime.now(timezone.utc)
+    # now_utc is injectable so tests can pin it; APScheduler calls with no args.
+    now_utc = now_utc or datetime.now(timezone.utc)
     org_cache: dict = {}
 
     # ponytail: family_alerts is a teacher-facing absence-alert switch (see
