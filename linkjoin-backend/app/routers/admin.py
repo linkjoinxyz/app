@@ -7,6 +7,7 @@ import secrets
 import string
 from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
+from pymongo.errors import DuplicateKeyError
 from fastapi.responses import StreamingResponse
 from app.auth import get_confirmed_user
 from app.config import get_settings
@@ -335,18 +336,25 @@ async def create_admin_account(body: dict, background_tasks: BackgroundTasks, us
     if existing:
         raise HTTPException(status_code=409, detail="An account with that email already exists")
     temp_pw = _gen_temp_password()
-    await motor_db.login.insert_one({
-        "username": email,
-        "password": _hasher.hash(temp_pw),
-        "user_id": gen_id(),
-        "account_type": "institutional",
-        "role": "school_admin",
-        "org_id": None,
-        "confirmed": "true",
-        "must_change_password": True,
-        "onboarding_done": False,
-        "created_at": datetime.now(timezone.utc),
-    })
+    # The find_one above is a check, not a lock: a second create for the same
+    # email can slip between it and this insert. The unique index on
+    # login.username then rejects the loser, and rather than 500 we ask the admin
+    # to retry — by then the find_one guard will see the account and 409 cleanly.
+    try:
+        await motor_db.login.insert_one({
+            "username": email,
+            "password": _hasher.hash(temp_pw),
+            "user_id": gen_id(),
+            "account_type": "institutional",
+            "role": "school_admin",
+            "org_id": None,
+            "confirmed": "true",
+            "must_change_password": True,
+            "onboarding_done": False,
+            "created_at": datetime.now(timezone.utc),
+        })
+    except DuplicateKeyError:
+        raise HTTPException(status_code=409, detail="That email was just registered. Please try again.")
     login_url = f"{_settings.frontend_url}/login"
     html = f"""
 <div style="font-family:sans-serif;max-width:520px;margin:0 auto;background:#0c1e32;padding:40px 32px;border-radius:12px">
@@ -451,7 +459,12 @@ async def import_staff(
             "onboarding_done": False,
             "created_at": datetime.now(timezone.utc),
         }
-        await motor_db.login.insert_one(new_user)
+        try:
+            await motor_db.login.insert_one(new_user)
+        except DuplicateKeyError:
+            results.append({"email": email, "status": "error",
+                            "error": "Created by another request. Please retry this row."})
+            continue
         html = _welcome_email_html(email, org_name, role, temp_pw, app_url)
         background_tasks.add_task(send_email, html, f"Welcome to {org_name} on LinkJoin", email)
         results.append({"email": email, "status": "created"})
@@ -549,7 +562,14 @@ async def import_org_members(
                 "granted_at": None,
                 "grant_ip": None,
             }
-        await motor_db.login.insert_one(new_user)
+        try:
+            await motor_db.login.insert_one(new_user)
+        except DuplicateKeyError:
+            # Raced with a concurrent import/signup after the find_one guard above.
+            # Flag the row so the admin can retry it rather than aborting the batch.
+            results.append({"email": email, "status": "error",
+                            "error": "Created by another request. Please retry this row."})
+            continue
         await log_audit(user["username"], "admin.import_member_created", detail={"email": email, "role": role, "org_id": org_id})
 
         html = _welcome_email_html(email, org_name, role, temp_pw, app_url)
@@ -629,21 +649,30 @@ async def import_org_parents(
         if not existing_parent:
             temp_pw = _gen_temp_password()
             parent_user_id = gen_id()
-            await motor_db.login.insert_one({
-                "username": parent_email,
-                "password": _hasher.hash(temp_pw),
-                "user_id": parent_user_id,
-                "account_type": "institutional",
-                "role": "parent",
-                "org_id": org_id,
-                "confirmed": "true",
-                "must_change_password": True,
-                "created_at": datetime.now(timezone.utc),
-                "onboarding_done": True,
-                "popup_check_done": "false",
-                "offset": 0,
-                "notes": "",
-            })
+            try:
+                await motor_db.login.insert_one({
+                    "username": parent_email,
+                    "password": _hasher.hash(temp_pw),
+                    "user_id": parent_user_id,
+                    "account_type": "institutional",
+                    "role": "parent",
+                    "org_id": org_id,
+                    "confirmed": "true",
+                    "must_change_password": True,
+                    "created_at": datetime.now(timezone.utc),
+                    "onboarding_done": True,
+                    "popup_check_done": "false",
+                    "offset": 0,
+                    "notes": "",
+                })
+            except DuplicateKeyError:
+                results.append({
+                    "parent_email": parent_email,
+                    "student_email": student_email,
+                    "status": "error",
+                    "error": "Created by another request. Please retry this row.",
+                })
+                continue
             html = _welcome_email_html(parent_email, org_name, "parent", temp_pw, app_url)
             background_tasks.add_task(send_email, html, f"Welcome to {org_name} on LinkJoin - Parent Portal", parent_email)
             status = "created"

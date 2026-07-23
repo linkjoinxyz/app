@@ -227,3 +227,38 @@ async def test_can_still_create_brand_new_staff_account(as_user, caller_admin, c
         assert created["org_id"] == caller_org["org_id"]
     finally:
         await motor_db.login.delete_one({"username": email})
+
+
+async def test_import_staff_race_is_reported_per_row_not_fatal(as_user, caller_admin, caller_org, monkeypatch):
+    """With the unique username index, a concurrent create landing between a row's
+    find_one and its insert raises DuplicateKeyError. The batch must flag that row
+    as a retryable error and keep going — one raced row cannot abort the import."""
+    from pymongo.errors import DuplicateKeyError
+    from motor.motor_asyncio import AsyncIOMotorCollection
+
+    raced = f"raced-{secrets.token_hex(4)}@test.import.edu"
+    ok = f"ok-{secrets.token_hex(4)}@test.import.edu"
+    orig_insert = AsyncIOMotorCollection.insert_one
+
+    async def racing_insert(self, doc, *a, **k):
+        if self.name == "login" and doc.get("username") == raced:
+            raise DuplicateKeyError("E11000 duplicate key: username")
+        return await orig_insert(self, doc, *a, **k)
+
+    monkeypatch.setattr(AsyncIOMotorCollection, "insert_one", racing_insert)
+    try:
+        resp = await as_user(caller_admin).post(
+            f"/admin/orgs/{caller_org['org_id']}/import-staff",
+            json={"rows": [
+                {"email": raced, "role": "teacher"},
+                {"email": ok, "role": "teacher"},
+            ]},
+        )
+        assert resp.status_code == 200, resp.text
+        results = {r["email"]: r for r in resp.json()["results"]}
+        assert results[raced]["status"] == "error"
+        assert "retry" in results[raced]["error"].lower()
+        assert results[ok]["status"] == "created"  # the batch kept going past the race
+    finally:
+        monkeypatch.undo()
+        await motor_db.login.delete_many({"username": {"$in": [raced, ok]}})

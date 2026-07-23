@@ -7,6 +7,7 @@ import httpx
 from argon2 import PasswordHasher as _PH
 from icalendar import Calendar
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Header, Query
+from pymongo.errors import DuplicateKeyError
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from app.auth import get_confirmed_user, get_current_user
 from app.database import motor_db
@@ -146,15 +147,23 @@ async def create_org(body: CreateOrgRequest, background_tasks: BackgroundTasks, 
                     "org_name": admin_email.split("@")[1],
                     "created_at": datetime.now(timezone.utc),
                 }
-                await motor_db.login.insert_one(user_doc)
-                login_url = f"{_settings.app_base_url}/login"
-                background_tasks.add_task(
-                    send_email,
-                    _admin_welcome_email(body.name, admin_email, temp_pw, login_url),
-                    f"Your LinkJoin admin account for {body.name}",
-                    admin_email,
-                )
-                admin_created = True
+                # Best-effort: the org is already created above, so a race on the
+                # admin account (unique username index) must not fail org creation.
+                # The concurrent request created the account; admin_created stays
+                # False for this call and no duplicate welcome email goes out.
+                try:
+                    await motor_db.login.insert_one(user_doc)
+                except DuplicateKeyError:
+                    pass
+                else:
+                    login_url = f"{_settings.app_base_url}/login"
+                    background_tasks.add_task(
+                        send_email,
+                        _admin_welcome_email(body.name, admin_email, temp_pw, login_url),
+                        f"Your LinkJoin admin account for {body.name}",
+                        admin_email,
+                    )
+                    admin_created = True
 
     result = {k: v for k, v in doc.items() if k != "_id"}
     result["admin_created"] = admin_created
