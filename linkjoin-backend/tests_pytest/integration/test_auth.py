@@ -123,3 +123,58 @@ async def test_unverified_google_email_is_rejected(client, fake_google_userinfo)
     assert resp.status_code == 400
 
     assert await motor_db.login.find_one({"username": email}) is None
+
+
+async def test_ensure_unique_username_index_migrates_and_is_idempotent():
+    """_ensure_unique_username_index (run in the app's lifespan) drops the legacy
+    non-unique index and builds a unique one, so the concurrent-signup race below
+    is caught at the DB rather than silently producing two docs for one email.
+    Called directly because httpx's ASGITransport does not fire lifespan events."""
+    from app.main import _ensure_unique_username_index
+
+    await _ensure_unique_username_index()
+    info = await motor_db.login.index_information()
+    unique = [
+        name for name, spec in info.items()
+        if spec.get("key") == [("username", 1)] and spec.get("unique")
+    ]
+    assert unique, f"login.username is not a unique index after migration: {info}"
+    # No duplicate non-unique index left behind on the same key.
+    assert "username_1" not in info or info["username_1"].get("unique")
+    # Idempotent: a second run sees the unique index already present and no-ops.
+    await _ensure_unique_username_index()
+
+
+async def test_google_signup_race_converges_on_one_account(client, fake_google_userinfo, monkeypatch):
+    """Two concurrent first-time Google sign-ins for the same address both pass
+    the find_one check; the loser's insert raises DuplicateKeyError. The right
+    answer is not to 500 but to converge on the winner's document — it is the same
+    person. Simulated by making the insert lose the race deterministically."""
+    from pymongo.errors import DuplicateKeyError
+    from motor.motor_asyncio import AsyncIOMotorCollection
+
+    email = "google-race@test.lincoln.edu"
+    fake_google_userinfo(email)
+    orig_insert = AsyncIOMotorCollection.insert_one
+
+    async def racing_insert(self, doc, *a, **k):
+        # Only the login insert for this email loses the race; everything else
+        # (audit, analytics, other collections) inserts normally.
+        if self.name == "login" and doc.get("username") == email:
+            await orig_insert(self, {**doc, "user_id": "race-winner-uid"})
+            raise DuplicateKeyError("E11000 duplicate key: username")
+        return await orig_insert(self, doc, *a, **k)
+
+    monkeypatch.setattr(AsyncIOMotorCollection, "insert_one", racing_insert)
+    try:
+        resp = await client.post("/auth/google-token", json={"access_token": "fake-token"})
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["email"] == email
+
+        monkeypatch.undo()  # restore before asserting on the DB
+        docs = [d async for d in motor_db.login.find({"username": email})]
+        assert len(docs) == 1, "must not create a second doc for the same email"
+        assert docs[0]["user_id"] == "race-winner-uid", "converged on the winner"
+    finally:
+        monkeypatch.undo()
+        await motor_db.login.delete_many({"username": email})

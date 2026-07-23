@@ -133,6 +133,36 @@ async def _soft_index(*coros) -> None:
             log.warning("[startup] index creation skipped: %s", exc)
 
 
+async def _ensure_unique_username_index() -> None:
+    """Migrate login.username from the non-unique username_1 index to a unique one.
+
+    MongoDB rejects a second index on the same key pattern even under a different
+    name, so the non-unique index has to be dropped before the unique one can be
+    built (a sub-millisecond window at boot with no username index). Idempotent:
+    returns immediately once a unique index on username exists, so re-runs and
+    fresh databases are no-ops. A failed build — a duplicate slipped in — is
+    logged loudly rather than swallowed, since a silently-absent uniqueness
+    constraint is exactly what let the duplicates accumulate.
+    """
+    info = await motor_db.login.index_information()
+    if any(spec.get("key") == [("username", 1)] and spec.get("unique") for spec in info.values()):
+        return  # already migrated
+    for name, spec in info.items():
+        if spec.get("key") == [("username", 1)] and not spec.get("unique"):
+            try:
+                await motor_db.login.drop_index(name)
+            except Exception as exc:
+                log.warning("[startup] could not drop non-unique username index %s: %s", name, exc)
+    try:
+        await motor_db.login.create_index("username", unique=True, name="username_unique")
+        log.info("[startup] built unique index on login.username")
+    except Exception as exc:
+        log.error(
+            "[startup] could not build unique index on login.username "
+            "(duplicates present?): %s", exc,
+        )
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Ensure hot-path indexes exist (idempotent). Independent, so run concurrently
@@ -151,7 +181,13 @@ async def lifespan(app: FastAPI):
         motor_db.links.create_index([("username", 1), ("id", 1)]),
         motor_db.links.create_index("share_id", sparse=True),
         motor_db.links.create_index("slug", unique=True, sparse=True),
-        motor_db.login.create_index("username"),
+        # login.username used to be a plain index (username_1); a concurrent-signup
+        # race could insert two docs for one email, after which every
+        # find_one({"username"}) returned an arbitrary one. This migrates it to
+        # unique. create_index cannot alter an existing index's options in place
+        # (IndexOptionsConflict), so build the unique one under a new name, then
+        # drop the old non-unique one. Idempotent and boot-safe.
+        _ensure_unique_username_index(),
         motor_db.bookmarks.create_index("username"),
         motor_db.bookmarks.create_index([("username", 1), ("id", 1)]),
         motor_db.pending_links.create_index("username"),
