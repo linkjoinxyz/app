@@ -11,16 +11,17 @@ from datetime import datetime, timedelta, timezone
 import pytest
 
 from app.database import motor_db
+from tests_pytest.conftest import RUN_ID
 
 
 @pytest.fixture(autouse=True)
 async def _cleanup():
     yield
-    await motor_db.login.delete_many({"user_id": {"$regex": "^pa-test-"}})
-    await motor_db.classes.delete_many({"class_id": {"$regex": "^pa-test-"}})
-    await motor_db.orgs.delete_many({"org_id": {"$regex": "^pa-test-"}})
-    await motor_db.attendance.delete_many({"class_id": {"$regex": "^pa-test-"}})
-    await motor_db.parent_links.delete_many({"student_user_id": {"$regex": "^pa-test-"}})
+    await motor_db.login.delete_many({"user_id": {"$regex": f"^pa-test-{RUN_ID}-"}})
+    await motor_db.classes.delete_many({"class_id": {"$regex": f"^pa-test-{RUN_ID}-"}})
+    await motor_db.orgs.delete_many({"org_id": {"$regex": f"^pa-test-{RUN_ID}-"}})
+    await motor_db.attendance.delete_many({"class_id": {"$regex": f"^pa-test-{RUN_ID}-"}})
+    await motor_db.parent_links.delete_many({"student_user_id": {"$regex": f"^pa-test-{RUN_ID}-"}})
 
 
 def _today_abbr():
@@ -28,9 +29,9 @@ def _today_abbr():
 
 
 async def _make_parent_and_student():
-    parent_id = f"pa-test-{secrets.token_hex(4)}"
-    student_id = f"pa-test-{secrets.token_hex(4)}"
-    student_email = f"pa-test-{secrets.token_hex(4)}@example.com"
+    parent_id = f"pa-test-{RUN_ID}-{secrets.token_hex(4)}"
+    student_id = f"pa-test-{RUN_ID}-{secrets.token_hex(4)}"
+    student_email = f"pa-test-{RUN_ID}-{secrets.token_hex(4)}@example.com"
     await motor_db.login.insert_one({"user_id": student_id, "username": student_email, "name": "Kid"})
     await motor_db.parent_links.insert_one({"parent_user_id": parent_id, "student_user_id": student_id})
     parent_user = {"user_id": parent_id, "role": "parent", "username": f"{parent_id}@example.com"}
@@ -40,7 +41,7 @@ async def _make_parent_and_student():
 async def test_override_supersedes_stale_attendance_row(as_user):
     """4.2 — a teacher's absent override must win over an earlier, stale row."""
     parent_user, student_id, student_email = await _make_parent_and_student()
-    class_id = f"pa-test-{secrets.token_hex(4)}"
+    class_id = f"pa-test-{RUN_ID}-{secrets.token_hex(4)}"
     await motor_db.classes.insert_one({
         "class_id": class_id, "name": "Test Class", "days": [_today_abbr()],
         "student_ids": [student_id], "org_id": "",
@@ -72,8 +73,8 @@ async def test_blackout_date_not_shown_as_absent(as_user):
     """4.3 — a scheduled weekday that falls on an org blackout date must not
     manufacture a fake absence."""
     parent_user, student_id, _ = await _make_parent_and_student()
-    class_id = f"pa-test-{secrets.token_hex(4)}"
-    org_id = f"pa-test-{secrets.token_hex(4)}"
+    class_id = f"pa-test-{RUN_ID}-{secrets.token_hex(4)}"
+    org_id = f"pa-test-{RUN_ID}-{secrets.token_hex(4)}"
     blackout_date = (datetime.now(timezone.utc).date() - timedelta(days=7)).isoformat()
     await motor_db.orgs.insert_one({"org_id": org_id, "blackout_dates": [blackout_date]})
     await motor_db.classes.insert_one({
@@ -91,8 +92,8 @@ async def test_blackout_date_not_shown_as_absent(as_user):
 async def test_uses_org_tardy_threshold_not_hardcoded_five(as_user):
     """4.4 — a 6-minute-late join must respect the org's configured threshold."""
     parent_user, student_id, student_email = await _make_parent_and_student()
-    class_id = f"pa-test-{secrets.token_hex(4)}"
-    org_id = f"pa-test-{secrets.token_hex(4)}"
+    class_id = f"pa-test-{RUN_ID}-{secrets.token_hex(4)}"
+    org_id = f"pa-test-{RUN_ID}-{secrets.token_hex(4)}"
     await motor_db.orgs.insert_one({"org_id": org_id, "attendance_settings": {"tardy_threshold_minutes": 10}})
     await motor_db.classes.insert_one({
         "class_id": class_id, "name": "Test Class", "days": [_today_abbr()],
@@ -116,7 +117,7 @@ async def test_notes_teacher_empty_org_id_denied(as_user):
     """4.5 — a teacher with a falsy org_id must not bypass the access check."""
     _, student_id, _ = await _make_parent_and_student()
     await motor_db.login.update_one({"user_id": student_id}, {"$set": {"org_id": "some-org"}})
-    teacher_user = {"user_id": f"pa-test-{secrets.token_hex(4)}", "role": "teacher", "org_id": ""}
+    teacher_user = {"user_id": f"pa-test-{RUN_ID}-{secrets.token_hex(4)}", "role": "teacher", "org_id": ""}
 
     resp = await as_user(teacher_user).get(f"/parent/children/{student_id}/notes")
     assert resp.status_code == 403
@@ -126,8 +127,8 @@ async def test_notes_teacher_outside_own_classes_denied(as_user):
     """4.5 — a teacher in the same org but not teaching this student must be denied."""
     _, student_id, _ = await _make_parent_and_student()
     await motor_db.login.update_one({"user_id": student_id}, {"$set": {"org_id": "shared-org"}})
-    teacher_id = f"pa-test-{secrets.token_hex(4)}"
-    other_class_id = f"pa-test-{secrets.token_hex(4)}"
+    teacher_id = f"pa-test-{RUN_ID}-{secrets.token_hex(4)}"
+    other_class_id = f"pa-test-{RUN_ID}-{secrets.token_hex(4)}"
     await motor_db.classes.insert_one({
         "class_id": other_class_id, "teacher_id": teacher_id, "org_id": "shared-org", "student_ids": [],
     })
@@ -141,8 +142,8 @@ async def test_notes_teacher_own_class_allowed(as_user):
     """4.5 — a teacher who actually teaches this student keeps access."""
     _, student_id, _ = await _make_parent_and_student()
     await motor_db.login.update_one({"user_id": student_id}, {"$set": {"org_id": "shared-org"}})
-    teacher_id = f"pa-test-{secrets.token_hex(4)}"
-    class_id = f"pa-test-{secrets.token_hex(4)}"
+    teacher_id = f"pa-test-{RUN_ID}-{secrets.token_hex(4)}"
+    class_id = f"pa-test-{RUN_ID}-{secrets.token_hex(4)}"
     await motor_db.classes.insert_one({
         "class_id": class_id, "teacher_id": teacher_id, "org_id": "shared-org", "student_ids": [student_id],
     })

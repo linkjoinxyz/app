@@ -1,17 +1,32 @@
 name: Deploy Backend
 
+# Gated on Test Backend rather than on push. These are separate workflows, so
+# `needs:` cannot reach across them; on a plain push trigger the image built and
+# pushed while pytest was still running, and a red test arrived a minute after a
+# broken image was already sitting in Docker Hub waiting for the manual Azure
+# restart. workflow_run also fires on a re-run, so fixing a flake still deploys.
 "on":
-  push:
-    branches: [main]
-    paths:
-      - 'linkjoin-backend/**'
+  workflow_run:
+    workflows: ["Test Backend"]
+    types: [completed]
   workflow_dispatch:
 
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
+    # Test Backend also runs on dev and on PRs; only main ships. workflow_dispatch
+    # carries no workflow_run payload, which is what the second clause allows.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.head_branch == 'main')
     steps:
       - uses: actions/checkout@v4
+        with:
+          # workflow_run checks out the default branch by default, not the commit
+          # that was tested. Pin to the tested SHA so the image matches the tests
+          # that just passed. Empty on workflow_dispatch, which falls back to default.
+          ref: ${{ github.event.workflow_run.head_sha }}
 
       - name: Debug checkout
         run: ls -la linkjoin-backend/
