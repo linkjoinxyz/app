@@ -9,6 +9,7 @@ from collections import defaultdict
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pymongo.errors import DuplicateKeyError
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 
@@ -550,16 +551,25 @@ async def _run_clever_sync(org_id: str) -> dict:
                     await motor_db.login.update_one({"user_id": uid}, {"$set": {"clever_user_id": clever_sid}})
             else:
                 uid = secrets.token_urlsafe(16)
-                await motor_db.login.insert_one({
-                    "username": student_email,
-                    "user_id": uid,
-                    "account_type": "institutional",
-                    "role": "student",
-                    "org_id": org_id,
-                    "confirmed": "false",
-                    "clever_user_id": clever_sid,
-                })
-                new_accounts += 1
+                try:
+                    await motor_db.login.insert_one({
+                        "username": student_email,
+                        "user_id": uid,
+                        "account_type": "institutional",
+                        "role": "student",
+                        "org_id": org_id,
+                        "confirmed": "false",
+                        "clever_user_id": clever_sid,
+                    })
+                    new_accounts += 1
+                except DuplicateKeyError:
+                    # A concurrent sync or signup created this student between the
+                    # find_one and here. Background job, so no one to prompt: use
+                    # the account that won rather than the uid we never inserted.
+                    winner = await motor_db.login.find_one({"username": student_email}, {"user_id": 1, "_id": 0})
+                    if not winner:
+                        continue
+                    uid = winner["user_id"]
             if uid not in existing_student_ids:
                 students_to_add.append(uid)
                 existing_student_ids.add(uid)
@@ -872,15 +882,24 @@ async def _run_oneroster_sync(org_id: str) -> dict:
                 uid = user_doc["user_id"]
             else:
                 uid = secrets.token_urlsafe(16)
-                await motor_db.login.insert_one({
-                    "username": student_email,
-                    "user_id": uid,
-                    "account_type": "institutional",
-                    "role": "student",
-                    "org_id": org_id,
-                    "confirmed": "false",
-                })
-                new_accounts += 1
+                try:
+                    await motor_db.login.insert_one({
+                        "username": student_email,
+                        "user_id": uid,
+                        "account_type": "institutional",
+                        "role": "student",
+                        "org_id": org_id,
+                        "confirmed": "false",
+                    })
+                    new_accounts += 1
+                except DuplicateKeyError:
+                    # Concurrent sync/signup created this student; converge on the
+                    # winner rather than a uid we never inserted. Background job,
+                    # so no popup — the next sync would reconcile anyway.
+                    winner = await motor_db.login.find_one({"username": student_email}, {"user_id": 1, "_id": 0})
+                    if not winner:
+                        continue
+                    uid = winner["user_id"]
             if uid not in existing_student_ids:
                 students_to_add.append(uid)
                 existing_student_ids.add(uid)
@@ -1503,16 +1522,25 @@ async def _run_schoology_sync(org_id: str) -> dict:
                     await motor_db.login.update_one({"user_id": student_uid}, {"$set": {"schoology_uid": uid}})
             else:
                 student_uid = secrets.token_urlsafe(16)
-                await motor_db.login.insert_one({
-                    "username": student_email,
-                    "user_id": student_uid,
-                    "schoology_uid": uid,
-                    "account_type": "institutional",
-                    "role": "student",
-                    "org_id": org_id,
-                    "confirmed": "false",
-                })
-                new_accounts += 1
+                try:
+                    await motor_db.login.insert_one({
+                        "username": student_email,
+                        "user_id": student_uid,
+                        "schoology_uid": uid,
+                        "account_type": "institutional",
+                        "role": "student",
+                        "org_id": org_id,
+                        "confirmed": "false",
+                    })
+                    new_accounts += 1
+                except DuplicateKeyError:
+                    # Concurrent sync/signup created this student; converge on the
+                    # winner rather than a uid we never inserted. Background job,
+                    # so no popup — the next sync would reconcile anyway.
+                    winner = await motor_db.login.find_one({"username": student_email}, {"user_id": 1, "_id": 0})
+                    if not winner:
+                        continue
+                    student_uid = winner["user_id"]
 
             if student_uid not in existing_ids:
                 students_to_add.append(student_uid)

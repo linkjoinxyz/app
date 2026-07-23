@@ -422,10 +422,22 @@ async def google_token_auth(request: Request, body: dict):
             "confirmed": "true",
             "timezone": "",
             "org_name": email.split("@")[1],
+            "created_at": _trial_start,
         }
-        await motor_db.login.insert_one(account)
-        await track_event("signup", user_id=account.get("user_id"))
-        user = account
+        # Check-then-insert is a race: two concurrent first-time Google sign-ins
+        # for the same address both pass the find_one above. With the unique index
+        # on username the loser's insert raises, and the right answer is NOT to
+        # reject — it is the same person, so converge on the winner's document and
+        # log them in. This is the exact path that produced the one duplicate we
+        # had to reconcile by hand.
+        try:
+            await motor_db.login.insert_one(account)
+            await track_event("signup", user_id=account.get("user_id"))
+            user = account
+        except DuplicateKeyError:
+            user = await motor_db.login.find_one({"username": email})
+            if not user:
+                raise HTTPException(status_code=500, detail="google_login_failed")
 
     # Same as the password path: a pre-launch account signing in via Google
     # starts its trial here.
