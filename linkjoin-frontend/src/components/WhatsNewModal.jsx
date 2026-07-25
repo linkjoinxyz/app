@@ -40,7 +40,7 @@ const FEATURES = [
 ]
 
 export default function WhatsNewModal({ onClose }) {
-  const { closing, handleClose } = useModalClose(onClose)
+  const { closing, handleClose, overlayRef, dialogProps } = useModalClose(onClose)
   const { accountType } = useAuth()
   // Org members get everything with the school plan, so no upsell branding.
   const showPremiumBadge = accountType !== 'institutional'
@@ -52,10 +52,10 @@ export default function WhatsNewModal({ onClose }) {
 
   return (
     <div className={`modal-overlay sn-page-overlay${closing ? ' closing' : ''}`} onClick={dismiss}>
-      <div className="modal-card whats-new-card" onClick={e => e.stopPropagation()}>
+      <div className="modal-card whats-new-card" ref={overlayRef} {...dialogProps} aria-labelledby="whats-new-title" onClick={e => e.stopPropagation()}>
         <div className="whats-new-header">
           <div className="whats-new-eyebrow">New in LinkJoin</div>
-          <div className="modal-title" style={{ margin: 0, paddingLeft: 0 }}>What's new</div>
+          <div className="modal-title" id="whats-new-title" style={{ margin: 0, paddingLeft: 0 }}>What's new</div>
         </div>
 
         <ul className="whats-new-list">

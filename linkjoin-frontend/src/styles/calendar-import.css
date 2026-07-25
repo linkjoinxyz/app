@@ -10,7 +10,7 @@
 }
 
 .ci-card {
-  background: #0C1E30;
+  background: var(--c-ink-900);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 16px;
   width: 100%;
@@ -70,7 +70,7 @@
   width: 28px;
   height: 28px;
   border: 2px solid rgba(255, 255, 255, 0.1);
-  border-top-color: #2B8FD8;
+  border-top-color: var(--c-accent-550);
   border-radius: 50%;
   animation: ci-spin 0.75s linear infinite;
   margin-bottom: 6px;
@@ -82,7 +82,7 @@
   background: none;
   border: 1px solid rgba(43, 143, 216, 0.35);
   border-radius: 8px;
-  color: #2B8FD8;
+  color: var(--c-accent-550);
   font: 500 13px Montserrat, sans-serif;
   padding: 8px 20px;
   cursor: pointer;
@@ -103,7 +103,7 @@
 .ci-select-all {
   background: none;
   border: none;
-  color: #2B8FD8;
+  color: var(--c-accent-550);
   font: 500 12px Montserrat, sans-serif;
   cursor: pointer;
   padding: 0;
@@ -149,8 +149,8 @@
   transition: background 0.12s, border-color 0.12s;
 }
 .ci-check-on {
-  background: #2B8FD8;
-  border-color: #2B8FD8;
+  background: var(--c-accent-550);
+  border-color: var(--c-accent-550);
 }
 .ci-check svg {
   position: static;
@@ -186,10 +186,10 @@
   border-radius: 20px;
   flex-shrink: 0;
 }
-.ci-badge-zoom        { background: rgba(43, 130, 255, 0.12); color: #5B9FFF; }
-.ci-badge-google-meet { background: rgba(0, 180, 100, 0.12);  color: #2DC97E; }
-.ci-badge-teams       { background: rgba(120, 90, 255, 0.12); color: #9B7EFF; }
-.ci-badge-webex       { background: rgba(255, 130, 0, 0.12);  color: #FF9A3C; }
+.ci-badge-zoom        { background: rgba(43, 130, 255, 0.12); color: var(--c-accent-550); }
+.ci-badge-google-meet { background: rgba(0, 180, 100, 0.12);  color: var(--c-success-400); }
+.ci-badge-teams       { background: rgba(120, 90, 255, 0.12); color: var(--c-indigo-300); }
+.ci-badge-webex       { background: rgba(255, 130, 0, 0.12);  color: var(--c-orange-550); }
 .ci-badge-meeting     { background: rgba(255, 255, 255, 0.07); color: rgba(255,255,255,0.45); }
 
 /* Footer */
@@ -215,7 +215,7 @@
 .ci-cancel:hover { border-color: rgba(255,255,255,0.25); color: white; }
 
 .ci-import-btn {
-  background: #2B8FD8;
+  background: var(--c-accent-550);
   border: none;
   border-radius: 9px;
   color: white;
@@ -249,5 +249,5 @@
 .lp-cal-import-btn:hover {
   background: rgba(43, 143, 216, 0.1);
   border-color: rgba(43, 143, 216, 0.55);
-  color: #2B8FD8;
+  color: var(--c-accent-550);
 }

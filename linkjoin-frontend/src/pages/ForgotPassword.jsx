@@ -38,7 +38,7 @@ export default function ForgotPassword() {
           <>
             <div className="auth-page-success-icon">
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" style={{ position: 'static', width: 24, height: 24 }}>
-                <path d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" stroke="#2B8FD8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                <path d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" style={{ stroke: 'var(--c-accent-550)' }} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             </div>
             <h2 className="auth-title">Check your email</h2>

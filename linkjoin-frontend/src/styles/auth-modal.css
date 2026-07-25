@@ -11,7 +11,7 @@
 }
 
 .auth-card {
-    background: #0C1E30;
+    background: var(--c-ink-900);
     border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 16px;
     padding: 4px 36px 40px;
@@ -76,13 +76,13 @@
     background: none;
     border: none;
     padding: 0;
-    color: #2B8FD8;
+    color: var(--c-accent-550);
     font: 500 14px Montserrat, sans-serif;
     cursor: pointer;
     text-decoration: underline;
     text-underline-offset: 2px;
 }
-.auth-switch button:hover { color: #5AAEEE; }
+.auth-switch button:hover { color: var(--c-accent-300); }
 
 /* ── Error ── */
 .auth-error {
@@ -91,7 +91,7 @@
     border-radius: 8px;
     padding: 10px 14px;
     font: 400 13px Montserrat, sans-serif;
-    color: #fca5a5;
+    color: var(--c-danger-200);
     margin-bottom: 16px;
 }
 
@@ -104,8 +104,8 @@
     justify-content: center;
     gap: 10px;
     background: white;
-    color: #3c4043;
-    border: 1px solid #dadce0;
+    color: var(--c-ink-700);
+    border: 1px solid var(--c-line);
     border-radius: 8px;
     font: 500 14px Montserrat, sans-serif;
     cursor: pointer;
@@ -113,7 +113,7 @@
     margin-bottom: 4px;
 }
 .auth-google-btn:hover:not(:disabled) {
-    background: #f8f9fa;
+    background: var(--c-white);
     box-shadow: 0 1px 4px rgba(0,0,0,0.2);
 }
 .auth-google-btn:disabled {
@@ -179,7 +179,7 @@
     padding: 0 4px;
     border: none;
     border-bottom: 1.5px solid rgba(255, 255, 255, 0.2);
-    background-image: linear-gradient(#2B8FD8, #2B8FD8);
+    background-image: linear-gradient(var(--c-accent-550), var(--c-accent-550));
     background-size: 0 2px;
     background-repeat: no-repeat;
     background-position: left bottom;
@@ -198,7 +198,7 @@
 .auth-input:-webkit-autofill:hover,
 .auth-input:-webkit-autofill:focus {
     -webkit-text-fill-color: white !important;
-    -webkit-box-shadow: 0 0 0px 1000px #0C1E30 inset !important;
+    -webkit-box-shadow: 0 0 0px 1000px var(--c-ink-900) inset !important;
     transition: background-color 5000s ease-in-out 0s;
 }
 .auth-input:focus { border-bottom-color: transparent; background-size: 100% 2px; outline: none; }
@@ -212,7 +212,7 @@
     display: block;
     align-self: flex-start;
 }
-.auth-reset:hover { color: #f87171; }
+.auth-reset:hover { color: var(--c-danger-300); }
 
 /* ── Phone ── */
 .auth-phone-container {
@@ -237,7 +237,7 @@
     width: 100%;
     height: 48px;
     margin-top: 8px;
-    background: #2B8FD8;
+    background: var(--c-accent-550);
     color: white;
     border: none;
     border-radius: 8px;

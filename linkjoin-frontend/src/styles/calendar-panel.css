@@ -52,7 +52,7 @@
 .cal-panel {
   width: 100%;
   max-width: 480px;
-  background: #0C1E30;
+  background: var(--c-ink-900);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 16px;
   overflow: hidden;
@@ -144,7 +144,7 @@
   pointer-events: none;
 }
 .cal-cell.cal-today .cal-date {
-  background: #2B8FD8;
+  background: var(--c-accent-550);
   color: white;
   border-radius: 50%;
   width: 32px;
@@ -182,7 +182,7 @@
   width: 4px;
   height: 4px;
   border-radius: 50%;
-  background: #2B8FD8;
+  background: var(--c-accent-550);
   opacity: 0.8;
 }
 .cal-dot-more {
@@ -196,7 +196,7 @@
 .cal-day-view {
   position: absolute;
   inset: 0;
-  background: #0C1E30;
+  background: var(--c-ink-900);
   transform: translateX(100%);
   transition: transform 0.22s ease;
   display: flex;
@@ -233,7 +233,7 @@
   margin-left: auto;
   background: rgba(43, 143, 216, 0.15);
   border: 1px solid rgba(43, 143, 216, 0.35);
-  color: #2B8FD8;
+  color: var(--c-accent-550);
   font: 600 11px Montserrat, sans-serif;
   letter-spacing: 0.04em;
   padding: 5px 10px;
@@ -288,7 +288,7 @@
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: #2B8FD8;
+  background: var(--c-accent-550);
   flex-shrink: 0;
 }
 

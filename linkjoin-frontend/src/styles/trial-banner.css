@@ -3,18 +3,15 @@
    .mfa-banner in practice — that one only shows for institutional admins, who
    are entitled outright and never carry a trial status. */
 .trial-banner {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  z-index: 9998;
+  /* Static within .lj-banner-stack; see mfa-banner.css. */
+  position: static;
   display: flex;
   align-items: center;
   gap: 14px;
   flex-wrap: wrap;
   padding: 11px 18px;
-  background: #1e3a5f;
-  color: #e8f2ff;
+  background: var(--c-accent-800);
+  color: var(--c-line);
   font-size: 13.5px;
   line-height: 1.45;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
@@ -22,8 +19,8 @@
 .trial-banner-text { flex: 1 1 320px; }
 .trial-banner-btn {
   flex: 0 0 auto;
-  background: #2b8fd8;
-  color: #fff;
+  background: var(--c-accent-550);
+  color: var(--c-white);
   border: 0;
   border-radius: 6px;
   padding: 7px 14px;
@@ -31,7 +28,7 @@
   font-weight: 600;
   cursor: pointer;
 }
-.trial-banner-btn:hover { background: #3b9fe8; }
+.trial-banner-btn:hover { background: var(--c-accent-550); }
 .trial-banner-dismiss {
   flex: 0 0 auto;
   background: none;

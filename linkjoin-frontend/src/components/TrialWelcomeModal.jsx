@@ -13,7 +13,7 @@ const TRIAL_FEATURES = [
 ]
 
 export default function TrialWelcomeModal({ trialEnd, existingAccount = false, onClose }) {
-  const { closing, handleClose } = useModalClose(onClose)
+  const { closing, handleClose, overlayRef, dialogProps } = useModalClose(onClose)
   const days = trialDaysRemaining(trialEnd) || 14
 
   function dismiss() {
@@ -23,7 +23,7 @@ export default function TrialWelcomeModal({ trialEnd, existingAccount = false, o
 
   return (
     <div className={`modal-overlay sn-page-overlay${closing ? ' closing' : ''}`} onClick={dismiss}>
-      <div className="modal-card whats-new-card upgrade-modal-card" onClick={e => e.stopPropagation()}>
+      <div className="modal-card whats-new-card upgrade-modal-card" ref={overlayRef} {...dialogProps} aria-labelledby="trial-welcome-title" onClick={e => e.stopPropagation()}>
         <div className="upgrade-modal-icon">
           <img src="/images/crown.svg" alt="" width="22" height="22" />
         </div>
@@ -31,7 +31,7 @@ export default function TrialWelcomeModal({ trialEnd, existingAccount = false, o
           <div className="upgrade-modal-eyebrow">
             {existingAccount ? 'A gift for being here early' : 'Welcome to LinkJoin'}
           </div>
-          <div className="modal-title" style={{ margin: 0, paddingLeft: 0 }}>
+          <div className="modal-title" id="trial-welcome-title" style={{ margin: 0, paddingLeft: 0 }}>
             Your {days}-day free trial has started
           </div>
         </div>

@@ -94,6 +94,8 @@ export default function SideNav({ onAdd, page, search, onSearch, searchPlacehold
 
   return (
     <>
+      {/* Skip link: first tab stop, jumps keyboard users past the nav to content. */}
+      <a href="#main-content" className="sr-only sr-only-focusable skip-link">Skip to main content</a>
       {/* Mobile hamburger button */}
       <button className="sn-hamburger" onClick={() => setMobileOpen(true)} aria-label="Open menu">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>

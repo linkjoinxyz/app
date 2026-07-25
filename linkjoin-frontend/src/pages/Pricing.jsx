@@ -48,7 +48,7 @@ function Check() {
   return (
     <svg width="18" height="18" viewBox="0 0 18 18" fill="none" style={{ flexShrink: 0, marginTop: 1, position: 'static', width: 18, height: 18, zIndex: 'auto' }}>
       <circle cx="9" cy="9" r="9" fill="rgba(43,143,216,0.18)" />
-      <path d="M5 9l3 3 5-5" stroke="#2B8FD8" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M5 9l3 3 5-5" style={{ stroke: 'var(--c-accent-550)' }} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   )
 }
@@ -99,7 +99,7 @@ export default function Pricing() {
             name="Individual"
             price="$0"
             sub="forever"
-            description="Full access to every feature, forever. No catch."
+            description="Everything you need to run your meetings, free forever. No catch."
             features={[
               'Unlimited scheduled meetings',
               'SMS reminders',

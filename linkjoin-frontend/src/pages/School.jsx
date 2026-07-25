@@ -22,6 +22,14 @@ export default function School() {
   const [statCount, setStatCount] = useState(0)
   const trustRef = useRef(null)
 
+  // Schools-specific document title so the page reads as a dedicated K-12
+  // product when shared with administrators, instead of the consumer title.
+  useEffect(() => {
+    const prev = document.title
+    document.title = 'LinkJoin for Schools: Attendance & virtual-class access'
+    return () => { document.title = prev }
+  }, [])
+
   useEffect(() => {
     const handler = () => setScrolled(window.scrollY > 10)
     window.addEventListener('scroll', handler, { passive: true })
@@ -494,6 +502,7 @@ export default function School() {
             <p className="sc-footer-col-title">Schools</p>
             <Link to="/privacy-schools">Privacy for Schools</Link>
             <Link to="/dpa">DPA</Link>
+            <Link to="/sla">SLA</Link>
             <Link to="/subprocessors">Subprocessors</Link>
             <Link to="/breach-policy">Breach Policy</Link>
           </div>

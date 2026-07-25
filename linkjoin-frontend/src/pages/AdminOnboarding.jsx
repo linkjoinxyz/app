@@ -342,10 +342,10 @@ function Step2InviteStaff({ onNext, onSkip, onBack, rows, setRows }) {
             />
             <span className="aob-row-status">
               {row.status === 'sent' && (
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#22C55E" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" style={{ stroke: 'var(--c-success-400)' }} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
               )}
               {row.status === 'error' && (
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#EF4444" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" style={{ stroke: 'var(--c-danger-400)' }} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
               )}
               {row.status !== 'sent' && rows.length > 1 && (
                 <button className="aob-remove-row" type="button" onClick={() => removeRow(i)} aria-label="Remove row">

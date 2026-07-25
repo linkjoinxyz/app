@@ -101,7 +101,7 @@ html::-webkit-scrollbar, body::-webkit-scrollbar { display: none; }
 
 .ct-submit {
   align-self: flex-start;
-  background: #2B8FD8;
+  background: var(--c-accent-550);
   color: white;
   border: none;
   border-radius: 10px;

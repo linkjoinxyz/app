@@ -36,12 +36,12 @@ export default function SchoolAttendance() {
     [base, 'nh-reveal', visSet.has(id) ? 'nh-visible' : ''].filter(Boolean).join(' ')
 
   const AWARDS = [
-    { label: 'First Steps', color: '#D97706', earned: true },
-    { label: 'On Point',    color: '#2B8FD8', earned: true },
-    { label: 'Perfect Week',color: '#059669', earned: true },
-    { label: 'Streak ×5',  color: '#D97706', earned: true },
-    { label: 'Streak ×10', color: '#7C3AED', earned: false },
-    { label: 'Champion',   color: '#059669', earned: false },
+    { label: 'First Steps', color: 'var(--c-orange-550)', earned: true },
+    { label: 'On Point',    color: 'var(--c-accent-550)', earned: true },
+    { label: 'Perfect Week',color: 'var(--c-teal-700)', earned: true },
+    { label: 'Streak ×5',  color: 'var(--c-orange-550)', earned: true },
+    { label: 'Streak ×10', color: 'var(--c-violet-400)', earned: false },
+    { label: 'Champion',   color: 'var(--c-teal-700)', earned: false },
   ]
 
   const CAL_DAYS = [

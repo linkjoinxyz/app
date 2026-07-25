@@ -8,7 +8,7 @@ html.nobar::-webkit-scrollbar, html.nobar body::-webkit-scrollbar { display: non
   display: flex;
   min-height: 100vh;
   font-family: Montserrat, sans-serif;
-  background: #060F1A;
+  background: var(--c-ink-950);
 }
 
 /* ─────────────────────────────────────────────
@@ -16,7 +16,7 @@ html.nobar::-webkit-scrollbar, html.nobar body::-webkit-scrollbar { display: non
 ───────────────────────────────────────────── */
 .ap-left {
   width: 55%;
-  background: #060F1A;
+  background: var(--c-ink-950);
   display: flex;
   flex-direction: column;
 }
@@ -92,7 +92,7 @@ html.nobar::-webkit-scrollbar, html.nobar body::-webkit-scrollbar { display: non
   bottom: 4px;
   left: 4px;
   width: calc(50% - 4px);
-  background: #2B8FD8;
+  background: var(--c-accent-550);
   border-radius: 7px;
   transition: transform 0.22s cubic-bezier(0.4, 0, 0.2, 1);
   pointer-events: none;
@@ -140,7 +140,7 @@ html.nobar::-webkit-scrollbar, html.nobar body::-webkit-scrollbar { display: non
   width: 100%;
   height: 52px;
   background: white;
-  color: #1a1a1a;
+  color: var(--c-ink-900-2);
   border: none;
   border-radius: 10px;
   font: 600 15px Montserrat, sans-serif;
@@ -200,7 +200,7 @@ html.nobar::-webkit-scrollbar, html.nobar body::-webkit-scrollbar { display: non
 .ap-input.ap-input-error { border-color: rgba(255,80,80,0.5); }
 .ap-input:-webkit-autofill,
 .ap-input:-webkit-autofill:focus {
-  -webkit-box-shadow: 0 0 0 1000px #0d1e2e inset !important;
+  -webkit-box-shadow: 0 0 0 1000px var(--c-ink-900) inset !important;
   -webkit-text-fill-color: white !important;
   caret-color: white;
 }
@@ -223,7 +223,7 @@ html.nobar::-webkit-scrollbar, html.nobar body::-webkit-scrollbar { display: non
   display: block;
   width: 100%;
   height: 52px;
-  background: #2B8FD8;
+  background: var(--c-accent-550);
   color: white;
   border: none;
   border-radius: 10px;
@@ -256,7 +256,7 @@ html.nobar::-webkit-scrollbar, html.nobar body::-webkit-scrollbar { display: non
 .ap-right-bg {
   position: absolute;
   inset: 0;
-  background: linear-gradient(145deg, #0d2440 0%, #091a2e 45%, #060F1A 100%);
+  background: linear-gradient(145deg, var(--c-ink-850) 0%, var(--c-ink-900) 45%, var(--c-ink-950) 100%);
   transition: background 0.6s ease;
 }
 
@@ -314,7 +314,7 @@ html.nobar::-webkit-scrollbar, html.nobar body::-webkit-scrollbar { display: non
   font: 600 13px Montserrat, sans-serif;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: #2B8FD8;
+  color: var(--c-accent-550);
   margin: 0 0 16px;
 }
 
@@ -376,7 +376,7 @@ html.nobar::-webkit-scrollbar, html.nobar body::-webkit-scrollbar { display: non
   align-items: center;
   padding: 18px 24px;
   border-bottom: 1px solid rgba(255,255,255,0.06);
-  background: #060F1A;
+  background: var(--c-ink-950);
   flex-shrink: 0;
 }
 .ap-mobile-bar img {

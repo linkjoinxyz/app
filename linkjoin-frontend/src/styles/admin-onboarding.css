@@ -3,12 +3,12 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--blue, #142539);
+  background: var(--blue, var(--c-ink-900));
   padding: 24px 16px;
 }
 
 .aob-card {
-  background: #1a2f45;
+  background: var(--c-ink-800);
   border: 1px solid rgba(255,255,255,0.08);
   border-radius: 16px;
   width: 100%;
@@ -39,7 +39,7 @@
 }
 
 .aob-dot--active {
-  background: var(--lightblue, #2B8FD8);
+  background: var(--lightblue, var(--c-accent-550));
   width: 22px;
   border-radius: 4px;
 }
@@ -70,7 +70,7 @@
   font-family: Montserrat, sans-serif;
   font-size: 22px;
   font-weight: 700;
-  color: #fff;
+  color: var(--c-white);
   line-height: 1.2;
 }
 
@@ -104,13 +104,13 @@
   padding: 10px 14px;
   font-family: Montserrat, sans-serif;
   font-size: 14px;
-  color: #fff;
+  color: var(--c-white);
   outline: none;
   transition: border-color 0.15s;
 }
 
 .aob-input:focus {
-  border-color: var(--lightblue, #2B8FD8);
+  border-color: var(--lightblue, var(--c-accent-550));
 }
 
 .aob-input::placeholder {
@@ -130,14 +130,14 @@
   padding: 10px 10px;
   font-family: Montserrat, sans-serif;
   font-size: 13px;
-  color: #fff;
+  color: var(--c-white);
   outline: none;
   cursor: pointer;
   max-width: 130px;
   transition: border-color 0.15s;
 }
-.aob-country-select:focus { border-color: var(--lightblue, #2B8FD8); }
-.aob-country-select option { color: #000; background: #fff; }
+.aob-country-select:focus { border-color: var(--lightblue, var(--c-accent-550)); }
+.aob-country-select option { color: var(--c-black); background: var(--c-white); }
 
 .aob-phone-input {
   flex: 1;
@@ -147,12 +147,12 @@
   padding: 10px 14px;
   font-family: Montserrat, sans-serif;
   font-size: 14px;
-  color: #fff;
+  color: var(--c-white);
   outline: none;
   min-width: 0;
   transition: border-color 0.15s;
 }
-.aob-phone-input:focus { border-color: var(--lightblue, #2B8FD8); }
+.aob-phone-input:focus { border-color: var(--lightblue, var(--c-accent-550)); }
 .aob-phone-input::placeholder { color: rgba(255,255,255,0.3); }
 
 .aob-row {
@@ -181,14 +181,14 @@
 
 .aob-type-btn--active {
   background: rgba(43,143,216,0.2);
-  border-color: var(--lightblue, #2B8FD8);
-  color: #fff;
+  border-color: var(--lightblue, var(--c-accent-550));
+  color: var(--c-white);
 }
 
 .aob-error {
   font-family: Montserrat, sans-serif;
   font-size: 13px;
-  color: #f87171;
+  color: var(--c-danger-300);
   background: rgba(248,113,113,0.1);
   border-radius: 8px;
   padding: 10px 14px;
@@ -217,12 +217,12 @@
 }
 
 .aob-btn--primary {
-  background: var(--lightblue, #2B8FD8);
-  color: #fff;
+  background: var(--lightblue, var(--c-accent-550));
+  color: var(--c-white);
 }
 
 .aob-btn--primary:hover:not(:disabled) {
-  background: #1a7bc4;
+  background: var(--c-accent-550);
 }
 
 .aob-btn--primary:disabled {
@@ -238,7 +238,7 @@
 
 .aob-btn--ghost:hover {
   border-color: rgba(255,255,255,0.35);
-  color: #fff;
+  color: var(--c-white);
 }
 
 .aob-invite-list {
@@ -271,7 +271,7 @@
 }
 
 .aob-input--error {
-  border-color: #EF4444 !important;
+  border-color: var(--c-danger-400) !important;
 }
 
 .aob-row-status {
@@ -326,8 +326,8 @@
 }
 
 .aob-remove-row:hover {
-  border-color: #EF4444;
-  color: #EF4444;
+  border-color: var(--c-danger-400);
+  color: var(--c-danger-400);
   background: rgba(239,68,68,0.12);
 }
 
@@ -347,7 +347,7 @@
 .aob-add-row:hover { opacity: 0.8; }
 
 .aob-done-icon {
-  color: #4ade80;
+  color: var(--c-success-400);
   margin-bottom: 8px;
 }
 
@@ -370,7 +370,7 @@
 }
 
 .aob-done-tip strong {
-  color: #fff;
+  color: var(--c-white);
 }
 
 .aob-ferpa-notice {
@@ -389,12 +389,12 @@
 
 .aob-ferpa-notice svg {
   flex-shrink: 0;
-  color: var(--lightblue, #2B8FD8);
+  color: var(--lightblue, var(--c-accent-550));
   margin-top: 1px;
 }
 
 .aob-ferpa-link {
-  color: var(--lightblue, #2B8FD8);
+  color: var(--lightblue, var(--c-accent-550));
   text-decoration: underline;
   font-family: Montserrat, sans-serif;
 }

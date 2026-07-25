@@ -157,7 +157,7 @@
 .modal-field .modal-input {
     margin-bottom: 0;
     border-bottom: 2px solid rgba(255, 255, 255, 0.18);
-    background-image: linear-gradient(#2B8FD8, #2B8FD8);
+    background-image: linear-gradient(var(--c-accent-550), var(--c-accent-550));
     background-size: 0 2px;
     background-repeat: no-repeat;
     background-position: left bottom;
@@ -208,7 +208,7 @@
 }
 
 .modal-time-input:focus {
-    border-bottom-color: #2B8FD8;
+    border-bottom-color: var(--c-accent-550);
 }
 
 .modal-time-input::placeholder {
@@ -360,13 +360,13 @@
 
 .modal-error {
     font: 400 13px Montserrat;
-    color: #ff7070;
+    color: var(--c-danger-300);
     margin: 0 0 12px;
 }
 
 .modal-warn {
     font: 400 13px Montserrat, sans-serif;
-    color: #F0C040;
+    color: var(--c-amber-400);
     background: rgba(255, 200, 50, 0.06);
     border: 1px solid rgba(255, 200, 50, 0.18);
     border-radius: 8px;
@@ -414,7 +414,7 @@
 .modal-copy-btn--done {
     background: rgba(72, 197, 120, 0.14);
     border-color: rgba(72, 197, 120, 0.4);
-    color: #48c578;
+    color: var(--c-success-400);
 }
 
 /* Settings */
@@ -574,7 +574,7 @@
     flex: 1;
     height: 48px;
     border-radius: 7px;
-    background: #c0392b;
+    background: var(--c-danger-600);
     border: none;
     color: var(--text-primary);
     font: 700 15px Montserrat;
@@ -641,7 +641,7 @@
 }
 
 .modal-action-btn-danger {
-    background: #c0392b;
+    background: var(--c-danger-600);
 }
 
 /* Share modal */
@@ -680,7 +680,7 @@
 .modal-share-pill:hover {
     background: rgba(192, 57, 43, 0.2);
     border-color: rgba(192, 57, 43, 0.55);
-    color: #ff7070;
+    color: var(--c-danger-300);
     text-decoration: line-through;
 }
 
@@ -880,13 +880,13 @@
     font: 700 10px Montserrat;
     letter-spacing: 1.4px;
     text-transform: uppercase;
-    color: #E8A94C;
+    color: var(--c-orange-400);
     margin-bottom: 6px;
 }
 
 .upgrade-modal-submit {
-    background: linear-gradient(135deg, #F0C572, #D99A2E);
-    color: #241A08;
+    background: linear-gradient(135deg, var(--c-orange-300), var(--c-orange-400));
+    color: var(--c-ink-950-2);
 }
 
 .upgrade-modal-submit:hover {
@@ -906,7 +906,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    color: #E8A94C;
+    color: var(--c-orange-400);
     background: rgba(232, 169, 76, 0.14);
     border: 1px solid rgba(232, 169, 76, 0.35);
 }
@@ -962,13 +962,13 @@
 .settings-save-toast.saved {
     background: rgba(34, 197, 94, 0.15);
     border: 1px solid rgba(34, 197, 94, 0.35);
-    color: #4ade80;
+    color: var(--c-success-400);
 }
 
 .settings-save-toast.error {
     background: rgba(239, 68, 68, 0.12);
     border: 1px solid rgba(239, 68, 68, 0.3);
-    color: #f87171;
+    color: var(--c-danger-300);
 }
 
 @keyframes toast-pop {
@@ -988,7 +988,7 @@
 .modal-danger-btn {
     background: transparent;
     border: 1px solid rgba(239, 68, 68, 0.45);
-    color: #f87171;
+    color: var(--c-danger-300);
     font: 600 13px Montserrat, sans-serif;
     padding: 8px 20px;
     border-radius: 8px;
@@ -998,7 +998,7 @@
 .modal-danger-btn:hover {
     background: rgba(239, 68, 68, 0.12);
     border-color: rgba(239, 68, 68, 0.7);
-    color: #fca5a5;
+    color: var(--c-danger-200);
 }
 .modal-danger-btn.modal-danger-btn-full {
     width: 100%;
@@ -1030,7 +1030,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    color: #f87171;
+    color: var(--c-danger-300);
     margin-bottom: 18px;
 }
 
@@ -1056,7 +1056,7 @@
 }
 
 .modal-delete-body strong {
-    color: #fca5a5;
+    color: var(--c-danger-200);
     font-weight: 600;
 }
 
@@ -1098,7 +1098,7 @@
     border: 1px solid rgba(255, 255, 255, 0.12);
     border-radius: 8px;
     padding: 8px 12px;
-    color: #fff;
+    color: var(--c-white);
     font: 13px Montserrat, sans-serif;
     outline: none;
     transition: border-color 0.15s;

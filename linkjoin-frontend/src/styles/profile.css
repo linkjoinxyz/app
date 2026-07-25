@@ -1,8 +1,8 @@
 .profile-root {
   min-height: 100vh;
-  background: var(--dark, #060F1A);
+  background: var(--dark, var(--c-ink-950));
   font-family: 'Montserrat', sans-serif;
-  color: #fff;
+  color: var(--c-white);
 }
 
 .profile-page {
@@ -53,7 +53,7 @@
   justify-content: center;
   font-size: 38px;
   font-weight: 700;
-  color: #fff;
+  color: var(--c-white);
   letter-spacing: -0.01em;
 }
 
@@ -83,7 +83,7 @@
 .profile-avatar-upload-btn {
   background: rgba(43,143,216,0.18);
   border: 1px solid rgba(43,143,216,0.4);
-  color: #fff;
+  color: var(--c-white);
   border-radius: 6px;
   padding: 6px 14px;
   font: 600 12px Montserrat, sans-serif;
@@ -102,7 +102,7 @@
   padding: 6px 4px;
   transition: color 0.15s;
 }
-.profile-avatar-remove-btn:hover { color: #ff5050; }
+.profile-avatar-remove-btn:hover { color: var(--c-danger-400); }
 .profile-avatar-remove-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
 /* ── Email badge ── */
@@ -141,7 +141,7 @@
   border: 1px solid rgba(255,255,255,0.12);
   border-radius: 8px;
   padding: 11px 14px;
-  color: #fff;
+  color: var(--c-white);
   font: 500 14px Montserrat, sans-serif;
   outline: none;
   transition: border-color 0.15s;
@@ -154,7 +154,7 @@
   border: 1px solid rgba(255,255,255,0.12);
   border-radius: 8px;
   padding: 11px 10px;
-  color: #fff;
+  color: var(--c-white);
   font: 500 14px Montserrat, sans-serif;
   outline: none;
   cursor: pointer;
@@ -164,7 +164,7 @@
 .profile-save-btn {
   background: rgba(43,143,216,0.2);
   border: 1px solid rgba(43,143,216,0.45);
-  color: #fff;
+  color: var(--c-white);
   border-radius: 8px;
   padding: 11px 20px;
   font: 600 13px Montserrat, sans-serif;
