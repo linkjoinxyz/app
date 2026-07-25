@@ -5,15 +5,15 @@
 
 /* ── Tokens ── */
 :root {
-  --nh-bg:       #060F1A;
+  --nh-bg:       var(--c-ink-950);
   --nh-surface:  rgba(14, 32, 50, 0.65);
   --nh-border:   rgba(43, 143, 216, 0.18);
   --nh-border-hi:rgba(43, 143, 216, 0.45);
-  --nh-accent:   #2B8FD8;
+  --nh-accent:   var(--lightblue); /* single-source the brand accent (globals.css) */
   --nh-glow:     rgba(43, 143, 216, 0.22);
-  --nh-text:     #FFFFFF;
+  --nh-text:     var(--c-white);
   --nh-dim:      rgba(255,255,255,0.55);
-  --nh-muted:    rgba(255,255,255,0.28);
+  --nh-muted:    rgba(255,255,255,0.5);
   --nh-card:     rgba(15, 35, 55, 0.72);
   --nh-radius:   14px;
   --nh-nav-h:    68px;
@@ -74,7 +74,7 @@
   width: 800px;
   height: 800px;
   border-radius: 50%;
-  border: 50px solid #2B8FD8;
+  border: 50px solid var(--c-accent-550);
   background: transparent;
   pointer-events: none;
   z-index: -1;
@@ -89,7 +89,7 @@
   width: 760px;
   height: 760px;
   border-radius: 50%;
-  border: 45px solid #2B8FD8;
+  border: 45px solid var(--c-accent-550);
   background: transparent;
   pointer-events: none;
   z-index: -1;
@@ -104,7 +104,7 @@
   width: 920px;
   height: 920px;
   border-radius: 50%;
-  border: 55px solid #2B8FD8;
+  border: 55px solid var(--c-accent-550);
   background: transparent;
   pointer-events: none;
   z-index: -1;
@@ -215,7 +215,7 @@
 
 .nh-btn-lg { padding: 14px 28px; font-size: 17px; border-radius: 10px; }
 
-.nh-btn-white { background: white; color: #111; }
+.nh-btn-white { background: white; color: var(--c-black); }
 .nh-btn-white:hover { filter: brightness(0.95); }
 
 .nh-mobile-only { display: none; }
@@ -346,7 +346,7 @@
   letter-spacing: 0.02em;
 }
 .nh-platform-pill-more {
-  color: rgba(255,255,255,0.18);
+  color: rgba(255,255,255,0.5);
   border-color: rgba(255,255,255,0.06);
   font-style: italic;
 }
@@ -507,7 +507,7 @@
 }
 
 .nh-hl-band {
-  background: #091B30;
+  background: var(--c-ink-900);
 }
 
 /* Band sections must stay opaque so their bg doesn't fade against the wave.
@@ -620,7 +620,7 @@
 }
 
 .nh-mock-email-strip {
-  background: #0d2236;
+  background: var(--c-ink-900);
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 10px;
   padding: 18px 20px;
@@ -650,7 +650,7 @@
   top: -16px;
   right: -24px;
   width: 210px;
-  background: #091B30;
+  background: var(--c-ink-900);
   border: 1px solid rgba(43, 143, 216, 0.28);
   border-radius: 10px;
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.55);
@@ -663,7 +663,7 @@
   align-items: center;
   gap: 6px;
   padding: 9px 12px;
-  background: #0d2236;
+  background: var(--c-ink-900);
   border-bottom: 1px solid rgba(43, 143, 216, 0.18);
 }
 
@@ -674,7 +674,7 @@
 
 .nh-mock-ov-badge {
   font: 400 10px Montserrat, sans-serif;
-  color: #6b8fac;
+  color: var(--c-accent-450);
 }
 
 .nh-mock-ov-body {
@@ -688,17 +688,17 @@
   font: 700 9px Montserrat, sans-serif;
   letter-spacing: 0.7px;
   text-transform: uppercase;
-  color: #6b8fac;
+  color: var(--c-accent-450);
   margin-top: 4px;
 }
 
 .nh-mock-ov-field {
-  background: #142539;
+  background: var(--c-ink-900);
   border: 1px solid rgba(43, 143, 216, 0.2);
   border-radius: 5px;
   padding: 5px 8px;
   font: 400 11px Montserrat, sans-serif;
-  color: #e8edf2;
+  color: var(--c-white);
 }
 
 .nh-mock-ov-days {
@@ -718,21 +718,21 @@
   flex-shrink: 0;
   border-radius: 4px;
   font: 600 9px Montserrat, sans-serif;
-  color: #6b8fac;
-  background: #142539;
+  color: var(--c-accent-450);
+  background: var(--c-ink-900);
   border: 1px solid rgba(43, 143, 216, 0.15);
 }
 
 .nh-mock-day.active {
   display: inline-flex;
-  background: #1a3d5c;
-  border-color: #2B8FD8;
-  color: #2B8FD8;
+  background: var(--c-ink-800);
+  border-color: var(--c-accent-550);
+  color: var(--c-accent-550);
 }
 
 .nh-mock-ov-btn {
   margin-top: 6px;
-  background: #2B8FD8;
+  background: var(--c-accent-550);
   border: none;
   border-radius: 5px;
   color: white;
@@ -746,7 +746,7 @@
 .nh-mock-calendar {
   width: 100%;
   max-width: 420px;
-  background: #0d2236;
+  background: var(--c-ink-900);
   border: 1px solid var(--nh-border);
   border-radius: var(--nh-radius);
   padding: 28px;
@@ -835,7 +835,7 @@
 .nh-mock-share {
   width: 100%;
   max-width: 400px;
-  background: #0d2236;
+  background: var(--c-ink-900);
   border: 1px solid var(--nh-border);
   border-radius: var(--nh-radius);
   padding: 28px;
@@ -918,7 +918,7 @@
   width: 26px;
   height: 26px;
   border-radius: 50%;
-  background: #1a3d5c;
+  background: var(--c-ink-800);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -935,19 +935,19 @@
 
 .nh-mock-share-check {
   font-size: 12px;
-  color: #3ecf8e;
+  color: var(--c-success-500);
 }
 
 .nh-mock-share-status {
   font: 400 11px Montserrat, sans-serif;
-  color: #3ecf8e;
+  color: var(--c-success-500);
 }
 
 /* ── Mock D: SMS phone ── */
 .nh-mock-phone {
   width: 100%;
   max-width: 340px;
-  background: #0a0a0f;
+  background: var(--c-black);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 28px;
   overflow: hidden;
@@ -979,14 +979,14 @@
 
 .nh-mock-sms-sender {
   font: 600 11px Montserrat, sans-serif;
-  color: rgba(255, 255, 255, 0.35);
+  color: rgba(255, 255, 255, 0.55);
   text-align: center;
   margin-bottom: 4px;
   letter-spacing: 0.02em;
 }
 
 .nh-mock-sms-bubble {
-  background: #1c1c1e;
+  background: var(--c-ink-900-2);
   border-radius: 16px 16px 16px 4px;
   padding: 10px 14px;
   font: 300 12px/1.55 Montserrat, sans-serif;
@@ -1007,7 +1007,7 @@
 
 .nh-mock-sms-time {
   font: 400 10px Montserrat, sans-serif;
-  color: rgba(255, 255, 255, 0.2);
+  color: rgba(255, 255, 255, 0.55);
   margin-top: 2px;
 }
 
@@ -1369,7 +1369,7 @@ html:has(.nh-root)::-webkit-scrollbar-track { background: transparent; }
 
 /* ── Calendar import mock ─────────────────────────────────── */
 .nh-mock-cal-import {
-  background: #0a1929;
+  background: var(--c-ink-900);
   border: 1px solid rgba(255, 255, 255, 0.09);
   border-radius: 18px;
   padding: 22px;
@@ -1403,14 +1403,14 @@ html:has(.nh-root)::-webkit-scrollbar-track { background: transparent; }
   padding: 3px 10px;
   border-radius: 20px;
   border: 1px solid rgba(255,255,255,0.1);
-  color: rgba(255,255,255,0.4);
+  color: rgba(255,255,255,0.55);
   cursor: default;
 }
 
 .nh-mock-cal-import-tab.active {
   background: rgba(43, 143, 216, 0.15);
   border-color: rgba(43, 143, 216, 0.4);
-  color: #2B8FD8;
+  color: var(--c-accent-550);
 }
 
 .nh-mock-cal-import-list {
@@ -1434,8 +1434,8 @@ html:has(.nh-root)::-webkit-scrollbar-track { background: transparent; }
   width: 18px;
   height: 18px;
   border-radius: 5px;
-  background: #2B8FD8;
-  border: 1.5px solid #2B8FD8;
+  background: var(--c-accent-550);
+  border: 1.5px solid var(--c-accent-550);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1465,7 +1465,7 @@ html:has(.nh-root)::-webkit-scrollbar-track { background: transparent; }
 
 .nh-mock-cal-import-meta {
   font: 400 11px Montserrat, sans-serif;
-  color: rgba(255, 255, 255, 0.38);
+  color: rgba(255, 255, 255, 0.55);
 }
 
 .nh-mock-cal-import-plat {
@@ -1478,7 +1478,7 @@ html:has(.nh-root)::-webkit-scrollbar-track { background: transparent; }
 .nh-mock-cal-import-btn {
   width: 100%;
   height: 40px;
-  background: #2B8FD8;
+  background: var(--c-accent-550);
   border: none;
   border-radius: 10px;
   color: white;
@@ -1644,7 +1644,7 @@ html:has(.nh-root) { scrollbar-color: rgba(255,255,255,0.15) transparent; }
   display: flex;
   flex-direction: column;
   gap: 20px;
-  border-left: 4px solid #2B8FD8;
+  border-left: 4px solid var(--c-accent-550);
   padding: 4px 0 4px 36px;
   flex: 0 1 500px;
   align-items: flex-start;
@@ -1733,14 +1733,14 @@ html:has(.nh-root) { scrollbar-color: rgba(255,255,255,0.15) transparent; }
   border-bottom: 1px solid rgba(43, 143, 216, 0.18);
   padding: 11px 16px;
   font: 500 12px Montserrat, sans-serif;
-  color: #7EC8F0;
+  color: var(--c-accent-350);
 }
 
 .nh-mock-att-alert-dot {
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: #2B8FD8;
+  background: var(--c-accent-550);
   flex-shrink: 0;
   animation: nh-att-pulse 2.2s ease-in-out infinite;
 }
@@ -1793,7 +1793,7 @@ html:has(.nh-root) { scrollbar-color: rgba(255,255,255,0.15) transparent; }
   height: 26px;
   border-radius: 50%;
   background: rgba(43, 143, 216, 0.18);
-  color: #7EC8F0;
+  color: var(--c-accent-350);
   font: 700 11px Montserrat, sans-serif;
   display: flex;
   align-items: center;
@@ -1817,17 +1817,17 @@ html:has(.nh-root) { scrollbar-color: rgba(255,255,255,0.15) transparent; }
 
 .nh-att-present {
   background: rgba(46, 213, 115, 0.12);
-  color: #3ecf8e;
+  color: var(--c-success-500);
 }
 
 .nh-att-absent {
   background: rgba(255, 80, 80, 0.14);
-  color: #FF7070;
+  color: var(--c-danger-300);
 }
 
 .nh-att-late {
   background: rgba(255, 165, 60, 0.14);
-  color: #FFA94D;
+  color: var(--c-orange-400);
 }
 
 .nh-mock-att-footer {
@@ -1842,7 +1842,7 @@ html:has(.nh-root) { scrollbar-color: rgba(255,255,255,0.15) transparent; }
 
 .nh-mock-att-sent {
   font: 600 12px Montserrat, sans-serif;
-  color: #3ecf8e;
+  color: var(--c-success-500);
 }
 
 @media (max-width: 900px) {
@@ -1915,7 +1915,7 @@ html:has(.nh-root) { scrollbar-color: rgba(255,255,255,0.15) transparent; }
 
 .ext-mock-notify {
   width: 100%;
-  background: #0d2236;
+  background: var(--c-ink-900);
   border: 1px solid rgba(43, 143, 216, 0.28);
   border-radius: 12px;
   box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
@@ -1957,8 +1957,8 @@ html:has(.nh-root) { scrollbar-color: rgba(255,255,255,0.15) transparent; }
 
 .ext-mock-notify-btn-primary {
   color: white;
-  background: #2B8FD8;
-  border-color: #2B8FD8;
+  background: var(--c-accent-550);
+  border-color: var(--c-accent-550);
 }
 
 .ext-mock-toolbar {
@@ -1989,8 +1989,8 @@ html:has(.nh-root) { scrollbar-color: rgba(255,255,255,0.15) transparent; }
   height: 15px;
   padding: 0 3px;
   border-radius: 8px;
-  background: #2B8FD8;
-  border: 1.5px solid #0d2236;
+  background: var(--c-accent-550);
+  border: 1.5px solid var(--c-ink-900);
   color: white;
   font: 700 9px Montserrat, sans-serif;
   display: flex;
@@ -2011,7 +2011,7 @@ html:has(.nh-root) { scrollbar-color: rgba(255,255,255,0.15) transparent; }
 }
 
 .ext-mock-ctxmenu-link {
-  background: #0d2236;
+  background: var(--c-ink-900);
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 10px;
   padding: 22px 20px;
@@ -2024,7 +2024,7 @@ html:has(.nh-root) { scrollbar-color: rgba(255,255,255,0.15) transparent; }
   top: 16px;
   left: 32px;
   width: 200px;
-  background: #142539;
+  background: var(--c-ink-900);
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 8px;
   box-shadow: 0 20px 50px rgba(0, 0, 0, 0.55);
@@ -2040,7 +2040,7 @@ html:has(.nh-root) { scrollbar-color: rgba(255,255,255,0.15) transparent; }
 }
 
 .ext-mock-ctxmenu-item-hi {
-  background: #2B8FD8;
+  background: var(--c-accent-550);
   color: white;
 }
 
@@ -2076,11 +2076,11 @@ html:has(.nh-root) { scrollbar-color: rgba(255,255,255,0.15) transparent; }
 .ext-feature-card {
   text-align: left;
   padding: 44px 38px;
-  border-left: 3px solid #2B8FD8;
+  border-left: 3px solid var(--c-accent-550);
 }
 .ext-feature-card:hover {
   border-color: rgba(255, 255, 255, 0.18);
-  border-left-color: #2B8FD8;
+  border-left-color: var(--c-accent-550);
 }
 
 .ext-feature-card .nh-feature-title {

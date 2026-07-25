@@ -5,7 +5,7 @@ import { useModalClose } from '../hooks/useModalClose.js'
 import '../styles/modal.css'
 
 export default function NotesModal({ link, onClose }) {
-  const { closing, handleClose } = useModalClose(onClose)
+  const { closing, handleClose, overlayRef, dialogProps } = useModalClose(onClose)
   const [markdown, setMarkdown] = useState('')
   const [preview, setPreview] = useState('')
   const [editing, setEditing] = useState(false)
@@ -58,9 +58,9 @@ export default function NotesModal({ link, onClose }) {
 
   return (
     <div className={`modal-overlay${closing ? ' closing' : ''}`} onClick={handleClose}>
-      <div className="modal-card modal-notes" onClick={e => e.stopPropagation()}>
+      <div className="modal-card modal-notes" ref={overlayRef} {...dialogProps} aria-labelledby="notes-modal-title" onClick={e => e.stopPropagation()}>
         <img src="/images/arrow-left.svg" className="modal-back" alt="back" onClick={handleClose} />
-        <div className="modal-title">
+        <div className="modal-title" id="notes-modal-title">
           Notes: <span style={{ color: 'var(--lightblue)' }}>{link.name}</span>
         </div>
 

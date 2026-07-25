@@ -81,7 +81,7 @@ function ParentProfile({ userId, onBack, onOpenStudent }) {
         <div className="sp-hero-info">
           <div className="sp-name">{data.name || data.email}</div>
           {data.name && <div className="sp-email">{data.email}</div>}
-          <span className="sp-badge" style={{ background: 'rgba(43,143,216,0.15)', color: '#4db8ff', border: '1px solid rgba(43,143,216,0.3)', marginTop: 10 }}>Parent account</span>
+          <span className="sp-badge" style={{ background: 'rgba(43,143,216,0.15)', color: 'var(--c-accent-300)', border: '1px solid rgba(43,143,216,0.3)', marginTop: 10 }}>Parent account</span>
         </div>
       </div>
 
@@ -183,7 +183,7 @@ function StudentProfile({ userId, onBack, onOpenClass, onOpenIntervention, onOpe
             <div className="sp-stat-label">Classes</div>
           </div>
           <div className="sp-stat">
-            <div className="sp-stat-val" style={{ color: activeInterventions > 0 ? '#f0c040' : 'inherit' }}>{activeInterventions}</div>
+            <div className="sp-stat-val" style={{ color: activeInterventions > 0 ? 'var(--c-amber-400)' : 'inherit' }}>{activeInterventions}</div>
             <div className="sp-stat-label">Open interventions</div>
           </div>
           {(() => {
@@ -236,9 +236,13 @@ function StudentProfile({ userId, onBack, onOpenClass, onOpenIntervention, onOpe
                       <span className="sp-class-stat-label">{c.sessions} sessions</span>
                       {c.tardy > 0 && <span className="sp-class-stat-warn">{c.tardy} tardy</span>}
                       {pct !== null && (
-                        <div className="att-rate-bar" style={{ width: 60 }}>
-                          <div className="att-rate-fill" style={{ width: `${pct}%`, background: pct >= 80 ? '#48c578' : pct >= 50 ? '#f0c040' : '#ff6b6b' }} />
-                        </div>
+                        <>
+                          {/* Rate as text so the value isn't conveyed by bar color alone (WCAG 1.4.1). */}
+                          <span className="att-rate-label">{pct}%</span>
+                          <div className="att-rate-bar" style={{ width: 60 }}>
+                            <div className="att-rate-fill" style={{ width: `${pct}%`, background: pct >= 80 ? 'var(--c-success-400)' : pct >= 50 ? 'var(--c-amber-400)' : 'var(--c-danger-300)' }} />
+                          </div>
+                        </>
                       )}
                       {onOpenClass && <span className="sp-row-chevron">›</span>}
                     </div>
@@ -296,7 +300,7 @@ function StudentProfile({ userId, onBack, onOpenClass, onOpenIntervention, onOpe
                   const late = r.minutes_late > 0
                   const excused = r.excused
                   const label = excused ? 'Excused' : late ? `${r.minutes_late}m late` : 'On time'
-                  const color = excused ? 'rgba(255,255,255,0.65)' : late ? '#f0c040' : '#48c578'
+                  const color = excused ? 'rgba(255,255,255,0.65)' : late ? 'var(--c-amber-400)' : 'var(--c-success-400)'
                   return (
                     <tr key={i}>
                       <td className="sp-att-date">{r.opened_at?.slice(0, 10)}</td>
@@ -335,7 +339,7 @@ function StudentProfile({ userId, onBack, onOpenClass, onOpenIntervention, onOpe
                     <td style={{ fontSize: 12, color: 'rgba(255,255,255,0.65)', maxWidth: 280 }}>{n.note}</td>
                     <td>
                       {n.is_excuse
-                        ? <span style={{ fontSize: 11, fontWeight: 700, color: '#60a5fa', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Excuse</span>
+                        ? <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--c-accent-550)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Excuse</span>
                         : <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)' }}>Note</span>
                       }
                     </td>
@@ -1148,7 +1152,7 @@ function ClassDetail({ cls, onBack, onUpdate, onViewStudent }) {
             <span className="detail-section-count">{students.length}</span>
             <label className="fa-toggle-label" style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 11, color: 'rgba(255,255,255,0.55)' }}>
               <span>Family absence alerts</span>
-              <input type="checkbox" checked={familyAlerts} onChange={toggleFamilyAlerts} style={{ accentColor: 'var(--sc-accent)' }} />
+              <input type="checkbox" aria-label="Family absence alerts" checked={familyAlerts} onChange={toggleFamilyAlerts} style={{ accentColor: 'var(--sc-accent)' }} />
             </label>
           </div>
           <div className="detail-section-body">
@@ -1436,12 +1440,12 @@ function ClassDetail({ cls, onBack, onUpdate, onViewStudent }) {
                           </td>
                           <td>
                             <div className="att-rate-bar">
-                              <div className="att-rate-fill" style={{ width: `${pct}%`, background: pct >= 80 ? '#48c578' : pct >= 50 ? '#f0c040' : '#ff6b6b' }} />
+                              <div className="att-rate-fill" style={{ width: `${pct}%`, background: pct >= 80 ? 'var(--c-success-400)' : pct >= 50 ? 'var(--c-amber-400)' : 'var(--c-danger-300)' }} />
                             </div>
                             <span className="att-rate-label">{s.sessions}/{effectiveExpected}</span>
                           </td>
                           <td className="att-stat-cell">{s.on_time}</td>
-                          <td className="att-stat-cell">{s.tardy > 0 ? <span style={{ color: s.tardy / (s.sessions || 1) >= 0.33 ? '#ff6b6b' : '#f0c040' }}>{s.tardy}</span> : '—'}</td>
+                          <td className="att-stat-cell">{s.tardy > 0 ? <span style={{ color: s.tardy / (s.sessions || 1) >= 0.33 ? 'var(--c-danger-300)' : 'var(--c-amber-400)' }}>{s.tardy}</span> : '—'}</td>
                           <td>
                             {(s.flags.length > 0 || (s.reopen_flags || []).length > 0) ? (
                               <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
@@ -2549,7 +2553,7 @@ function SchoologyCard({ orgId }) {
                 required
               />
             </div>
-            {connectErr && <div style={{ color: '#f87171', fontSize: 13 }}>{connectErr}</div>}
+            {connectErr && <div style={{ color: 'var(--c-danger-300)', fontSize: 13 }}>{connectErr}</div>}
             <button
               className="admin-btn or-connect-btn"
               type="submit"
@@ -2736,8 +2740,8 @@ function TeacherView() {
               <div className="class-card-body">
                 <div className="class-card-name">{cls.name}</div>
                 <div className="class-card-stats">
-                  <div className="class-card-stat"><span>{(cls.student_ids || []).length}</span> students</div>
-                  <div className="class-card-stat"><span>{(cls.link_ids || []).length}</span> links</div>
+                  <div className="class-card-stat"><span>{(cls.student_ids || []).length}</span> {(cls.student_ids || []).length === 1 ? 'student' : 'students'}</div>
+                  <div className="class-card-stat"><span>{(cls.link_ids || []).length}</span> {(cls.link_ids || []).length === 1 ? 'link' : 'links'}</div>
                 </div>
               </div>
             </div>
@@ -2906,13 +2910,13 @@ function IvDetailPanel({ iv, updateCase, addNote, deleteNote, noteInputs, setNot
                 {attendanceRow && (
                   <div className="iv-mine-field">
                     <span className="iv-mine-label">Rate</span>
-                    <span className="iv-mine-value" style={{ color: attendanceRow.attendance_rate < 0.75 ? '#f0c040' : 'inherit' }}>
+                    <span className="iv-mine-value" style={{ color: attendanceRow.attendance_rate < 0.75 ? 'var(--c-amber-400)' : 'inherit' }}>
                       {Math.round(attendanceRow.attendance_rate * 100)}%
                     </span>
                   </div>
                 )}
                 <div className="iv-mine-field"><span className="iv-mine-label">On time</span><span className="iv-mine-value">{attendanceRow?.on_time ?? classSummary?.on_time}</span></div>
-                <div className="iv-mine-field"><span className="iv-mine-label">Tardy</span><span className="iv-mine-value" style={{ color: (attendanceRow?.tardy ?? classSummary?.tardy ?? 0) > 0 ? '#ff6b6b' : 'inherit' }}>{attendanceRow?.tardy ?? classSummary?.tardy}</span></div>
+                <div className="iv-mine-field"><span className="iv-mine-label">Tardy</span><span className="iv-mine-value" style={{ color: (attendanceRow?.tardy ?? classSummary?.tardy ?? 0) > 0 ? 'var(--c-danger-300)' : 'inherit' }}>{attendanceRow?.tardy ?? classSummary?.tardy}</span></div>
               </div>
             </div>
           )}
@@ -3044,13 +3048,13 @@ function OrgAttendanceTab({ orgId }) {
   }
 
   function rateColor(rate) {
-    if (rate >= 90) return '#4ade80'
-    if (rate >= 75) return '#facc15'
-    return '#f87171'
+    if (rate >= 90) return 'var(--c-success-400)'
+    if (rate >= 75) return 'var(--c-amber-400)'
+    return 'var(--c-danger-300)'
   }
 
   if (loading) return <div className="admin-empty" style={{ padding: '48px 0' }}>Loading attendance data...</div>
-  if (error) return <div className="admin-empty" style={{ padding: '48px 0', color: '#f87171' }}>{error}</div>
+  if (error) return <div className="admin-empty" style={{ padding: '48px 0', color: 'var(--c-danger-300)' }}>{error}</div>
 
   const totalRecords = rows.reduce((s, r) => s + r.total_records, 0)
   const orgRate = totalRecords > 0 ? Math.round(rows.reduce((s, r) => s + r.on_time, 0) / totalRecords * 100) : 0
@@ -3090,15 +3094,19 @@ function OrgAttendanceTab({ orgId }) {
       ) : (
         <div style={{ padding: '16px 20px 20px', overflowX: 'auto' }}>
           <table className="attendance-table" style={{ width: '100%' }}>
+            <caption className="sr-only">Organization attendance by student, sortable by column.</caption>
             <thead>
               <tr>
                 {COLS.map(col => (
-                  <th key={col.key} style={{ cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap' }}
-                    onClick={() => toggleSort(col.key)}>
+                  <th key={col.key} scope="col" tabIndex={0}
+                    aria-sort={sort.key === col.key ? (sort.dir === 1 ? 'ascending' : 'descending') : 'none'}
+                    style={{ cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap' }}
+                    onClick={() => toggleSort(col.key)}
+                    onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleSort(col.key) } }}>
                     {col.label} <SortIcon col={col.key} />
                   </th>
                 ))}
-                <th style={{ width: 24 }} />
+                <th scope="col" style={{ width: 24 }}><span className="sr-only">Actions</span></th>
               </tr>
             </thead>
             <tbody>
@@ -3112,8 +3120,8 @@ function OrgAttendanceTab({ orgId }) {
                       <td style={{ fontWeight: 500 }}>{row.class_name || '—'}</td>
                       <td style={{ color: 'rgba(255,255,255,0.6)' }}>{row.teacher_name || '—'}</td>
                       <td style={{ textAlign: 'center' }}>{row.total_records}</td>
-                      <td style={{ textAlign: 'center', color: '#4ade80' }}>{row.on_time}</td>
-                      <td style={{ textAlign: 'center', color: '#facc15' }}>{row.late}</td>
+                      <td style={{ textAlign: 'center', color: 'var(--c-success-400)' }}>{row.on_time}</td>
+                      <td style={{ textAlign: 'center', color: 'var(--c-amber-400)' }}>{row.late}</td>
                       <td style={{ textAlign: 'center' }}>
                         {row.total_records > 0
                           ? <span style={{ color: rateColor(row.attendance_rate), fontWeight: 600 }}>{row.attendance_rate}%</span>
@@ -3131,7 +3139,7 @@ function OrgAttendanceTab({ orgId }) {
                             <div style={{ padding: '10px 0', color: 'rgba(255,255,255,0.4)', fontSize: 13 }}>Loading...</div>
                           )}
                           {detail?.error && (
-                            <div style={{ padding: '10px 0', color: '#f87171', fontSize: 13 }}>Failed to load student data.</div>
+                            <div style={{ padding: '10px 0', color: 'var(--c-danger-300)', fontSize: 13 }}>Failed to load student data.</div>
                           )}
                           {detail && !detail.loading && !detail.error && (
                             detail.students.length === 0
@@ -3154,8 +3162,8 @@ function OrgAttendanceTab({ orgId }) {
                                           }
                                         </td>
                                         <td style={{ textAlign: 'center', padding: '8px 12px' }}>{s.sessions}</td>
-                                        <td style={{ textAlign: 'center', padding: '8px 12px', color: '#4ade80' }}>{s.on_time}</td>
-                                        <td style={{ textAlign: 'center', padding: '8px 12px', color: '#facc15' }}>{s.late}</td>
+                                        <td style={{ textAlign: 'center', padding: '8px 12px', color: 'var(--c-success-400)' }}>{s.on_time}</td>
+                                        <td style={{ textAlign: 'center', padding: '8px 12px', color: 'var(--c-amber-400)' }}>{s.late}</td>
                                         <td style={{ textAlign: 'center', padding: '8px 12px' }}>
                                           <span style={{ color: rateColor(s.attendance_rate), fontWeight: 600 }}>{s.attendance_rate}%</span>
                                         </td>
@@ -3207,13 +3215,13 @@ function LeakSignalTab({ orgId }) {
   }
 
   function rateColor(rate, threshold) {
-    if (rate >= threshold) return '#f87171'
-    if (rate >= threshold * 0.5) return '#facc15'
-    return '#4ade80'
+    if (rate >= threshold) return 'var(--c-danger-300)'
+    if (rate >= threshold * 0.5) return 'var(--c-amber-400)'
+    return 'var(--c-success-400)'
   }
 
   if (loading) return <div className="admin-empty" style={{ padding: '48px 0' }}>Loading leak signal data...</div>
-  if (error) return <div className="admin-empty" style={{ padding: '48px 0', color: '#f87171' }}>{error}</div>
+  if (error) return <div className="admin-empty" style={{ padding: '48px 0', color: 'var(--c-danger-300)' }}>{error}</div>
   if (!data) return null
 
   const threshold = data.leak_threshold ?? 0.15
@@ -3234,12 +3242,16 @@ function LeakSignalTab({ orgId }) {
   function Table({ rows, cols, sort, onSort }) {
     return (
       <table className="attendance-table" style={{ width: '100%' }}>
+        <caption className="sr-only">Attendance-integrity signals, sortable by column.</caption>
         <thead>
           <tr>
             {cols.map(col => (
-              <th key={col.key} style={{ cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap' }}
-                onClick={() => onSort(col.key)}>
-                {col.label} {sort.key === col.key ? (sort.dir === 1 ? '↑' : '↓') : <span style={{ opacity: 0.3 }}>↕</span>}
+              <th key={col.key} scope="col" tabIndex={0}
+                aria-sort={sort.key === col.key ? (sort.dir === 1 ? 'ascending' : 'descending') : 'none'}
+                style={{ cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap' }}
+                onClick={() => onSort(col.key)}
+                onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSort(col.key) } }}>
+                {col.label} {sort.key === col.key ? (sort.dir === 1 ? '↑' : '↓') : <span style={{ opacity: 0.3 }} aria-hidden="true">↕</span>}
               </th>
             ))}
           </tr>
@@ -3913,7 +3925,7 @@ function SchoolAdminView() {
               </button>
             </div>
             {inviteResult && (
-              <div style={{ marginTop: 10, fontSize: 13, color: inviteResult.ok ? '#4ade80' : '#f87171' }}>
+              <div style={{ marginTop: 10, fontSize: 13, color: inviteResult.ok ? 'var(--c-success-400)' : 'var(--c-danger-300)' }}>
                 {inviteResult.msg}
               </div>
             )}
@@ -3971,9 +3983,9 @@ function SchoolAdminView() {
                   </div>
                 )}
                 {csvResults && (
-                  <div style={{ marginTop: 12, fontSize: 13, color: '#4ade80' }}>
+                  <div style={{ marginTop: 12, fontSize: 13, color: 'var(--c-success-400)' }}>
                     Done — {csvResults.filter(r => r.status === 'created').length} created, {csvResults.filter(r => r.status === 'updated').length} updated
-                    {csvResults.filter(r => r.status === 'error').length > 0 && <span style={{ color: '#f87171' }}>, {csvResults.filter(r => r.status === 'error').length} errors</span>}
+                    {csvResults.filter(r => r.status === 'error').length > 0 && <span style={{ color: 'var(--c-danger-300)' }}>, {csvResults.filter(r => r.status === 'error').length} errors</span>}
                   </div>
                 )}
               </>
@@ -4033,9 +4045,9 @@ function SchoolAdminView() {
                   </div>
                 )}
                 {parentCsvResults && (
-                  <div style={{ marginTop: 12, fontSize: 13, color: '#4ade80' }}>
+                  <div style={{ marginTop: 12, fontSize: 13, color: 'var(--c-success-400)' }}>
                     Done — {parentCsvResults.filter(r => r.status === 'created').length} created, {parentCsvResults.filter(r => r.status === 'updated').length} updated
-                    {parentCsvResults.filter(r => r.status === 'error').length > 0 && <span style={{ color: '#f87171' }}>, {parentCsvResults.filter(r => r.status === 'error').length} errors</span>}
+                    {parentCsvResults.filter(r => r.status === 'error').length > 0 && <span style={{ color: 'var(--c-danger-300)' }}>, {parentCsvResults.filter(r => r.status === 'error').length} errors</span>}
                   </div>
                 )}
               </>
@@ -4245,7 +4257,7 @@ export default function AdminDashboard() {
   return (
     <div className="admin-root">
       <SideNav page="admin" />
-      <div className="sn-content">
+      <div className="sn-content" id="main-content" role="main">
         <div className="admin-page">
           {role === 'teacher' && <TeacherView />}
           {role === 'school_admin' && <SchoolAdminView />}

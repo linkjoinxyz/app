@@ -164,7 +164,7 @@
     text-align: left;
     display: block;
 }
-.home-footer-link-btn:hover { color: #0AFFED; }
+.home-footer-link-btn:hover { color: var(--c-teal-500); }
 
 /* ── Mobile hamburger ── */
 .home-hamburger {
@@ -586,7 +586,7 @@
     font-family: Montserrat, sans-serif;
 }
 
-.home-footer .footer-column a:hover { color: #0AFFED; }
+.home-footer .footer-column a:hover { color: var(--c-teal-500); }
 
 .home-footer .copyright {
     width: 100%;

@@ -24,6 +24,7 @@ Accounts created (all passwords: Test1234!):
 import asyncio
 import secrets
 import sys
+from datetime import datetime, timezone
 from argon2 import PasswordHasher
 from cryptography.fernet import Fernet
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -109,7 +110,14 @@ async def main():
     do_wipe = "--wipe" in sys.argv
 
     client = AsyncIOMotorClient(MONGO_URI)
-    db = client["zoom_opener"]
+    # Fail closed: this script (esp. with --wipe) writes real data. Require an
+    # explicit target database rather than defaulting to production so a bare
+    # `python seed_school.py --wipe` can never destroy prod. Use e.g.
+    # MONGO_DATABASE=linkjoin_test.
+    db_name = os.environ.get("MONGO_DATABASE")
+    if not db_name:
+        raise SystemExit("Refusing to seed: set MONGO_DATABASE (e.g. linkjoin_test) first.")
+    db = client[db_name]
 
     user_emails = [u["email"] for u in USERS]
 
@@ -150,6 +158,7 @@ async def main():
             "account_type": "institutional",
             "role": u["role"],
             "org_id": org_id,
+            "created_at": datetime.now(timezone.utc),
         }
         await db.login.insert_one(doc)
         print(f"  Created {u['role']:12s}: {u['email']}")

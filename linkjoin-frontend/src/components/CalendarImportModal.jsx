@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { linksApi } from '../api/links.js'
+import { useFocusTrap } from '../hooks/useFocusTrap.js'
 import '../styles/calendar-import.css'
 
 const GOOGLE_CLIENT_ID = '189748485716-d2pih6avqivdondcfjbt0ve8hkj33sts.apps.googleusercontent.com'
@@ -232,6 +233,8 @@ function normalizeUrl(url) {
 // ── Component ───────────────────────────────────────────
 
 export default function CalendarImportModal({ provider = 'google', existingLinks = [], isPremium = true, onClose, onImport }) {
+  const dialogRef = useRef(null)
+  useFocusTrap(dialogRef)
   const [status, setStatus] = useState('loading')
   const [events, setEvents] = useState([])
   const [selected, setSelected] = useState(new Set())
@@ -402,9 +405,11 @@ export default function CalendarImportModal({ provider = 'google', existingLinks
 
   return (
     <div className="ci-overlay" onClick={onClose}>
-      <div className="ci-card" onClick={e => e.stopPropagation()}>
+      <div className="ci-card" ref={dialogRef} role="dialog" aria-modal="true" tabIndex={-1}
+           aria-labelledby="ci-title" onKeyDown={e => { if (e.key === 'Escape') onClose() }}
+           onClick={e => e.stopPropagation()}>
         <div className="ci-header">
-          <span className="ci-title">{title}</span>
+          <span className="ci-title" id="ci-title">{title}</span>
           <button className="ci-close" onClick={onClose}>×</button>
         </div>
 

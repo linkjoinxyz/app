@@ -4,7 +4,7 @@ import { useModalClose } from '../hooks/useModalClose.js'
 import '../styles/modal.css'
 
 export default function DeleteModal({ link, type = 'link', onClose }) {
-  const { closing, handleClose } = useModalClose(onClose)
+  const { closing, handleClose, overlayRef, dialogProps } = useModalClose(onClose)
   const [loading, setLoading] = useState(false)
 
   async function handleDelete() {
@@ -21,8 +21,8 @@ export default function DeleteModal({ link, type = 'link', onClose }) {
 
   return (
     <div className={`modal-overlay${closing ? ' closing' : ''}`} onClick={() => handleClose(false)}>
-      <div className="modal-card modal-confirm" onClick={e => e.stopPropagation()}>
-        <div className="modal-confirm-title">Delete &ldquo;{link?.name}&rdquo;?</div>
+      <div className="modal-card modal-confirm" ref={overlayRef} {...dialogProps} aria-labelledby="delete-modal-title" onClick={e => e.stopPropagation()}>
+        <div className="modal-confirm-title" id="delete-modal-title">Delete &ldquo;{link?.name}&rdquo;?</div>
         <div className="modal-confirm-sub">This can be recovered from deleted links in settings.</div>
         <div className="modal-confirm-buttons">
           <button className="modal-confirm-cancel" onClick={() => handleClose(false)}>

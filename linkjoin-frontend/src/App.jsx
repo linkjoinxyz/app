@@ -1,5 +1,5 @@
 import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useAuth } from './context/AuthContext.jsx'
 import { ToastProvider } from './context/ToastContext.jsx'
 import { useDarkMode } from './hooks/useDarkMode.js'
@@ -121,7 +121,24 @@ function PlatformAdminRoute({ children }) {
 
 function AppInner() {
   useDarkMode()
-  return <><MfaSetupBanner /><TrialEndingBanner /><IncidentBanner /></>
+  // Banners stack in one fixed container; publish its height as --lj-banner-h so
+  // the page body and the fixed sidebar can offset below it instead of being
+  // covered (the logo was hidden behind a top:0 fixed banner).
+  const stackRef = useRef(null)
+  useEffect(() => {
+    const el = stackRef.current
+    if (!el) return
+    const setH = () => document.documentElement.style.setProperty('--lj-banner-h', el.offsetHeight + 'px')
+    setH()
+    const ro = new ResizeObserver(setH)
+    ro.observe(el)
+    return () => { ro.disconnect(); document.documentElement.style.removeProperty('--lj-banner-h') }
+  }, [])
+  return (
+    <div className="lj-banner-stack" ref={stackRef}>
+      <MfaSetupBanner /><TrialEndingBanner /><IncidentBanner />
+    </div>
+  )
 }
 
 export default function App() {

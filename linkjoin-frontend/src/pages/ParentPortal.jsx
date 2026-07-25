@@ -196,7 +196,7 @@ function NoteModal({ event, studentId, onClose, onSaved }) {
           </span>
           <span className="pp-modal-excuse-label">Mark as excused</span>
         </label>
-        {error && <div style={{ fontSize: 12, color: '#f87171' }}>{error}</div>}
+        {error && <div style={{ fontSize: 12, color: 'var(--c-danger-300)' }}>{error}</div>}
         <div className="pp-modal-actions">
           <button className="pp-modal-cancel" onClick={onClose}>Cancel</button>
           <button className="pp-modal-save" onClick={handleSave} disabled={saving || !noteText.trim()}>
@@ -408,14 +408,14 @@ function NotificationsTab() {
           <div className="settings-row-label">Email reminders</div>
           <div className="settings-row-desc">An email about 10 minutes before your child's class starts.</div>
         </div>
-        <input type="checkbox" className="settings-toggle" checked={settings.email_enabled} onChange={() => toggle('email_enabled')} />
+        <input type="checkbox" className="settings-toggle" aria-label="Email notifications" checked={settings.email_enabled} onChange={() => toggle('email_enabled')} />
       </div>
       <div className="settings-row settings-row--last">
         <div>
           <div className="settings-row-label">Text reminders</div>
           <div className="settings-row-desc">A text message about 10 minutes before your child's class starts.</div>
         </div>
-        <input type="checkbox" className="settings-toggle" checked={settings.sms_enabled} onChange={() => toggle('sms_enabled')} />
+        <input type="checkbox" className="settings-toggle" aria-label="SMS notifications" checked={settings.sms_enabled} onChange={() => toggle('sms_enabled')} />
       </div>
 
       {!settings.has_phone && (
@@ -457,7 +457,7 @@ export default function ParentPortal() {
 
   useEffect(() => {
     const prev = document.body.style.background
-    document.body.style.background = 'var(--blue, #142539)'
+    document.body.style.background = 'var(--blue, var(--c-ink-900))'
     return () => { document.body.style.background = prev }
   }, [])
 

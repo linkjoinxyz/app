@@ -554,6 +554,7 @@ async def _run_clever_sync(org_id: str) -> dict:
                 try:
                     await motor_db.login.insert_one({
                         "username": student_email,
+                        "created_at": datetime.now(timezone.utc),
                         "user_id": uid,
                         "account_type": "institutional",
                         "role": "student",
@@ -885,6 +886,7 @@ async def _run_oneroster_sync(org_id: str) -> dict:
                 try:
                     await motor_db.login.insert_one({
                         "username": student_email,
+                        "created_at": datetime.now(timezone.utc),
                         "user_id": uid,
                         "account_type": "institutional",
                         "role": "student",
@@ -1525,6 +1527,7 @@ async def _run_schoology_sync(org_id: str) -> dict:
                 try:
                     await motor_db.login.insert_one({
                         "username": student_email,
+                        "created_at": datetime.now(timezone.utc),
                         "user_id": student_uid,
                         "schoology_uid": uid,
                         "account_type": "institutional",

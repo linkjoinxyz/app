@@ -1,9 +1,22 @@
+/* Semantic color tokens (generated: single source of truth for all
+   raw hexes). Consolidated from ~193 drifted values. */
 :root {
-    --lightblue: #2B8FD8;
-    --blue: #142539;
-    --darkblue: #091B30;
-    --text: #e8edf2;
-    --muted: #6b8fac;
+  --c-accent-450: #6b8fac;
+  --c-accent-550: #2b8fd8;
+  --c-danger-300: #f87171;
+  --c-ink-700: #3c4043;
+  --c-ink-900: #0f172a;
+  --c-line: #e2eaf2;
+  --c-success-400: #4ade80;
+  --c-white: #ffffff;
+}
+
+:root {
+    --lightblue: var(--c-accent-550);
+    --blue: var(--c-ink-900);
+    --darkblue: var(--c-ink-900);
+    --text: var(--c-white);
+    --muted: var(--c-accent-450);
     --border: rgba(43, 143, 216, 0.18);
 }
 
@@ -163,7 +176,7 @@ input:focus {
 }
 
 .error {
-    color: #e05555;
+    color: var(--c-danger-300);
     font-size: 12px;
     text-align: center;
     margin-top: 2px;
@@ -171,9 +184,9 @@ input:focus {
 
 .google-btn {
     background: white;
-    border: 1px solid #dadce0;
+    border: 1px solid var(--c-line);
     border-radius: 8px;
-    color: #3c4043;
+    color: var(--c-ink-700);
     font-family: inherit;
     font-size: 13px;
     font-weight: 600;
@@ -186,7 +199,7 @@ input:focus {
     width: 100%;
     transition: background 0.15s;
 }
-.google-btn:hover:not(:disabled) { background: #f8f9fa; }
+.google-btn:hover:not(:disabled) { background: var(--c-white); }
 .google-btn:disabled { opacity: 0.6; cursor: default; }
 
 .or-divider {
@@ -523,7 +536,7 @@ input:focus {
 .period-btn:hover { border-color: var(--lightblue); }
 
 .add-error {
-    color: #e05555;
+    color: var(--c-danger-300);
     font-size: 12px;
 }
 
@@ -544,7 +557,7 @@ input:focus {
 
 .add-submit:hover:not(:disabled) { opacity: 0.88; }
 .add-submit:disabled { opacity: 0.4; cursor: default; }
-.add-submit.success { background: #22c55e; }
+.add-submit.success { background: var(--c-success-400); }
 
 /* Settings */
 
@@ -658,4 +671,13 @@ input:focus {
 }
 .scan-btn:hover:not(.scan-btn--locked) {
     border-color: var(--lightblue);
+}
+
+/* Respect reduced-motion: collapse all animation/transition motion. */
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        animation-duration: 0.001ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.001ms !important;
+    }
 }

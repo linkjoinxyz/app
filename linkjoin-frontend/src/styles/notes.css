@@ -126,8 +126,8 @@
 .note-editor-save {
   margin-left: auto;
   font: 600 12px Montserrat, sans-serif;
-  color: #fff;
-  background: #2b8fd8;
+  color: var(--c-white);
+  background: var(--c-accent-550);
   border: none;
   border-radius: 6px;
   padding: 5px 14px;
@@ -141,7 +141,7 @@
 }
 
 .note-editor-save--saved {
-  background: #22c55e;
+  background: var(--c-success-400);
 }
 
 .note-editor-textarea {
@@ -195,7 +195,7 @@
   margin: 0 0 8px;
   padding-left: 20px;
 }
-.note-editor-preview a { color: #4db8ff; }
+.note-editor-preview a { color: var(--c-accent-300); }
 
 @media (max-width: 768px) {
   .notes-root { padding-top: 72px; }

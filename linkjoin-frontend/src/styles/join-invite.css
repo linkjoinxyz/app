@@ -1,6 +1,6 @@
 .join-root {
   min-height: 100vh;
-  background: #060F1A;
+  background: var(--c-ink-950);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -8,7 +8,7 @@
 }
 
 .join-card {
-  background: #0d1a2a;
+  background: var(--c-ink-900);
   border: 1px solid rgba(255,255,255,0.08);
   border-radius: 14px;
   padding: 40px 36px;
@@ -39,7 +39,7 @@
   display: inline-flex;
   align-items: center;
   background: rgba(43,143,216,0.15);
-  color: #2b8fd8;
+  color: var(--c-accent-550);
   border-radius: 6px;
   font-size: 12px;
   font-weight: 600;
@@ -55,7 +55,7 @@
 .join-title {
   font-size: 18px;
   font-weight: 600;
-  color: #e8edf2;
+  color: var(--c-white);
   margin-bottom: 24px;
   line-height: 1.3;
 }
@@ -76,7 +76,7 @@
   width: 40px;
   height: 40px;
   background: rgba(239,68,68,0.15);
-  color: #f87171;
+  color: var(--c-danger-300);
   border-radius: 50%;
   font-size: 20px;
   font-weight: 700;
@@ -89,7 +89,7 @@
 .join-error-title {
   font-size: 16px;
   font-weight: 600;
-  color: #e8edf2;
+  color: var(--c-white);
   margin-bottom: 8px;
 }
 
@@ -160,7 +160,7 @@
   border-radius: 8px;
   padding: 10px 14px;
   font-size: 14px;
-  color: #e8edf2;
+  color: var(--c-white);
   outline: none;
   width: 100%;
   box-sizing: border-box;
@@ -177,8 +177,8 @@
 }
 
 .join-btn {
-  background: #2b8fd8;
-  color: #fff;
+  background: var(--c-accent-550);
+  color: var(--c-white);
   border: none;
   border-radius: 8px;
   font-size: 14px;
@@ -199,7 +199,7 @@
 
 .join-form-error {
   font-size: 13px;
-  color: #f87171;
+  color: var(--c-danger-300);
   background: rgba(239,68,68,0.08);
   border-radius: 6px;
   padding: 8px 12px;
@@ -218,7 +218,7 @@
   border-radius: 50%;
   background: rgba(43,143,216,0.15);
   border: 1.5px solid rgba(43,143,216,0.4);
-  color: #2b8fd8;
+  color: var(--c-accent-550);
   font-size: 24px;
   display: flex;
   align-items: center;
@@ -229,7 +229,7 @@
 .join-welcome-title {
   font-size: 20px;
   font-weight: 700;
-  color: #e8edf2;
+  color: var(--c-white);
   letter-spacing: -0.3px;
   margin-bottom: 10px;
   text-align: center;

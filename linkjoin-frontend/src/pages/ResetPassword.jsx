@@ -49,7 +49,7 @@ export default function ResetPassword() {
           <>
             <div className="auth-page-success-icon">
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" style={{ position: 'static', width: 24, height: 24 }}>
-                <path d="M5 13l4 4L19 7" stroke="#2B8FD8" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+                <path d="M5 13l4 4L19 7" style={{ stroke: 'var(--c-accent-550)' }} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             </div>
             <h2 className="auth-title">Password updated!</h2>

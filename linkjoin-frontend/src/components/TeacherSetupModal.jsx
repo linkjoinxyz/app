@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { apiFetch } from '../api/client.js'
 import { TimeOfDayInput, DayPicker, toUTC } from './schedule/ScheduleControls.jsx'
+import { useFocusTrap } from '../hooks/useFocusTrap.js'
 import '../styles/teacher-setup.css'
 
 const TOTAL_STEPS = 3
@@ -19,6 +20,8 @@ function StepDots({ step }) {
 }
 
 export default function TeacherSetupModal({ onDone }) {
+  const dialogRef = useRef(null)
+  useFocusTrap(dialogRef)
   const [step, setStep] = useState(0)
   const [className, setClassName] = useState('')
   // Collected at creation rather than left empty. A class with no schedule
@@ -125,7 +128,9 @@ export default function TeacherSetupModal({ onDone }) {
 
   return (
     <div className="ts-overlay" onClick={dismiss}>
-      <div className="ts-modal" onClick={e => e.stopPropagation()}>
+      <div className="ts-modal" ref={dialogRef} role="dialog" aria-modal="true" tabIndex={-1}
+           aria-label="Class setup" onKeyDown={e => { if (e.key === 'Escape') dismiss() }}
+           onClick={e => e.stopPropagation()}>
         {done ? (
           <div className="ts-success">
             <div className="ts-success-icon">&#10003;</div>

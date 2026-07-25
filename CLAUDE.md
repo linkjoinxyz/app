@@ -7,7 +7,9 @@
 - Artifacts sync: off
 - Current repo policy: read-write (github.com/linkjoinxyz/app)
 - Code source: gstack-code-linkjoin → /Users/sethraphael/PycharmProject/linkjoin
-- Pages indexed: 226 (linkjoin-frontend + linkjoin-backend)
+- Pages indexed: 494 total (359 code); last code sync 2026-07-23 at commit f78f5fe on `dev`
+- Sync command: ALWAYS `gbrain sync --strategy code`. A bare `gbrain sync` uses the docs strategy here and would PRUNE the code index (marks ~60 code pages "un-syncable" and deletes them). After a large sync, also run `gbrain embed --stale` and `gbrain extract --stale --source-id gstack-code-linkjoin`.
+- Known issue: the v0.11.0 "Minions" migration is stuck failing (`column "event_page_id" does not exist`, prints on every command). It is unrelated to code sync (sync works despite the warning) and re-running `apply-migrations` does not fix it — escalate to gbrain, do not block on it.
 
 ## GBrain Search Guidance (configured by /sync-gbrain)
 <!-- gstack-gbrain-search-guidance:start -->

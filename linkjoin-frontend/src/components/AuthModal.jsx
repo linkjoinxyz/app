@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext.jsx'
 import { authApi } from '../api/auth.js'
+import { useFocusTrap } from '../hooks/useFocusTrap.js'
 import '../styles/auth-modal.css'
 
 const GOOGLE_CLIENT_ID = '189748485716-d2pih6avqivdondcfjbt0ve8hkj33sts.apps.googleusercontent.com'
@@ -31,10 +32,10 @@ function GoogleIcon() {
       position: 'static', zIndex: 'auto', height: 18, width: 18,
       fill: 'none', transform: 'none', flexShrink: 0,
     }}>
-      <path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844a4.14 4.14 0 0 1-1.796 2.717v2.258h2.908C16.658 14.013 17.64 11.706 17.64 9.2z"/>
-      <path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.861-3.048.861-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18z"/>
-      <path fill="#FBBC05" d="M3.964 10.71A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.042l3.007-2.332z"/>
-      <path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.958L3.964 6.29C4.672 5.163 6.656 3.58 9 3.58z"/>
+      <path style={{ fill: 'var(--c-brand-google-blue)' }} d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844a4.14 4.14 0 0 1-1.796 2.717v2.258h2.908C16.658 14.013 17.64 11.706 17.64 9.2z"/>
+      <path style={{ fill: 'var(--c-brand-google-green)' }} d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.861-3.048.861-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18z"/>
+      <path style={{ fill: 'var(--c-brand-google-yellow)' }} d="M3.964 10.71A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.042l3.007-2.332z"/>
+      <path style={{ fill: 'var(--c-brand-google-red)' }} d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.958L3.964 6.29C4.672 5.163 6.656 3.58 9 3.58z"/>
     </svg>
   )
 }
@@ -42,6 +43,8 @@ function GoogleIcon() {
 export default function AuthModal({ mode: initialMode, onClose }) {
   const { login } = useAuth()
   const navigate = useNavigate()
+  const dialogRef = useRef(null)
+  useFocusTrap(dialogRef)
   const [mode, setMode] = useState(initialMode)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -227,12 +230,12 @@ export default function AuthModal({ mode: initialMode, onClose }) {
   if (mfaSession) {
     return (
       <div className="auth-backdrop" onMouseDown={e => e.target === e.currentTarget && onClose()}>
-        <div className="auth-card">
+        <div className="auth-card" ref={dialogRef} role="dialog" aria-modal="true" tabIndex={-1} aria-labelledby="auth-confirm-title">
           <button className="auth-back" onClick={onClose} aria-label="Close">
             <img src="/images/arrow-left.svg" height="20" width="20" alt="back" />
           </button>
           <div className="auth-heading">
-            <h2 className="auth-title">Confirm it's you.</h2>
+            <h2 className="auth-title" id="auth-confirm-title">Confirm it's you.</h2>
             <p className="auth-switch">Enter the 6-digit code sent to your phone.</p>
           </div>
           {mfaError && <div className="auth-error">{mfaError}</div>}
@@ -262,14 +265,14 @@ export default function AuthModal({ mode: initialMode, onClose }) {
 
   return (
     <div className="auth-backdrop" onMouseDown={e => e.target === e.currentTarget && onClose()}>
-      <div className="auth-card" data-mode={mode}>
+      <div className="auth-card" data-mode={mode} ref={dialogRef} role="dialog" aria-modal="true" tabIndex={-1} aria-labelledby="auth-main-title">
 
         <button className="auth-back" onClick={onClose} aria-label="Close">
           <img src="/images/arrow-left.svg" height="20" width="20" alt="back" />
         </button>
 
         <div className="auth-heading">
-          <h2 className="auth-title">
+          <h2 className="auth-title" id="auth-main-title">
             {mode === 'login' ? 'Welcome back.' : 'Create your account.'}
           </h2>
           <p className="auth-switch">
@@ -307,7 +310,7 @@ export default function AuthModal({ mode: initialMode, onClose }) {
           <input
             className="auth-input" type="email" placeholder="you@example.com" required
             value={email} onChange={e => setEmail(e.target.value)} onKeyUp={submitOnEnter}
-            style={error === 'email_not_found' || error === 'invalid_email' ? { borderBottomColor: '#f87171' } : {}}
+            style={error === 'email_not_found' || error === 'invalid_email' ? { borderBottomColor: 'var(--c-danger-300)' } : {}}
           />
         </div>
 
@@ -316,7 +319,7 @@ export default function AuthModal({ mode: initialMode, onClose }) {
           <input
             className="auth-input" type="password" placeholder="••••••••" required
             value={password} onChange={e => setPassword(e.target.value)} onKeyUp={submitOnEnter}
-            style={showReset || error === 'password_too_short' ? { borderBottomColor: '#f87171' } : {}}
+            style={showReset || error === 'password_too_short' ? { borderBottomColor: 'var(--c-danger-300)' } : {}}
           />
           {mode === 'login' && showReset && (
             <a href="/forgot-password" className="auth-reset">Forgot password?</a>

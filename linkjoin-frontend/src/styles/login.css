@@ -42,7 +42,7 @@
   color: rgba(255, 255, 255, 0.45);
 }
 .page-login .auth-nav-aside a {
-  color: #2B8FD8;
+  color: var(--c-accent-550);
   font-weight: 600;
   margin-left: 6px;
   text-decoration: none;
@@ -51,7 +51,7 @@
 
 /* ── Card ─────────────────────────────────── */
 .page-login .auth-card {
-  background: #0C1E30;
+  background: var(--c-ink-900);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 20px;
   padding: 40px 44px 44px;
@@ -83,15 +83,15 @@
   justify-content: center;
   gap: 10px;
   background: white;
-  color: #3c4043;
-  border: 1px solid #dadce0;
+  color: var(--c-ink-700);
+  border: 1px solid var(--c-line);
   border-radius: 10px;
   font: 500 14px Montserrat, sans-serif;
   cursor: pointer;
   transition: background 0.15s, box-shadow 0.15s;
 }
 .page-login .login-google-btn:hover:not(:disabled) {
-  background: #f8f9fa;
+  background: var(--c-white);
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
 }
 .page-login .login-google-btn:disabled { opacity: 0.6; cursor: not-allowed; }
@@ -144,7 +144,7 @@
 .page-login .auth-input:-webkit-autofill:hover,
 .page-login .auth-input:-webkit-autofill:focus {
   -webkit-text-fill-color: white !important;
-  -webkit-box-shadow: 0 0 0px 1000px #0C1E30 inset !important;
+  -webkit-box-shadow: 0 0 0px 1000px var(--c-ink-900) inset !important;
   transition: background-color 5000s ease-in-out 0s;
 }
 
@@ -160,7 +160,7 @@
   width: 100%;
   height: 48px;
   border-radius: 10px;
-  background: #2B8FD8;
+  background: var(--c-accent-550);
   color: white;
   font: 700 15px Montserrat, sans-serif;
   border: none;
@@ -183,7 +183,7 @@
   display: none;
   margin-top: 10px;
 }
-.page-login #reset:hover { color: #2B8FD8; }
+.page-login #reset:hover { color: var(--c-accent-550); }
 
 /* ── Phone row (signup) ───────────────────── */
 .page-login .auth-phone-row {

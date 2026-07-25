@@ -3,9 +3,9 @@ import { Link } from 'react-router-dom'
 import '../styles/school.css'
 
 const TEACHER_AVATARS = [
-  { name: 'Ms. Rivera', email: 'rivera@school.edu', color: '#2B8FD8', classes: 3 },
-  { name: 'Mr. Chen',   email: 'chen@school.edu',   color: '#7C3AED', classes: 2 },
-  { name: 'Dr. Osei',   email: 'osei@school.edu',   color: '#059669', classes: 4 },
+  { name: 'Ms. Rivera', email: 'rivera@school.edu', color: 'var(--c-accent-550)', classes: 3 },
+  { name: 'Mr. Chen',   email: 'chen@school.edu',   color: 'var(--c-violet-400)', classes: 2 },
+  { name: 'Dr. Osei',   email: 'osei@school.edu',   color: 'var(--c-teal-700)', classes: 4 },
 ]
 
 const CLASS_CARDS = [
@@ -224,7 +224,7 @@ export default function SchoolDashboards() {
                 </div>
                 <div className="sc-teacher-list">
                   <div className="sc-teacher-row sc-teacher-row--open">
-                    <div className="sc-teacher-avatar" style={{background:'#2B8FD8'}}>R</div>
+                    <div className="sc-teacher-avatar" style={{background:'var(--c-accent-550)'}}>R</div>
                     <div className="sc-teacher-info">
                       <div className="sc-teacher-name">Ms. Rivera</div>
                       <div className="sc-teacher-email">rivera@school.edu</div>
@@ -243,7 +243,7 @@ export default function SchoolDashboards() {
                     </div>
                   </div>
                   <div className="sc-teacher-row">
-                    <div className="sc-teacher-avatar" style={{background:'#7C3AED'}}>C</div>
+                    <div className="sc-teacher-avatar" style={{background:'var(--c-violet-400)'}}>C</div>
                     <div className="sc-teacher-info">
                       <div className="sc-teacher-name">Mr. Chen</div>
                       <div className="sc-teacher-email">chen@school.edu</div>
@@ -252,7 +252,7 @@ export default function SchoolDashboards() {
                     <span className="sc-teacher-chevron">›</span>
                   </div>
                   <div className="sc-teacher-row">
-                    <div className="sc-teacher-avatar" style={{background:'#059669'}}>O</div>
+                    <div className="sc-teacher-avatar" style={{background:'var(--c-teal-700)'}}>O</div>
                     <div className="sc-teacher-info">
                       <div className="sc-teacher-name">Dr. Osei</div>
                       <div className="sc-teacher-email">osei@school.edu</div>
@@ -515,7 +515,7 @@ export default function SchoolDashboards() {
               {
                 role: 'Teacher',
                 icon: 'T',
-                color: '#2B8FD8',
+                color: 'var(--c-accent-550)',
                 sub: 'Their classes only',
                 scopes: [
                   'Their own class grid',
@@ -528,7 +528,7 @@ export default function SchoolDashboards() {
               {
                 role: 'School admin',
                 icon: 'A',
-                color: '#7C3AED',
+                color: 'var(--c-violet-400)',
                 sub: 'Full school access',
                 scopes: [
                   'Every teacher and their classes',
@@ -541,7 +541,7 @@ export default function SchoolDashboards() {
               {
                 role: 'District admin',
                 icon: 'D',
-                color: '#059669',
+                color: 'var(--c-teal-700)',
                 sub: 'All schools',
                 scopes: [
                   'Every school in the district',
@@ -554,7 +554,7 @@ export default function SchoolDashboards() {
             ].map(({ role, icon, color, sub, scopes }) => (
               <div key={role} className="sc-sd-role-card">
                 <div className="sc-sd-role-card-header" style={{background: color + '14', borderColor: color + '30'}}>
-                  <div className="sc-hier-icon" style={{background: color, color: '#fff', width:36, height:36, borderRadius:10, display:'flex', alignItems:'center', justifyContent:'center', fontWeight:700, fontSize:15, flexShrink:0}}>{icon}</div>
+                  <div className="sc-hier-icon" style={{background: color, color: 'var(--c-white)', width:36, height:36, borderRadius:10, display:'flex', alignItems:'center', justifyContent:'center', fontWeight:700, fontSize:15, flexShrink:0}}>{icon}</div>
                   <div>
                     <div className="sc-sd-role-name">{role}</div>
                     <div className="sc-sd-role-sub">{sub}</div>

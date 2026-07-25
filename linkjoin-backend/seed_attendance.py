@@ -78,7 +78,11 @@ async def main():
     rng = random.Random(42)  # deterministic so re-runs produce same data
 
     client = AsyncIOMotorClient(MONGO_URI)
-    db_name = os.environ.get("MONGO_DATABASE", "zoom_opener")
+    # Fail closed rather than defaulting to the production database, so a bare
+    # run cannot write to prod by accident. Use e.g. MONGO_DATABASE=linkjoin_test.
+    db_name = os.environ.get("MONGO_DATABASE")
+    if not db_name:
+        raise SystemExit("Refusing to seed: set MONGO_DATABASE (e.g. linkjoin_test) first.")
     db = client[db_name]
 
     if do_wipe:
