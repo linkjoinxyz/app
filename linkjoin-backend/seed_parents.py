@@ -62,7 +62,13 @@ def _gen_id(n=12) -> str:
 
 async def run():
     client = AsyncIOMotorClient(MONGO_URI)
-    db = client.zoom_opener
+    # Fail closed: require an explicit target database rather than defaulting to
+    # production, so this script cannot write to prod by accident. Use e.g.
+    # MONGO_DATABASE=linkjoin_test.
+    db_name = os.environ.get("MONGO_DATABASE")
+    if not db_name:
+        raise SystemExit("Refusing to seed: set MONGO_DATABASE (e.g. linkjoin_test) first.")
+    db = client[db_name]
 
     hashed = _hasher.hash(PASSWORD)
     created = 0

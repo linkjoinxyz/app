@@ -10,7 +10,7 @@ const OPEN_EARLY_OPTIONS = [0, 1, 2, 3, 5, 10, 15]
 const SORT_OPTIONS = ['None', 'Day & Time', 'Upcoming']
 
 export default function SettingsModal({ user, visible, onClose, onShowDeleted, onCalendarImport, onOutlookImport, onUserRefresh }) {
-  const { closing, handleClose } = useModalClose(onClose)
+  const { closing, handleClose, overlayRef, dialogProps } = useModalClose(onClose)
   const { logout } = useAuth()
   const [tab, setTab] = useState('personal')
   const [name, setName] = useState(user?.name || '')
@@ -89,7 +89,7 @@ export default function SettingsModal({ user, visible, onClose, onShowDeleted, o
 
   return (
     <div className={`modal-overlay${closing ? ' closing' : ''}`} onClick={handleClose}>
-      <div className="modal-card" onClick={e => e.stopPropagation()}>
+      <div className="modal-card" ref={overlayRef} {...dialogProps} aria-label="Settings" onClick={e => e.stopPropagation()}>
         <img
           src="/images/arrow-left.svg"
           className="modal-back"

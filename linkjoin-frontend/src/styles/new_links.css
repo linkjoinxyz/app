@@ -19,7 +19,7 @@
     width: 70px;
 }
 
-#add-number-div {
+var(--c-teal-200)-number-div {
     width: min(500px, calc(100vw - 30px));
     padding: 10px 10px;
     background: var(--darkblue);
@@ -34,7 +34,7 @@
     display: none;
 }
 
-#add-number-div .content {
+var(--c-teal-200)-number-div .content {
     position: relative;
     top: -10px
 }
@@ -51,7 +51,7 @@
     opacity: 0.2
 }
 
-#add_number {
+var(--c-teal-200)_number {
     font-size: 16px;
     display: inline-flex;
     height: 60px;
@@ -131,7 +131,7 @@
     width: 350px;
     height: 100px;
     background: var(--blue);
-    border-left: 3px solid #14db38;
+    border-left: 3px solid var(--c-success-550);
     border-radius: 3px;
     position: absolute;
     top: 30px;
@@ -162,7 +162,7 @@
 }
 
 .notes_button:hover {
-    background: #3da7f5
+    background: var(--c-accent-300)
 }
 
 .back {
@@ -486,7 +486,7 @@ html, body {scroll-behavior: smooth; overflow-x: visible;}
     padding: 3px 5px 1px 0;
     margin-bottom: 8px;
     min-height: 20px;
-    background: #801f27;
+    background: var(--c-danger-700);
     border-radius: 3px;
     text-align: center;
     font: 400 14px Montserrat, sans-serif;
@@ -658,7 +658,7 @@ html, body {scroll-behavior: smooth; overflow-x: visible;}
   background: none;
   border: 1px solid rgba(43, 143, 216, 0.5);
   border-radius: 6px;
-  color: #2B8FD8;
+  color: var(--c-accent-550);
   font: 500 13px Montserrat, sans-serif;
   cursor: pointer;
   padding: 4px 12px;
@@ -702,7 +702,7 @@ html, body {scroll-behavior: smooth; overflow-x: visible;}
 
 .modified-banner-icon {
   font-size: 15px;
-  color: #2B8FD8;
+  color: var(--c-accent-550);
   flex-shrink: 0;
 }
 
@@ -712,7 +712,7 @@ html, body {scroll-behavior: smooth; overflow-x: visible;}
 }
 
 .modified-banner-text strong {
-  color: #fff;
+  color: var(--c-white);
   font-weight: 600;
 }
 
@@ -729,13 +729,13 @@ html, body {scroll-behavior: smooth; overflow-x: visible;}
 }
 .modified-banner-dismiss:hover { color: rgba(255, 255, 255, 0.8); }
 
-[data-theme="light"] #popup { background: #fff; color: #0D1B2A; }
-[data-theme="light"] #popup-notes { background: #fff; color: #0D1B2A; }
-[data-theme="light"] #popup h2, [data-theme="light"] #popup-notes h2 { color: #0D1B2A; }
-[data-theme="light"] #popup input, [data-theme="light"] #popup select { background: #ffffff; color: #0D1B2A; border-color: #E2EAF2; }
-[data-theme="light"] #links-search { background: #ffffff; color: #0D1B2A; border-color: #E2EAF2; width: 260px; }
+[data-theme="light"] #popup { background: var(--c-white); color: var(--c-ink-900); }
+[data-theme="light"] #popup-notes { background: var(--c-white); color: var(--c-ink-900); }
+[data-theme="light"] #popup h2, [data-theme="light"] #popup-notes h2 { color: var(--c-ink-900); }
+[data-theme="light"] #popup input, [data-theme="light"] #popup select { background: var(--c-white); color: var(--c-ink-900); border-color: var(--c-line); }
+[data-theme="light"] #links-search { background: var(--c-white); color: var(--c-ink-900); border-color: var(--c-line); width: 260px; }
 [data-theme="light"] #links-search-container { background: transparent; border-bottom: none; }
-[data-theme="light"] .verify-banner { background: #1e3349; }
+[data-theme="light"] .verify-banner { background: var(--c-ink-800); }
 [data-theme="light"] .verify-banner-close { color: rgba(255,255,255,0.5); }
-[data-theme="light"] .modified-banner { background: #1e3349; }
+[data-theme="light"] .modified-banner { background: var(--c-ink-800); }
 [data-theme="light"] .modified-banner-dismiss { color: rgba(255,255,255,0.4); }

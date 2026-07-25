@@ -460,7 +460,7 @@ const [showDeleted, setShowDeleted] = useState(false)
         search={search}
         onSearch={setSearch}
       />
-      <div className="sn-content">
+      <div className="sn-content" id="main-content" role="main">
 
       {tzMismatch && (
         <div className="verify-banner tz-banner">

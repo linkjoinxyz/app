@@ -49,7 +49,7 @@ function CreateAdminModal({ onClose }) {
           </button>
         </div>
         {result && (
-          <div style={{ marginTop: 10, fontSize: 13, color: result.ok ? '#4ade80' : '#f87171' }}>
+          <div style={{ marginTop: 10, fontSize: 13, color: result.ok ? 'var(--c-success-400)' : 'var(--c-danger-300)' }}>
             {result.msg}
           </div>
         )}
@@ -292,7 +292,7 @@ function DonutChart({ segments, size = 148, thickness = 30 }) {
   if (!total) {
     return (
       <div style={{ width: size, height: size, borderRadius: '50%', background: 'rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-        <div style={{ width: innerSize, height: innerSize, borderRadius: '50%', background: '#060F1A' }} />
+        <div style={{ width: innerSize, height: innerSize, borderRadius: '50%', background: 'var(--c-ink-950)' }} />
       </div>
     )
   }
@@ -308,9 +308,9 @@ function DonutChart({ segments, size = 148, thickness = 30 }) {
     .join(', ')
   return (
     <div style={{ width: size, height: size, borderRadius: '50%', background: `conic-gradient(${stops})`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-      <div style={{ width: innerSize, height: innerSize, borderRadius: '50%', background: '#060F1A', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div style={{ width: innerSize, height: innerSize, borderRadius: '50%', background: 'var(--c-ink-950)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <div style={{ textAlign: 'center' }}>
-          <div style={{ fontSize: 22, fontWeight: 700, color: '#e8edf2', lineHeight: 1 }}>{total}</div>
+          <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--c-white)', lineHeight: 1 }}>{total}</div>
           <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)', marginTop: 3, textTransform: 'uppercase', letterSpacing: '0.06em' }}>total</div>
         </div>
       </div>
@@ -361,46 +361,46 @@ function AnalyticsTab() {
   const maxSignups = Math.max(...monthly_signups.map(m => m.count), 1)
 
   const roleSegments = [
-    { label: 'Students',        value: users.by_role.student,        color: '#4ade80' },
-    { label: 'Teachers',        value: users.by_role.teacher,        color: '#60a5fa' },
-    { label: 'School admins',   value: users.by_role.school_admin,   color: '#c084fc' },
-    { label: 'District admins', value: users.by_role.district_admin, color: '#fb923c' },
-    { label: 'Personal',        value: users.by_role.personal,       color: '#475569' },
+    { label: 'Students',        value: users.by_role.student,        color: 'var(--c-success-400)' },
+    { label: 'Teachers',        value: users.by_role.teacher,        color: 'var(--c-accent-550)' },
+    { label: 'School admins',   value: users.by_role.school_admin,   color: 'var(--c-violet-200)' },
+    { label: 'District admins', value: users.by_role.district_admin, color: 'var(--c-orange-550)' },
+    { label: 'Personal',        value: users.by_role.personal,       color: 'var(--c-slate-600)' },
   ]
 
   const inviteSegments = [
-    { label: 'Accepted',  value: invites.accepted,  color: '#4ade80' },
-    { label: 'Pending',   value: invites.pending,   color: '#fbbf24' },
-    { label: 'Rescinded', value: invites.rescinded, color: '#f87171' },
-    { label: 'Expired',   value: invites.expired,   color: '#334155' },
+    { label: 'Accepted',  value: invites.accepted,  color: 'var(--c-success-400)' },
+    { label: 'Pending',   value: invites.pending,   color: 'var(--c-amber-400)' },
+    { label: 'Rescinded', value: invites.rescinded, color: 'var(--c-danger-300)' },
+    { label: 'Expired',   value: invites.expired,   color: 'var(--c-ink-700-2)' },
   ]
 
   const inviteTypeSegments = [
-    { label: 'School admin',    value: invites.by_type.school_admin,   color: '#c084fc' },
-    { label: 'Teacher',         value: invites.by_type.teacher,        color: '#60a5fa' },
-    { label: 'Student join code', value: invites.by_type.student_class, color: '#4ade80' },
+    { label: 'School admin',    value: invites.by_type.school_admin,   color: 'var(--c-violet-200)' },
+    { label: 'Teacher',         value: invites.by_type.teacher,        color: 'var(--c-accent-550)' },
+    { label: 'Student join code', value: invites.by_type.student_class, color: 'var(--c-success-400)' },
   ]
 
-  const BAR_COLORS = ['#60a5fa','#818cf8','#a78bfa','#c084fc','#e879f9','#f472b6']
+  const BAR_COLORS = ['var(--c-accent-550)','var(--c-indigo-350)','var(--c-violet-200)','var(--c-violet-200)','var(--c-magenta-350)','var(--c-magenta-300)']
 
   return (
     <div className="pa-section">
       {/* Overview stat cards */}
       <div className="pa-stat-grid">
-        <StatCard val={orgs.total}          label="Organizations"       accent="#60a5fa" />
-        <StatCard val={users.total}         label="Total users"         accent="#c084fc" />
-        <StatCard val={users.institutional} label="Institutional users" accent="#4ade80" />
-        <StatCard val={invites.pending}     label="Pending invites"     accent="#fbbf24" />
+        <StatCard val={orgs.total}          label="Organizations"       accent="var(--c-accent-550)" />
+        <StatCard val={users.total}         label="Total users"         accent="var(--c-violet-200)" />
+        <StatCard val={users.institutional} label="Institutional users" accent="var(--c-success-400)" />
+        <StatCard val={invites.pending}     label="Pending invites"     accent="var(--c-amber-400)" />
       </div>
 
       {/* Last-30-day activity */}
       <div className="pa-section-title">Last 30 days</div>
       <div className="pa-stat-grid">
-        <StatCard val={last_30d?.logins?.count       ?? 0} sub={last_30d?.logins?.unique_users       ?? 0} label="Logins"         accent="#60a5fa" />
-        <StatCard val={last_30d?.signups?.count      ?? 0} sub={last_30d?.signups?.unique_users      ?? 0} label="Signups"        accent="#4ade80" />
-        <StatCard val={last_30d?.link_creates?.count ?? 0} sub={last_30d?.link_creates?.unique_users ?? 0} label="Links created"  accent="#a78bfa" />
-        <StatCard val={last_30d?.link_opens?.count   ?? 0} sub={last_30d?.link_opens?.unique_users   ?? 0} label="Links opened"   accent="#fb923c" />
-        <StatCard val={last_30d?.link_shares?.count  ?? 0} sub={last_30d?.link_shares?.unique_users  ?? 0} label="Link shares"    accent="#f472b6" />
+        <StatCard val={last_30d?.logins?.count       ?? 0} sub={last_30d?.logins?.unique_users       ?? 0} label="Logins"         accent="var(--c-accent-550)" />
+        <StatCard val={last_30d?.signups?.count      ?? 0} sub={last_30d?.signups?.unique_users      ?? 0} label="Signups"        accent="var(--c-success-400)" />
+        <StatCard val={last_30d?.link_creates?.count ?? 0} sub={last_30d?.link_creates?.unique_users ?? 0} label="Links created"  accent="var(--c-violet-200)" />
+        <StatCard val={last_30d?.link_opens?.count   ?? 0} sub={last_30d?.link_opens?.unique_users   ?? 0} label="Links opened"   accent="var(--c-orange-550)" />
+        <StatCard val={last_30d?.link_shares?.count  ?? 0} sub={last_30d?.link_shares?.unique_users  ?? 0} label="Link shares"    accent="var(--c-magenta-300)" />
       </div>
 
       {/* Donut charts row */}
@@ -578,7 +578,7 @@ function IncidentsTab() {
           <div className="inc-components">
             {ALL_COMPONENTS.map(c => (
               <label key={c} className="inc-component-chip">
-                <input type="checkbox" checked={components.includes(c)} onChange={() => toggleComponent(c)} />
+                <input type="checkbox" aria-label={c} checked={components.includes(c)} onChange={() => toggleComponent(c)} />
                 {c}
               </label>
             ))}

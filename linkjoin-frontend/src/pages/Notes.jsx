@@ -128,6 +128,7 @@ export default function Notes() {
   const [notes, setNotes] = useState([])
   const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(false)
   const [searchParams] = useSearchParams()
   const autoLinkId = searchParams.get('link_id')
   const autoLinkName = searchParams.get('name')
@@ -141,7 +142,7 @@ export default function Notes() {
         }
         setNotes(list)
       })
-      .catch(() => {})
+      .catch(() => setError(true))
       .finally(() => setLoading(false))
   }, [])
 
@@ -157,8 +158,10 @@ export default function Notes() {
   return (
     <div style={{ display: 'flex' }}>
       <SideNav page="notes" search={search} onSearch={setSearch} searchPlaceholder="Search notes…" />
-      <div className="sn-content notes-root">
-        {loading ? null : filtered.length === 0 ? (
+      <div className="sn-content notes-root" id="main-content" role="main">
+        {loading ? null : error ? (
+          <div className="notes-empty">Could not load your notes. Please refresh to try again.</div>
+        ) : filtered.length === 0 ? (
           <div className="notes-empty">
             {search ? 'No notes match your search.' : 'No notes yet. Open a meeting and add notes from the dot menu.'}
           </div>

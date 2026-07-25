@@ -376,7 +376,7 @@ export default function Settings() {
   return (
     <div className="settings-root">
       <SideNav page="settings" />
-      <div className="sn-content">
+      <div className="sn-content" id="main-content" role="main">
 
       {toast && (
         <div className={`settings-toast ${toast === 'billing-success' ? 'saved' : toast === 'billing-cancel' ? 'error' : toast}`}>

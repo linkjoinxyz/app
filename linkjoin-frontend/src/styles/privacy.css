@@ -24,7 +24,7 @@ html::-webkit-scrollbar, body::-webkit-scrollbar { display: none; }
 .pp-body {
   width: 100%;
   max-width: 680px;
-  background: #060F1A;
+  background: var(--c-ink-950);
   border-radius: 8px;
   padding: 56px 64px;
 }
@@ -33,7 +33,7 @@ html::-webkit-scrollbar, body::-webkit-scrollbar { display: none; }
   font: 600 11px/1 Montserrat, sans-serif;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: #2B8FD8;
+  color: var(--c-accent-550);
   margin: 0 0 16px;
 }
 
@@ -88,7 +88,7 @@ html::-webkit-scrollbar, body::-webkit-scrollbar { display: none; }
 }
 
 .pp-link {
-  color: #2B8FD8;
+  color: var(--c-accent-550);
   text-decoration: none;
 }
 .pp-link:hover { text-decoration: underline; }
@@ -116,7 +116,7 @@ html::-webkit-scrollbar, body::-webkit-scrollbar { display: none; }
   padding: 1px 6px;
   font-family: 'SF Mono', 'Fira Code', 'Menlo', monospace;
   font-size: 13px;
-  color: #60c8f5;
+  color: var(--c-accent-350);
 }
 
 .pp-method {
@@ -130,11 +130,11 @@ html::-webkit-scrollbar, body::-webkit-scrollbar { display: none; }
   margin-right: 8px;
   vertical-align: middle;
 }
-.pp-method--get    { background: rgba(52,168,83,0.18);  color: #4ade80; }
-.pp-method--post   { background: rgba(43,143,216,0.18); color: #60a5fa; }
-.pp-method--put    { background: rgba(251,191,36,0.18); color: #fbbf24; }
-.pp-method--patch  { background: rgba(251,191,36,0.18); color: #fbbf24; }
-.pp-method--delete { background: rgba(239,68,68,0.18);  color: #f87171; }
+.pp-method--get    { background: rgba(52,168,83,0.18);  color: var(--c-success-400); }
+.pp-method--post   { background: rgba(43,143,216,0.18); color: var(--c-accent-550); }
+.pp-method--put    { background: rgba(251,191,36,0.18); color: var(--c-amber-400); }
+.pp-method--patch  { background: rgba(251,191,36,0.18); color: var(--c-amber-400); }
+.pp-method--delete { background: rgba(239,68,68,0.18);  color: var(--c-danger-300); }
 
 .pp-endpoint {
   display: flex;
@@ -192,7 +192,7 @@ html::-webkit-scrollbar, body::-webkit-scrollbar { display: none; }
   margin-left: 8px;
   vertical-align: middle;
   background: rgba(43,143,216,0.15);
-  color: #2B8FD8;
+  color: var(--c-accent-550);
   border: 1px solid rgba(43,143,216,0.3);
 }
 

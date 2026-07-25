@@ -31,7 +31,7 @@
 }
 
 .link.link-disabled .join-meeting .name {
-    color: #B7C0C7;
+    color: var(--c-slate-300-2);
     opacity: 0.8
 }
 
@@ -100,7 +100,7 @@
     width: 30px;
     min-width: 30px;
     height: 13px;
-    background: #6E767C;
+    background: var(--c-slate-500-2);
     border-radius: 18px;
     margin: 0 10px;
 }
@@ -111,7 +111,7 @@
     width: 20px;
     height: 20px;
     border-radius: 100px;
-    background: #B7C0C7;
+    background: var(--c-slate-300-2);
     top: -3px;
     left: 0;
     transition: all 0.3s;
@@ -154,7 +154,7 @@
     width: 140px;
     height: auto;
     padding: 6px 0;
-    background: #0c1e32;
+    background: var(--c-ink-900);
     border: 1px solid rgba(255, 255, 255, 0.14);
     border-radius: 10px;
     box-shadow: 0 8px 28px rgba(0, 0, 0, 0.5);
@@ -190,12 +190,12 @@
     padding: 3px 10px;
     border-radius: 20px;
 }
-.lk-badge-zoom  { background: rgba(43, 130, 255, 0.12); color: #5B9FFF; }
-.lk-badge-meet  { background: rgba(0, 180, 100, 0.12);  color: #2DC97E; }
-.lk-badge-teams { background: rgba(120, 90, 255, 0.12); color: #9B7EFF; }
-.lk-badge-webex { background: rgba(255, 130, 0, 0.12);  color: #FF9A3C; }
-.lk-badge-class    { background: rgba(255, 200, 50, 0.12); color: #F0C040; max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.lk-badge-conflict { background: rgba(255, 160, 50, 0.12); color: #F0A030; }
+.lk-badge-zoom  { background: rgba(43, 130, 255, 0.12); color: var(--c-accent-550); }
+.lk-badge-meet  { background: rgba(0, 180, 100, 0.12);  color: var(--c-success-400); }
+.lk-badge-teams { background: rgba(120, 90, 255, 0.12); color: var(--c-indigo-300); }
+.lk-badge-webex { background: rgba(255, 130, 0, 0.12);  color: var(--c-orange-550); }
+.lk-badge-class    { background: rgba(255, 200, 50, 0.12); color: var(--c-amber-400); max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lk-badge-conflict { background: rgba(255, 160, 50, 0.12); color: var(--c-orange-400); }
 
 
 @media (max-width: 730px) {
@@ -262,23 +262,23 @@
 }
 
 [data-theme="light"] .link {
-  background: #ffffff;
-  border-color: #E2EAF2;
-  color: #0D1B2A;
+  background: var(--c-white);
+  border-color: var(--c-line);
+  color: var(--c-ink-900);
   box-shadow: 0 1px 3px rgba(13,27,42,0.07), 0 1px 2px rgba(13,27,42,0.04);
 }
 [data-theme="light"] .link:hover {
-  background: #ffffff;
+  background: var(--c-white);
   border-color: var(--lightblue);
   box-shadow: 0 4px 12px rgba(43,143,216,0.12);
 }
-[data-theme="light"] .description { color: #4B5563; opacity: 1; }
-[data-theme="light"] .days-dots { color: #64748B; }
+[data-theme="light"] .description { color: var(--c-slate-600); opacity: 1; }
+[data-theme="light"] .days-dots { color: var(--c-slate-500); }
 [data-theme="light"] .menu {
-  background: #ffffff;
-  border-color: #E2EAF2;
+  background: var(--c-white);
+  border-color: var(--c-line);
   box-shadow: 0 8px 24px rgba(13,27,42,0.12);
-  color: #0D1B2A;
+  color: var(--c-ink-900);
 }
-[data-theme="light"] .menu div:hover { background: #F2F4F7; }
-[data-theme="light"] .menu_line { background: #E2EAF2; opacity: 1; }
+[data-theme="light"] .menu div:hover { background: var(--c-white); }
+[data-theme="light"] .menu_line { background: var(--c-line); opacity: 1; }

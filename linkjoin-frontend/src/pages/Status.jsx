@@ -70,7 +70,7 @@ function IncidentCard({ incident, active }) {
       {incident.timeline?.length > 0 && (
         <div style={{ marginTop: 12 }}>
           <button
-            style={{ background: 'none', border: 'none', font: '500 12px Montserrat', color: '#2563EB', cursor: 'pointer', padding: 0 }}
+            style={{ background: 'none', border: 'none', font: '500 12px Montserrat', color: 'var(--c-accent-500)', cursor: 'pointer', padding: 0 }}
             onClick={() => setOpen(o => !o)}
           >
             {open ? 'Hide' : 'Show'} timeline ({incident.timeline.length})
@@ -108,8 +108,8 @@ export default function Status() {
           <img src="/images/logo.svg" alt="LinkJoin" />
           LinkJoin
         </Link>
-        <span style={{ color: '#CBD5E1', marginLeft: 4 }}>/</span>
-        <span style={{ fontSize: 15, color: '#64748B', fontWeight: 500 }}>Status</span>
+        <span style={{ color: 'var(--c-line)', marginLeft: 4 }}>/</span>
+        <span style={{ fontSize: 15, color: 'var(--c-slate-500)', fontWeight: 500 }}>Status</span>
       </header>
 
       <div className="st-body">

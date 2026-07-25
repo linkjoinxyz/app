@@ -5,11 +5,11 @@ import '../styles/settings.css'
 const myEmail = () => localStorage.getItem('lj_email') || ''
 
 const EVENT_META = {
-  open:    { label: 'Opened',   dot: '#2B8FD8' },
-  create:  { label: 'Added',    dot: '#3CC864' },
+  open:    { label: 'Opened',   dot: 'var(--c-accent-550)' },
+  create:  { label: 'Added',    dot: 'var(--c-success-400)' },
   edit:    { label: 'Edited',   dot: 'rgba(255,255,255,0.35)' },
-  delete:  { label: 'Deleted',  dot: '#D83C2B' },
-  restore: { label: 'Restored', dot: '#FFC83C' },
+  delete:  { label: 'Deleted',  dot: 'var(--c-danger-400)' },
+  restore: { label: 'Restored', dot: 'var(--c-amber-400)' },
   toggle:  { label: 'Toggled',  dot: 'rgba(255,255,255,0.35)' },
 }
 

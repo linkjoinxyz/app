@@ -66,7 +66,7 @@ function nextDateForDays(days) {
 
 export default function LinkModal({ visible, editLink, onClose, onSuccess, prefillDays, prefillDate, defaultAutoOpen = true, allLinks = [] }) {
   const isEdit = Boolean(editLink)
-  const { closing, handleClose } = useModalClose(onClose)
+  const { closing, handleClose, overlayRef, dialogProps } = useModalClose(onClose)
 
   // The class owns the schedule for links attached to it; the server propagates
   // class.time/days down onto them, so editing time/days here would just be
@@ -202,9 +202,9 @@ export default function LinkModal({ visible, editLink, onClose, onSuccess, prefi
 
   return (
     <div className={`modal-overlay${closing ? ' closing' : ''}`} onClick={handleClose}>
-      <div className="modal-card" onClick={e => e.stopPropagation()}>
+      <div className="modal-card" ref={overlayRef} {...dialogProps} aria-labelledby="link-modal-title" onClick={e => e.stopPropagation()}>
         <img src="/images/arrow-left.svg" className="modal-back" alt="back" onClick={handleClose} />
-        <div className="modal-title">{isEdit ? 'Edit meeting' : 'Schedule a meeting'}</div>
+        <div className="modal-title" id="link-modal-title">{isEdit ? 'Edit meeting' : 'Schedule a meeting'}</div>
 
         <div className="modal-field">
           <span className="modal-field-tag">Meeting title</span>

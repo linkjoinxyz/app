@@ -5,7 +5,7 @@
 
 .a2-right {
   flex: 1;
-  background: #07111d;
+  background: var(--c-ink-950);
   border-left: 1px solid rgba(255, 255, 255, 0.06);
   display: flex;
   align-items: center;
@@ -46,7 +46,7 @@
 
 /* Back card */
 .a2-card-c {
-  background: #0c1e30;
+  background: var(--c-ink-900);
   border: 1px solid rgba(255, 255, 255, 0.07);
   top: 240px;
   left: 20px;
@@ -57,7 +57,7 @@
 
 /* Middle card */
 .a2-card-b {
-  background: #0d2035;
+  background: var(--c-ink-900);
   border: 1px solid rgba(43, 143, 216, 0.15);
   top: 120px;
   left: 10px;
@@ -68,7 +68,7 @@
 
 /* Front card */
 .a2-card-a {
-  background: #0f2540;
+  background: var(--c-ink-800);
   border: 1px solid rgba(43, 143, 216, 0.35);
   box-shadow:
     0 20px 60px rgba(0, 0, 0, 0.5),
@@ -97,7 +97,7 @@
 
 .a2-card-period {
   font: 500 16px Montserrat, sans-serif;
-  color: #2B8FD8;
+  color: var(--c-accent-550);
   letter-spacing: 0.06em;
   margin-top: 2px;
 }
@@ -123,9 +123,9 @@
   padding: 3px 8px;
   border-radius: 20px;
 }
-.a2-badge-zoom  { background: rgba(43, 130, 255, 0.15); color: #5B9FFF; }
-.a2-badge-meet  { background: rgba(0, 180, 100, 0.15);  color: #2DC97E; }
-.a2-badge-teams { background: rgba(120, 90, 255, 0.15); color: #9B7EFF; }
+.a2-badge-zoom  { background: rgba(43, 130, 255, 0.15); color: var(--c-accent-550); }
+.a2-badge-meet  { background: rgba(0, 180, 100, 0.15);  color: var(--c-success-400); }
+.a2-badge-teams { background: rgba(120, 90, 255, 0.15); color: var(--c-indigo-300); }
 
 .a2-card-days {
   font: 400 11px Montserrat, sans-serif;
@@ -173,7 +173,7 @@
   padding: 10px 14px;
   font-family: Montserrat, sans-serif;
   font-size: 13px;
-  color: #4ade80;
+  color: var(--c-success-400);
   margin-bottom: 12px;
 }
 .ap-mfa-actions {
@@ -189,7 +189,7 @@
   padding: 0;
   font-family: Montserrat, sans-serif;
   font-size: 13px;
-  color: var(--lightblue, #2B8FD8);
+  color: var(--lightblue, var(--c-accent-550));
   cursor: pointer;
   text-decoration: underline;
 }

@@ -56,4 +56,15 @@ describe('UpgradeModal', () => {
     fireEvent.click(screen.getByText('Maybe later'))
     await waitFor(() => expect(onClose).toHaveBeenCalled())
   })
+
+  // Accessibility contract from useModalClose (F5): dialog semantics + Escape.
+  it('exposes dialog semantics and closes on Escape', async () => {
+    const onClose = vi.fn()
+    render(<UpgradeModal onClose={onClose} />)
+    const dialog = screen.getByRole('dialog')
+    expect(dialog).toHaveAttribute('aria-modal', 'true')
+    expect(dialog).toHaveAttribute('aria-labelledby')
+    fireEvent.keyDown(dialog, { key: 'Escape' })
+    await waitFor(() => expect(onClose).toHaveBeenCalled())
+  })
 })

@@ -38,12 +38,12 @@ async function resizeToDataURL(file, size = 220) {
 }
 
 const AWARD_META = {
-  first_steps:      { label: 'First Steps',     color: '#6B7280', desc: 'Attended your first class',        icon: '/images/awards/sprout.svg' },
-  on_point:         { label: 'On Point',         color: '#2B8FD8', desc: 'Joined a class on time',          icon: '/images/awards/target.svg' },
-  perfect_week:     { label: 'Perfect Week',     color: '#D97706', desc: 'On time every day for a week',    icon: '/images/awards/calendar-check.svg' },
-  streak_5:         { label: '5-Day Streak',     color: '#7C3AED', desc: '5 consecutive on-time days',      icon: '/images/awards/flame.svg' },
-  streak_10:        { label: '10-Day Streak',    color: '#059669', desc: '10 consecutive on-time days',     icon: '/images/awards/zap.svg' },
-  monthly_champion: { label: 'Monthly Champion', color: '#DC2626', desc: '20 consecutive on-time days',     icon: '/images/awards/crown.svg' },
+  first_steps:      { label: 'First Steps',     color: 'var(--c-slate-500)', desc: 'Attended your first class',        icon: '/images/awards/sprout.svg' },
+  on_point:         { label: 'On Point',         color: 'var(--c-accent-550)', desc: 'Joined a class on time',          icon: '/images/awards/target.svg' },
+  perfect_week:     { label: 'Perfect Week',     color: 'var(--c-orange-550)', desc: 'On time every day for a week',    icon: '/images/awards/calendar-check.svg' },
+  streak_5:         { label: '5-Day Streak',     color: 'var(--c-violet-400)', desc: '5 consecutive on-time days',      icon: '/images/awards/flame.svg' },
+  streak_10:        { label: '10-Day Streak',    color: 'var(--c-teal-700)', desc: '10 consecutive on-time days',     icon: '/images/awards/zap.svg' },
+  monthly_champion: { label: 'Monthly Champion', color: 'var(--c-danger-400)', desc: '20 consecutive on-time days',     icon: '/images/awards/crown.svg' },
 }
 const ALL_AWARDS = ['first_steps', 'on_point', 'perfect_week', 'streak_5', 'streak_10', 'monthly_champion']
 
@@ -70,7 +70,7 @@ export default function StudentProfile() {
       setUser(u)
       setName(u.name || '')
       setAvatar(u.avatar || '')
-    }).catch(() => {})
+    }).catch(() => setToast('loaderror'))
 
   }, [])
 
@@ -133,8 +133,8 @@ export default function StudentProfile() {
       <HeaderModern page="profile" />
 
       {toast && (
-        <div className={`settings-toast ${toast}`}>
-          {toast === 'saved' ? '✓ Saved' : '✕ Failed to save'}
+        <div className={`settings-toast ${toast}`} role="status">
+          {toast === 'saved' ? '✓ Saved' : toast === 'loaderror' ? '✕ Could not load your profile. Please refresh.' : '✕ Failed to save'}
         </div>
       )}
 

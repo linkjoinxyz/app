@@ -5,8 +5,8 @@ import '../styles/new-homepage.css'
 
 const CHROME_STORE_URL = 'https://chromewebstore.google.com/detail/add-to-linkjoin/mhncphjlaeeglmjpgdmclklebdfomele'
 
-const BAND = '#091B30'
-const BASE = '#060F1A'
+const BAND = 'var(--c-ink-900)'
+const BASE = 'var(--c-ink-950)'
 
 function WaveDivider({ top, bottom, flip = false }) {
   const d = flip

@@ -64,27 +64,27 @@ export default function NewAttendance() {
 
   const AWARDS = [
     {
-      label: 'First Steps', color: '#D97706', desc: 'Attended a class for the first time', earned: true,
+      label: 'First Steps', color: 'var(--c-orange-550)', desc: 'Attended a class for the first time', earned: true,
       icon: <svg xmlns="http://www.w3.org/2000/svg" width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>,
     },
     {
-      label: 'On Point', color: '#2B8FD8', desc: 'Joined on time at least once', earned: true,
+      label: 'On Point', color: 'var(--c-accent-550)', desc: 'Joined on time at least once', earned: true,
       icon: <svg xmlns="http://www.w3.org/2000/svg" width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="9 12 11 14 15 10"/></svg>,
     },
     {
-      label: 'Perfect Week', color: '#059669', desc: 'On time every day in a Mon-Fri span', earned: true,
+      label: 'Perfect Week', color: 'var(--c-teal-700)', desc: 'On time every day in a Mon-Fri span', earned: true,
       icon: <svg xmlns="http://www.w3.org/2000/svg" width="8" height="8" viewBox="-3 -3 30 30" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><path d="m9 16 2 2 4-4"/></svg>,
     },
     {
-      label: 'Streak x5', color: '#D97706', desc: 'Five consecutive on-time sessions', earned: true,
+      label: 'Streak x5', color: 'var(--c-orange-550)', desc: 'Five consecutive on-time sessions', earned: true,
       icon: <svg xmlns="http://www.w3.org/2000/svg" width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>,
     },
     {
-      label: 'Streak x10', color: '#7C3AED', desc: 'Ten consecutive on-time sessions', earned: false,
+      label: 'Streak x10', color: 'var(--c-violet-400)', desc: 'Ten consecutive on-time sessions', earned: false,
       icon: <svg xmlns="http://www.w3.org/2000/svg" width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2z"/></svg>,
     },
     {
-      label: 'Champion', color: '#059669', desc: 'Twenty-session on-time streak', earned: false,
+      label: 'Champion', color: 'var(--c-teal-700)', desc: 'Twenty-session on-time streak', earned: false,
       icon: <svg xmlns="http://www.w3.org/2000/svg" width="8" height="8" viewBox="-3 -3 30 30" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2z"/></svg>,
     },
   ]

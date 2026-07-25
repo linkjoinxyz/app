@@ -201,7 +201,7 @@ export default function Bookmarks() {
         onSearch={setSearch}
         searchPlaceholder="Search bookmarks…"
       />
-      <div className="sn-content">
+      <div className="sn-content" id="main-content" role="main">
 
       {pendingBookmarks.length > 0 && (
         <div id="pending-links">

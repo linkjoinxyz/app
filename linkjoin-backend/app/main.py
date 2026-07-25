@@ -290,7 +290,10 @@ app.add_middleware(NormalizeClientIPMiddleware)
 _origins = [_settings.frontend_url, "http://localhost:5173"]
 if _settings.frontend_url.startswith("https://"):
     _bare = _settings.frontend_url.replace("https://", "")
-    _origins += [f"https://www.{_bare}", f"https://{_bare}"]
+    # Include the schools subdomain so IncidentBanner (mounted globally) can
+    # fetch /incidents/active there; without it the banner never shows to the
+    # school/district admins who have an SLA.
+    _origins += [f"https://www.{_bare}", f"https://{_bare}", f"https://schools.{_bare}"]
 
 app.add_middleware(
     CORSMiddleware,

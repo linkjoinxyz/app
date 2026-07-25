@@ -21,7 +21,7 @@
 
 .sp-title {
   font: 700 22px Montserrat, sans-serif;
-  color: #fff;
+  color: var(--c-white);
   margin: 0 0 28px;
 }
 
@@ -45,12 +45,12 @@
 }
 
 .sp-stat--streak .sp-stat-value {
-  color: #5AABEE;
+  color: var(--c-accent-300);
 }
 
 .sp-stat-value {
   font: 800 28px Montserrat, sans-serif;
-  color: #fff;
+  color: var(--c-white);
   line-height: 1;
 }
 
@@ -107,18 +107,18 @@
   width: 38px;
   height: 38px;
   border-radius: 10px;
-  background: #374151;
+  background: var(--c-ink-700-2);
   display: flex;
   align-items: center;
   justify-content: center;
   font: 700 13px Montserrat, sans-serif;
-  color: #fff;
+  color: var(--c-white);
   flex-shrink: 0;
 }
 
 .sp-award-name {
   font: 600 14px Montserrat, sans-serif;
-  color: #fff;
+  color: var(--c-white);
   margin-bottom: 2px;
 }
 
@@ -135,13 +135,13 @@
   padding: 24px 0;
 }
 
-[data-theme="light"] .sp-card { background: #fff; }
+[data-theme="light"] .sp-card { background: var(--c-white); }
 [data-theme="light"] .sp-close { color: rgba(15,23,42,0.4); }
 [data-theme="light"] .sp-close:hover { color: rgba(15,23,42,0.8); }
 [data-theme="light"] .sp-avatar-ring { background: rgba(0,0,0,0.05); }
-[data-theme="light"] .sp-name { color: #0f172a; }
+[data-theme="light"] .sp-name { color: var(--c-ink-900); }
 [data-theme="light"] .sp-email { color: rgba(15,23,42,0.45); }
-[data-theme="light"] .sp-stat-val { color: #0f172a; }
+[data-theme="light"] .sp-stat-val { color: var(--c-ink-900); }
 [data-theme="light"] .sp-stat-label { color: rgba(15,23,42,0.4); }
 [data-theme="light"] .sp-section-title { color: rgba(15,23,42,0.5); }
 [data-theme="light"] .sp-award-row { background: rgba(0,0,0,0.03); border-color: rgba(0,0,0,0.08); }

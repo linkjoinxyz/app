@@ -33,8 +33,8 @@ const FAQ_ITEMS = [
 
 const PLATFORMS = ['Zoom', 'Google Meet', 'Teams', 'Webex']
 
-const BAND = '#091B30'
-const BASE = '#060F1A'
+const BAND = 'var(--c-ink-900)'
+const BASE = 'var(--c-ink-950)'
 
 function WaveDivider({ top, bottom, flip = false }) {
   const d = flip
@@ -245,14 +245,14 @@ export default function NewHomepage() {
                   {week.map((day, di) => (
                     <div key={day} className={`nh-mock-cal-cell${active.includes(di) ? ' nh-cal-active' : ''}`}>
                       <span className="nh-mock-cal-num">{day}</span>
-                      {active.includes(di) && <span className="nh-cal-dot" style={di === 2 ? { background: '#3ecf8e' } : {}} />}
+                      {active.includes(di) && <span className="nh-cal-dot" style={di === 2 ? { background: 'var(--c-success-500)' } : {}} />}
                     </div>
                   ))}
                 </div>
               ))}
               <div className="nh-mock-cal-legends">
                 <span className="nh-mock-cal-legend"><span className="nh-cal-dot" /> Weekly standup</span>
-                <span className="nh-mock-cal-legend"><span className="nh-cal-dot" style={{ background: '#3ecf8e' }} /> Design review</span>
+                <span className="nh-mock-cal-legend"><span className="nh-cal-dot" style={{ background: 'var(--c-success-500)' }} /> Design review</span>
               </div>
             </div>
           </div>
@@ -350,7 +350,7 @@ export default function NewHomepage() {
               </div>
               <div className="nh-mock-share-members">
                 <div className="nh-mock-avatars">
-                  {[['AK', '#1a4a70'], ['BR', '#0d3050'], ['CL', '#2B8FD8']].map(([l, bg]) => (
+                  {[['AK', 'var(--c-accent-800)'], ['BR', 'var(--c-accent-800)'], ['CL', 'var(--c-accent-550)']].map(([l, bg]) => (
                     <div key={l} className="nh-mock-avatar" style={{ background: bg }}>{l}</div>
                   ))}
                 </div>
@@ -445,9 +445,9 @@ export default function NewHomepage() {
               </div>
               <div className="nh-mock-cal-import-list">
                 {[
-                  { name: 'Team standup', meta: 'Mon 9:00 AM · Weekly', color: '#4285F4', label: 'Meet' },
-                  { name: 'Design review', meta: 'Wed 2:00 PM · Weekly', color: '#2D8CFF', label: 'Zoom' },
-                  { name: '1:1 with manager', meta: 'Fri 11:00 AM · Weekly', color: '#6264A7', label: 'Teams' },
+                  { name: 'Team standup', meta: 'Mon 9:00 AM · Weekly', color: 'var(--c-brand-google-blue)', label: 'Meet' },
+                  { name: 'Design review', meta: 'Wed 2:00 PM · Weekly', color: 'var(--c-accent-400)', label: 'Zoom' },
+                  { name: '1:1 with manager', meta: 'Fri 11:00 AM · Weekly', color: 'var(--c-indigo-500)', label: 'Teams' },
                 ].map((e, i) => (
                   <div key={i} className="nh-mock-cal-import-row">
                     <div className="nh-mock-cal-import-check">

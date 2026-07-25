@@ -7,7 +7,7 @@ import '../styles/modal.css'
 const EMAIL_RE = /^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$/
 
 export default function ShareModal({ link, type = 'link', onClose }) {
-  const { closing, handleClose } = useModalClose(onClose)
+  const { closing, handleClose, overlayRef, dialogProps } = useModalClose(onClose)
   const { email: currentUserEmail } = useAuth()
   const [emailInput, setEmailInput] = useState('')
   const [emails, setEmails] = useState([])
@@ -47,9 +47,9 @@ export default function ShareModal({ link, type = 'link', onClose }) {
 
   return (
     <div className={`modal-overlay${closing ? ' closing' : ''}`} onClick={handleClose}>
-      <div className="modal-card" onClick={e => e.stopPropagation()}>
+      <div className="modal-card" ref={overlayRef} {...dialogProps} aria-labelledby="share-modal-title" onClick={e => e.stopPropagation()}>
         <img src="/images/arrow-left.svg" className="modal-back" alt="back" onClick={handleClose} />
-        <div className="modal-title">
+        <div className="modal-title" id="share-modal-title">
           Share <span style={{ color: 'var(--lightblue)' }}>{link?.name}</span>:
         </div>
 
@@ -70,7 +70,7 @@ export default function ShareModal({ link, type = 'link', onClose }) {
               if (e.key === 'Escape') { setInputInvalid(false) }
             }}
             onBlur={() => { if (emailInput.trim()) addEmail() }}
-            style={inputInvalid ? { color: '#ff5f5f' } : undefined}
+            style={inputInvalid ? { color: 'var(--c-danger-300)' } : undefined}
           />
         </div>
 
