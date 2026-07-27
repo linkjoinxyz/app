@@ -1,5 +1,6 @@
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext.jsx'
+import { isAppRoute } from '../utils.js'
 import '../styles/mfa-banner.css'
 
 /**
@@ -18,7 +19,9 @@ export default function MfaSetupBanner() {
   const navigate = useNavigate()
   const { pathname } = useLocation()
 
-  if (!mfaSetupRequired) return null
+  // The banner explains why *dashboard* data is 403ing, so it only belongs on
+  // authenticated app routes — not the public homepage / marketing / auth pages.
+  if (!mfaSetupRequired || !isAppRoute(pathname)) return null
 
   const onSettings = pathname.startsWith('/settings')
 

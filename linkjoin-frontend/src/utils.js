@@ -12,6 +12,21 @@ export function safeRedirect(raw) {
   return '/meetings'
 }
 
+// Authenticated app routes (those that render the SideNav app shell). Used to
+// scope in-app banners (MFA setup, trial ending) so they don't leak onto public
+// marketing/auth pages like the homepage. Whitelist, not blacklist: a new public
+// page can never accidentally show an app-only banner.
+const APP_ROUTE_PREFIXES = [
+  '/meetings', '/links', '/bookmarks', '/notes', '/addlink',
+  '/admin', '/platform', '/settings', '/history', '/profile',
+  '/parent', '/onboarding', '/c/',
+]
+export function isAppRoute(pathname) {
+  return APP_ROUTE_PREFIXES.some(p =>
+    p.endsWith('/') ? pathname.startsWith(p) : (pathname === p || pathname.startsWith(p + '/'))
+  )
+}
+
 // --- Server timestamps ---------------------------------------------------------
 // Mongo hands the backend naive datetimes, so `.isoformat()` serializes them
 // without a timezone suffix ("2026-07-21T14:00:00") even though the value is

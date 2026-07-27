@@ -1,6 +1,7 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext.jsx'
+import { isAppRoute } from '../utils.js'
 import '../styles/trial-banner.css'
 
 // Only warn near the end. Earlier than this it is nagging, and the modal at the
@@ -21,6 +22,7 @@ const DISMISS_KEY = 'lj_trial_banner_dismissed'
 export default function TrialEndingBanner() {
   const { premiumStatus, trialDaysLeft } = useAuth()
   const navigate = useNavigate()
+  const { pathname } = useLocation()
   const today = new Date().toISOString().slice(0, 10)
   const [dismissed, setDismissed] = useState(() => {
     try {
@@ -30,6 +32,7 @@ export default function TrialEndingBanner() {
     }
   })
 
+  if (!isAppRoute(pathname)) return null  // in-app only, not public marketing pages
   if (premiumStatus !== 'trial') return null
   if (trialDaysLeft === null || trialDaysLeft > WARN_WITHIN_DAYS) return null
   if (dismissed) return null
