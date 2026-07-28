@@ -18,7 +18,7 @@ from app.utils import (
     track_event, get_school_year_start, STAFF_HIDDEN_FIELDS,
     assert_public_url, UnsafeURLError, get_blackout_set, lookback_cutoff,
 )
-from app.routers.attendance import compute_student_attendance_rate, _LOOKBACK_DAYS, _TARDY_THRESHOLD_MINUTES
+from app.routers.attendance import compute_org_attendance_rates, _LOOKBACK_DAYS, _TARDY_THRESHOLD_MINUTES
 from app.email_service import send_email
 
 _hasher = _PH()
@@ -578,39 +578,23 @@ async def get_org_attendance(org_id: str, window: str = Query(default="28d"), us
         ):
             email_by_user_id[u["user_id"]] = u["username"]
 
-    result = []
-    for cls in classes:
-        emails = [
-            email_by_user_id[uid]
-            for uid in (cls.get("student_ids") or [])
-            if uid in email_by_user_id
-        ]
+    # Rates are expected-sessions-weighted across the roster (same math as the
+    # parent portal / get_class_patterns). Computed for the whole org in a batched
+    # query instead of one find per student per class (was ~1,250 sequential
+    # round-trips for a 50-class org; see compute_org_attendance_rates).
+    aggregates = await compute_org_attendance_rates(
+        classes, email_by_user_id, cutoff, lookback_days, tardy_threshold, blackout_dates
+    )
 
-        # Rate is expected-sessions-weighted across the roster (same math as the
-        # parent portal / get_class_patterns), not on-time-joins-over-joins-attended —
-        # a student who skips most of the term should not read as 100% attendance.
-        total = on_time = late = expected_total = 0
-        for email in emails:
-            stats = await compute_student_attendance_rate(
-                cls["class_id"], cls, email, cutoff, lookback_days, tardy_threshold, blackout_dates
-            )
-            total += stats["sessions"]
-            on_time += stats["on_time"]
-            late += stats["tardy"]
-            expected_total += stats["effective_expected"]
-
-        attendance_rate = round(min(total / expected_total, 1.0) * 100) if expected_total else 0
-
-        result.append({
+    result = [
+        {
             "class_id": cls["class_id"],
             "class_name": cls.get("name", ""),
             "teacher_name": cls.get("teacher_name", ""),
-            "total_records": total,
-            "on_time": on_time,
-            "late": late,
-            "attendance_rate": attendance_rate,
-        })
-
+            **aggregates[cls["class_id"]],
+        }
+        for cls in classes
+    ]
     result.sort(key=lambda r: r["class_name"].lower())
     return {"classes": result, "window": window}
 

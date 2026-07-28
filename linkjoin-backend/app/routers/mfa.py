@@ -43,7 +43,7 @@ async def _send_mfa_code(user: dict) -> bool:
         "resend_count": 0,
     })
 
-    phone = user.get("mfa_phone") or str(user.get("number", ""))
+    phone = str(user.get("mfa_phone") or user.get("number", "")).strip().lstrip("+")
     if not (phone and _settings.twilio_sid and _settings.twilio_token):
         log.warning("MFA SMS not sent (unconfigured) for user_id=%s", user.get("user_id"))
         return False
