@@ -113,6 +113,55 @@ async def test_uses_org_tardy_threshold_not_hardcoded_five(as_user):
     assert today_events[0]["type"] == "on_time", "org threshold is 10 minutes, so 6 minutes late must not be tardy"
 
 
+async def test_child_classes_rates_match_per_class_computation(as_user):
+    """The batched get_child_classes must return the same per-class numbers as
+    the unbatched compute_student_attendance_rate loop it replaced."""
+    from app.routers.attendance import compute_student_attendance_rate, _LOOKBACK_DAYS
+    from app.utils import lookback_cutoff, get_blackout_set
+
+    parent_user, student_id, student_email = await _make_parent_and_student()
+    org_id = f"pa-test-{RUN_ID}-{secrets.token_hex(4)}"
+    await motor_db.orgs.insert_one(
+        {"org_id": org_id, "attendance_settings": {"tardy_threshold_minutes": 5}}
+    )
+
+    all_days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+    now = datetime.now(timezone.utc)
+    class_ids = []
+    for i in range(2):  # two classes so the batching (one $in vs two finds) is exercised
+        cid = f"pa-test-{RUN_ID}-{secrets.token_hex(4)}"
+        class_ids.append(cid)
+        await motor_db.classes.insert_one({
+            "class_id": cid, "name": f"Class {i}", "days": all_days,
+            "student_ids": [student_id], "org_id": org_id, "time": "09:00",
+        })
+        for days_ago, ml in [(1, 0), (3, 20), (5, 0)]:  # on-time, tardy, on-time
+            day = now - timedelta(days=days_ago)
+            await motor_db.attendance.insert_one({
+                "student_email": student_email, "class_id": cid, "class_name": f"Class {i}",
+                "opened_at": day, "minutes_late": ml, "recorded_at": day,
+                "record_date": day.date().isoformat(), "source": "linkjoin_click",
+            })
+
+    resp = await as_user(parent_user).get(f"/parent/children/{student_id}/classes")
+    assert resp.status_code == 200, resp.text
+    rows = {r["class_id"]: r for r in resp.json()}
+    assert set(rows) == set(class_ids)
+
+    cutoff = lookback_cutoff(now, _LOOKBACK_DAYS)
+    org = await motor_db.orgs.find_one({"org_id": org_id})
+    for cid in class_ids:
+        cls = await motor_db.classes.find_one({"class_id": cid})
+        expected = await compute_student_attendance_rate(
+            cid, cls, student_email, cutoff, _LOOKBACK_DAYS, 5, get_blackout_set(org),
+        )
+        row = rows[cid]
+        assert row["attended_last_28d"] == expected["sessions"] == 3
+        assert row["tardy_last_28d"] == expected["tardy"] == 1
+        assert row["expected_last_28d"] == expected["effective_expected"]
+        assert row["attendance_rate"] == expected["attendance_rate"]
+
+
 async def test_notes_teacher_empty_org_id_denied(as_user):
     """4.5 — a teacher with a falsy org_id must not bypass the access check."""
     _, student_id, _ = await _make_parent_and_student()

@@ -110,6 +110,15 @@ async def test_on_time_join_records_zero(as_user, eastern_teacher, morning_class
     assert rec["minutes_late"] == 0
 
 
+async def test_early_join_records_zero_not_negative(
+    as_user, eastern_teacher, morning_class, student_in_class
+):
+    """A student who joins before the bell is on time, not "-5 minutes late" —
+    a raw negative would pollute the CSV export, parent view and average."""
+    rec = await _override(as_user, eastern_teacher, morning_class, student_in_class, _MONDAY, "08:55")
+    assert rec["minutes_late"] == 0
+
+
 async def test_ninety_minutes_late_records_ninety(
     as_user, eastern_teacher, morning_class, student_in_class
 ):

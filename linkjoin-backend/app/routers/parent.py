@@ -1,10 +1,12 @@
+from collections import defaultdict
 from datetime import datetime, timezone, timedelta
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from app.auth import get_confirmed_user
 from app.database import motor_db
 from app.routers.attendance import (
-    compute_student_attendance_rate,
+    _rate_stats_from_records,
+    _class_expected_dates,
     _LOOKBACK_DAYS as _RATE_LOOKBACK_DAYS,
     _TARDY_THRESHOLD_MINUTES,
     _record_date_str,
@@ -104,37 +106,69 @@ async def get_child_classes(student_id: str, user: dict = Depends(get_confirmed_
     cutoff = lookback_cutoff(now, _RATE_LOOKBACK_DAYS)
 
     result = []
-    async for cls in motor_db.classes.find({"student_ids": student_id}, {"_id": 0}):
+    classes = await motor_db.classes.find({"student_ids": student_id}, {"_id": 0}).to_list(None)
+    if not classes:
+        return result
+
+    # Batch what the old loop fetched one class at a time (an N+1 per class:
+    # org, this student's attendance rows, open interventions, teacher). A
+    # student's classes usually share one org, so the deduped org $in alone
+    # collapses several identical round-trips.
+    class_ids = [c["class_id"] for c in classes]
+    org_ids = list({c.get("org_id", "") for c in classes})
+    orgs = {
+        o["org_id"]: o
+        async for o in motor_db.orgs.find(
+            {"org_id": {"$in": org_ids}},
+            {"org_id": 1, "attendance_settings": 1, "blackout_dates": 1, "summer_start": 1, "summer_end": 1, "_id": 0},
+        )
+    }
+    recs_by_class: dict[str, list] = defaultdict(list)
+    async for r in motor_db.attendance.find({
+        "class_id": {"$in": class_ids},
+        "student_email": student_email,
+        "$or": [{"opened_at": {"$gte": cutoff}}, {"recorded_at": {"$gte": cutoff}}],
+    }):
+        recs_by_class[r["class_id"]].append(r)
+    iv_by_class: dict[str, dict] = {}
+    async for iv in motor_db.interventions.find(
+        {"class_id": {"$in": class_ids}, "student_email": student_email, "status": {"$ne": "resolved"}},
+        {"flag_type": 1, "class_id": 1, "_id": 0},
+    ):
+        iv_by_class.setdefault(iv["class_id"], iv)  # first open flag per class, matching the old find_one
+    # teacher_id is stored as a user_id on some classes and an email on legacy
+    # ones, so look up both and index by whichever key each class carries.
+    teacher_ids = list({c.get("teacher_id") for c in classes if c.get("teacher_id")})
+    teacher_email_by_key: dict[str, str] = {}
+    if teacher_ids:
+        async for t in motor_db.login.find(
+            {"$or": [{"user_id": {"$in": teacher_ids}}, {"username": {"$in": teacher_ids}}]},
+            {"user_id": 1, "username": 1, "_id": 0},
+        ):
+            uname = t.get("username", "")
+            if t.get("user_id"):
+                teacher_email_by_key[t["user_id"]] = uname
+            if uname:
+                teacher_email_by_key.setdefault(uname, uname)
+
+    now = datetime.now(timezone.utc)
+    for cls in classes:
         class_id = cls["class_id"]
         class_days = cls.get("days") or []
-
-        org = await motor_db.orgs.find_one(
-            {"org_id": cls.get("org_id", "")},
-            {"attendance_settings": 1, "blackout_dates": 1, "summer_start": 1, "summer_end": 1},
-        )
-        tardy_threshold = int((org or {}).get("attendance_settings", {}).get("tardy_threshold_minutes", _TARDY_THRESHOLD_MINUTES))
-        stats = await compute_student_attendance_rate(
-            class_id, cls, student_email, cutoff, _RATE_LOOKBACK_DAYS, tardy_threshold,
-            get_blackout_set(org or {}),
+        org = orgs.get(cls.get("org_id", "")) or {}
+        tardy_threshold = int(org.get("attendance_settings", {}).get("tardy_threshold_minutes", _TARDY_THRESHOLD_MINUTES))
+        expected_dates = _class_expected_dates(cls, cutoff, _RATE_LOOKBACK_DAYS, get_blackout_set(org), now)
+        stats = _rate_stats_from_records(
+            recs_by_class.get(class_id, []), cls, student_email,
+            set(expected_dates), len(expected_dates), tardy_threshold,
         )
         attended = stats["sessions"]
         tardy = stats["tardy"]
         expected = stats["effective_expected"] if class_days else None
         attendance_rate = stats["attendance_rate"] if class_days else None
 
-        open_iv = await motor_db.interventions.find_one(
-            {"class_id": class_id, "student_email": student_email, "status": {"$ne": "resolved"}},
-            {"flag_type": 1, "status": 1, "_id": 0},
-        )
-
-        teacher_email = ""
-        teacher_id = cls.get("teacher_id")
-        if teacher_id:
-            t = await motor_db.login.find_one({"user_id": teacher_id}, {"username": 1, "_id": 0})
-            if not t:
-                t = await motor_db.login.find_one({"username": teacher_id}, {"username": 1, "_id": 0})
-            if t:
-                teacher_email = t.get("username", "")
+        open_iv = iv_by_class.get(class_id)
+        teacher_email = teacher_email_by_key.get(cls.get("teacher_id"), "")
 
         result.append({
             "class_id": class_id,

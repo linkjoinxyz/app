@@ -136,7 +136,10 @@ async def resolve_class_link(slug: str, background_tasks: BackgroundTasks, user:
                 if existing:
                     logged = True
                 else:
-                    minutes_late = round((now_utc - session_start).total_seconds() / 60)
+                    # Clamp: a student who joins before the bell is on time, not
+                    # "negative minutes late" — a raw negative would leak into the
+                    # CSV export, parent view and average-lateness metric.
+                    minutes_late = max(0, round((now_utc - session_start).total_seconds() / 60))
                     await motor_db.attendance.insert_one({
                         "student_email": user["username"],
                         "link_id": link.get("id"),
