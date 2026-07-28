@@ -6,9 +6,11 @@ import TrialEndingBanner from './TrialEndingBanner.jsx'
 const mockUseAuth = vi.fn()
 vi.mock('../context/AuthContext.jsx', () => ({ useAuth: () => mockUseAuth() }))
 
-function renderBanner(auth) {
+function renderBanner(auth, path = '/meetings') {
   mockUseAuth.mockReturnValue(auth)
-  return render(<MemoryRouter><TrialEndingBanner /></MemoryRouter>)
+  return render(
+    <MemoryRouter initialEntries={[path]}><TrialEndingBanner /></MemoryRouter>
+  )
 }
 
 /**
@@ -52,6 +54,11 @@ describe('TrialEndingBanner', () => {
 
   it('does not render when the day count is unknown', () => {
     const { container } = renderBanner({ premiumStatus: 'trial', trialDaysLeft: null })
+    expect(container).toBeEmptyDOMElement()
+  })
+
+  it('stays off public marketing pages even when the trial is ending', () => {
+    const { container } = renderBanner({ premiumStatus: 'trial', trialDaysLeft: 1 }, '/')
     expect(container).toBeEmptyDOMElement()
   })
 

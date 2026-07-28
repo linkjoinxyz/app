@@ -84,6 +84,39 @@ async def test_org_attendance_rollup_denied_cross_org(as_user, institutional_tea
     assert resp.status_code == 403
 
 
+async def test_batched_org_rates_match_per_student(org_doc, org_class, student):
+    """The N+1 fix: the batched org computation must equal summing the per-student
+    compute_student_attendance_rate — the refactor's whole point is identical math."""
+    from app.routers.attendance import (
+        compute_org_attendance_rates, compute_student_attendance_rate,
+        lookback_cutoff, _LOOKBACK_DAYS, _TARDY_THRESHOLD_MINUTES,
+    )
+    now = datetime.now(timezone.utc)
+    cutoff = lookback_cutoff(now, _LOOKBACK_DAYS)
+    email, cid = student["username"], org_class["class_id"]
+    recent = now - timedelta(days=2)
+    await motor_db.attendance.insert_many([
+        {"class_id": cid, "student_email": email, "opened_at": recent,
+         "recorded_at": recent, "minutes_late": 0},
+        {"class_id": cid, "student_email": email, "opened_at": recent - timedelta(days=1),
+         "recorded_at": recent - timedelta(days=1), "minutes_late": 30},
+    ])
+
+    per = await compute_student_attendance_rate(
+        cid, org_class, email, cutoff, _LOOKBACK_DAYS, _TARDY_THRESHOLD_MINUTES, set()
+    )
+    batched = await compute_org_attendance_rates(
+        [org_class], {student["user_id"]: email}, cutoff, _LOOKBACK_DAYS, _TARDY_THRESHOLD_MINUTES, set()
+    )
+    agg = batched[cid]
+    assert agg["total_records"] == per["sessions"]
+    assert agg["on_time"] == per["on_time"]
+    assert agg["late"] == per["tardy"]
+    expected_rate = (round(min(per["sessions"] / per["effective_expected"], 1.0) * 100)
+                     if per["effective_expected"] else 0)
+    assert agg["attendance_rate"] == expected_rate
+
+
 # ── LMS score computation ────────────────────────────────────────────────────
 
 def _cls(**over):

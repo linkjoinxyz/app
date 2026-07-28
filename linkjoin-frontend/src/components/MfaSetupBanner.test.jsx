@@ -40,6 +40,12 @@ describe('MfaSetupBanner', () => {
     expect(container).toBeEmptyDOMElement()
   })
 
+  it('stays off public pages even for an admin who needs MFA', () => {
+    mockUseAuth.mockReturnValue({ mfaSetupRequired: true })
+    const { container } = renderAt('/')
+    expect(container).toBeEmptyDOMElement()
+  })
+
   it('drops the redundant CTA once the user is already on settings', () => {
     mockUseAuth.mockReturnValue({ mfaSetupRequired: true })
     renderAt('/settings')

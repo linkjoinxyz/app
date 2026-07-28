@@ -103,30 +103,14 @@ async def compute_student_session_counts(
     return results
 
 
-async def compute_student_attendance_rate(
-    class_id: str, cls: dict, student_email: str, cutoff: datetime, lookback_days: int,
-    tardy_threshold: int, blackout_dates: set[str] = frozenset(),
+def _rate_stats_from_records(
+    records: list[dict], cls: dict, student_email: str,
+    expected_dates_set: set[str], expected_count: int, tardy_threshold: int,
 ) -> dict:
-    """Single-student sessions/tardy/expected/attendance_rate over [cutoff, now) —
-    same excused-absence-aware math as get_class_patterns, factored out so other
-    surfaces (e.g. the parent portal) show the same numbers teachers see."""
-    now = datetime.now(timezone.utc)
-    # Blackouts and cancelled dates now leave the denominator. Previously this
-    # counted them as expected sessions while the missed_dates list rendered
-    # beside it subtracted them, so a student's rate and their missed days
-    # disagreed. Rates rise for orgs that configure closures.
-    expected_dates = expected_session_dates(
-        cls, cutoff.date(), (cutoff + timedelta(days=lookback_days - 1)).date(),
-        blackout_dates, through=now.date(),
-    )
-    expected_count = len(expected_dates)
-    expected_dates_set = set(expected_dates)
-
-    records = await motor_db.attendance.find({
-        "class_id": class_id,
-        "student_email": student_email,
-        "$or": [{"opened_at": {"$gte": cutoff}}, {"recorded_at": {"$gte": cutoff}}],
-    }).to_list(None)
+    """Pure (no DB) sessions/tardy/expected/attendance_rate for one student, given
+    that student's already-fetched attendance rows and the class's expected dates.
+    The single source of truth for the rate math; both the per-student query path
+    and the batched org path below feed it, so their numbers are identical."""
     current_records = list(_resolve_latest_records(records).values())
     attended = [r for r in current_records if isinstance(r.get("opened_at"), datetime)]
     total = len(attended)
@@ -153,6 +137,93 @@ async def compute_student_attendance_rate(
         "effective_expected": effective_expected,
         "attendance_rate": round(attendance_rate, 2),
     }
+
+
+def _class_expected_dates(cls: dict, cutoff: datetime, lookback_days: int,
+                          blackout_dates: set[str], now: datetime) -> list[str]:
+    """Expected session dates for a class over [cutoff, now) — per-class, not
+    per-student, so the org path computes it once rather than once per student.
+
+    Blackouts and cancelled dates leave the denominator (they used to count as
+    expected while the missed_dates list beside them subtracted them, so a
+    student's rate and their missed days disagreed)."""
+    return expected_session_dates(
+        cls, cutoff.date(), (cutoff + timedelta(days=lookback_days - 1)).date(),
+        blackout_dates, through=now.date(),
+    )
+
+
+async def compute_student_attendance_rate(
+    class_id: str, cls: dict, student_email: str, cutoff: datetime, lookback_days: int,
+    tardy_threshold: int, blackout_dates: set[str] = frozenset(),
+) -> dict:
+    """Single-student sessions/tardy/expected/attendance_rate over [cutoff, now) —
+    same excused-absence-aware math as get_class_patterns, factored out so other
+    surfaces (e.g. the parent portal) show the same numbers teachers see."""
+    now = datetime.now(timezone.utc)
+    expected_dates = _class_expected_dates(cls, cutoff, lookback_days, blackout_dates, now)
+
+    records = await motor_db.attendance.find({
+        "class_id": class_id,
+        "student_email": student_email,
+        "$or": [{"opened_at": {"$gte": cutoff}}, {"recorded_at": {"$gte": cutoff}}],
+    }).to_list(None)
+    return _rate_stats_from_records(
+        records, cls, student_email, set(expected_dates), len(expected_dates), tardy_threshold
+    )
+
+
+async def compute_org_attendance_rates(
+    classes: list[dict], email_by_user_id: dict[str, str], cutoff: datetime,
+    lookback_days: int, tardy_threshold: int, blackout_dates: set[str],
+) -> dict[str, dict]:
+    """Per-class attendance aggregates for a whole org in a small, constant number
+    of DB round-trips. Replaces the previous one-find-per-student-per-class loop
+    (~1,250 sequential queries for a 50-class org); the math is identical because
+    both paths funnel through _rate_stats_from_records."""
+    now = datetime.now(timezone.utc)
+    class_ids = [c["class_id"] for c in classes]
+
+    # One query per chunk of classes: all attendance rows since cutoff, grouped
+    # into records[class_id][student_email]. Chunking the $in bounds the result
+    # size so a large district doesn't pull an unbounded set in a single query.
+    records: dict[str, dict[str, list]] = defaultdict(lambda: defaultdict(list))
+    _CHUNK = 100
+    for i in range(0, len(class_ids), _CHUNK):
+        chunk = class_ids[i:i + _CHUNK]
+        async for r in motor_db.attendance.find({
+            "class_id": {"$in": chunk},
+            "$or": [{"opened_at": {"$gte": cutoff}}, {"recorded_at": {"$gte": cutoff}}],
+        }):
+            records[r["class_id"]][r["student_email"]].append(r)
+
+    out: dict[str, dict] = {}
+    for cls in classes:
+        expected = _class_expected_dates(cls, cutoff, lookback_days, blackout_dates, now)
+        expected_set = set(expected)
+        expected_count = len(expected)
+        emails = [
+            email_by_user_id[uid]
+            for uid in (cls.get("student_ids") or [])
+            if uid in email_by_user_id
+        ]
+        cls_records = records.get(cls["class_id"], {})
+        total = on_time = late = expected_total = 0
+        for email in emails:
+            stats = _rate_stats_from_records(
+                cls_records.get(email, []), cls, email, expected_set, expected_count, tardy_threshold
+            )
+            total += stats["sessions"]
+            on_time += stats["on_time"]
+            late += stats["tardy"]
+            expected_total += stats["effective_expected"]
+        out[cls["class_id"]] = {
+            "total_records": total,
+            "on_time": on_time,
+            "late": late,
+            "attendance_rate": round(min(total / expected_total, 1.0) * 100) if expected_total else 0,
+        }
+    return out
 
 
 async def compute_leak_rate(class_id: str, cutoff: datetime) -> tuple[float, int]:
@@ -843,29 +914,38 @@ async def get_class_attendance_summary(
         cutoff = lookback_cutoff(now, _LOOKBACK_DAYS)
         lookback_days = _LOOKBACK_DAYS
 
-    counts = await compute_student_session_counts(class_id, cutoff, tardy_threshold)
+    # One batched fetch of the class's rows (was one find per student for the
+    # rate, plus one login find_one per roster member). Group by student, then
+    # compute sessions/on_time/late AND the expected-weighted rate from the same
+    # rows via _rate_stats_from_records — identical math to the per-student path.
+    expected = _class_expected_dates(cls, cutoff, lookback_days, blackout_dates, now)
+    expected_set, expected_count = set(expected), len(expected)
+
+    records_by_student: dict[str, list] = defaultdict(list)
+    async for r in motor_db.attendance.find({
+        "class_id": class_id,
+        "$or": [{"opened_at": {"$gte": cutoff}}, {"recorded_at": {"$gte": cutoff}}],
+    }):
+        records_by_student[r["student_email"]].append(r)
 
     email_to_user_id: dict[str, str] = {}
-    for uid in cls.get("student_ids") or []:
-        u = await motor_db.login.find_one({"user_id": uid}, {"_id": 0, "username": 1, "user_id": 1})
-        if u:
-            email_to_user_id[u["username"]] = u["user_id"]
+    async for u in motor_db.login.find(
+        {"user_id": {"$in": cls.get("student_ids") or []}}, {"_id": 0, "username": 1, "user_id": 1}
+    ):
+        email_to_user_id[u["username"]] = u["user_id"]
 
     students = []
-    for email, c in counts.items():
-        # attendance_rate is expected-sessions-weighted (same math as the parent
-        # portal), not on-time-joins-over-joins-attended — sessions/on_time/late
-        # stay as raw counts from compute_student_session_counts above.
-        rate_stats = await compute_student_attendance_rate(
-            class_id, cls, email, cutoff, lookback_days, tardy_threshold, blackout_dates
-        )
+    # Iterate students who have rows in the window (same set as before), not the
+    # whole roster — a student with zero records still doesn't appear here.
+    for email, recs in records_by_student.items():
+        stats = _rate_stats_from_records(recs, cls, email, expected_set, expected_count, tardy_threshold)
         students.append({
             "student_email": email,
             "student_user_id": email_to_user_id.get(email),
-            "sessions": c["sessions"],
-            "on_time": c["on_time"],
-            "late": c["late"],
-            "attendance_rate": round(rate_stats["attendance_rate"] * 100),
+            "sessions": stats["sessions"],
+            "on_time": stats["on_time"],
+            "late": stats["tardy"],
+            "attendance_rate": round(stats["attendance_rate"] * 100),
         })
     students.sort(key=lambda s: s["student_email"])
     return {"window": window, "students": students}

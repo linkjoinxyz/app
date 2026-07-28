@@ -3326,6 +3326,7 @@ function OrgInterventionList({ onBack, initialExpanded = null }) {
   const [studentProfiles, setStudentProfiles] = useState({})
   const [atRisk, setAtRisk] = useState([])
   const [atRiskLoading, setAtRiskLoading] = useState(true)
+  const [atRiskCollapsed, setAtRiskCollapsed] = useState(false)
   const [creatingCases, setCreatingCases] = useState({})
 
   useEffect(() => {
@@ -3427,12 +3428,20 @@ function OrgInterventionList({ onBack, initialExpanded = null }) {
   return (
     <div>
       {!atRiskLoading && atRisk.length > 0 && (
-        <div className="iv-atrisk-section">
-          <div className="iv-atrisk-header">
+        <div className={`iv-atrisk-section${atRiskCollapsed ? ' iv-atrisk-section--collapsed' : ''}`}>
+          <button
+            type="button"
+            className="iv-atrisk-toggle"
+            aria-expanded={!atRiskCollapsed}
+            aria-controls="iv-atrisk-list"
+            onClick={() => setAtRiskCollapsed(c => !c)}
+          >
+            <span className="iv-chevron">{atRiskCollapsed ? '▸' : '▾'}</span>
             <span className="iv-atrisk-title">Attention needed ({atRisk.length})</span>
             <span className="iv-atrisk-sub">Students with attendance flags but no open intervention case</span>
-          </div>
-          <div className="iv-atrisk-list">
+          </button>
+          {!atRiskCollapsed && (
+          <div className="iv-atrisk-list" id="iv-atrisk-list">
             {atRisk.map(flag => {
               const key = `${flag.class_id}:${flag.student_email}:${flag.flag_type}`
               const busy = !!creatingCases[key]
@@ -3458,6 +3467,7 @@ function OrgInterventionList({ onBack, initialExpanded = null }) {
               )
             })}
           </div>
+          )}
         </div>
       )}
 
