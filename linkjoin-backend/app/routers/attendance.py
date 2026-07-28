@@ -613,7 +613,9 @@ async def override_class_attendance(class_id: str, body: OverrideBody, user: dic
             raise HTTPException(status_code=422, detail="Invalid join_time value")
         opened_at = tz.localize(datetime(day.year, day.month, day.day, h, m)).astimezone(utc)
         if session_start is not None:
-            minutes_late = round((opened_at - session_start).total_seconds() / 60)
+            # Clamp negatives: an early join is on time, not negative-late. Same
+            # rule as the auto-recording path in links.py.
+            minutes_late = max(0, round((opened_at - session_start).total_seconds() / 60))
         else:
             # The override's date isn't a day this class is scheduled to meet
             # (e.g. a correction entered against the wrong weekday) — a real
