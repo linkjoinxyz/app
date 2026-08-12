@@ -41,9 +41,20 @@
 
 .co-body {
   display: grid;
-  grid-template-columns: 1fr 280px;
+  /* minmax(0,…): a bare 1fr floors at min-content and pushes the form wider
+     than its column. */
+  grid-template-columns: minmax(0, 1fr) 280px;
   gap: 32px;
   align-items: start;
+}
+
+/* This file had no media queries, so the fixed 280px summary sidebar sat
+   entirely off-screen on a phone (it measured out to x=666 in a 393px
+   viewport). Stack it under the form instead, and drop the sticky -- there is
+   no side column left to stick to. */
+@media (max-width: 760px) {
+  .co-body { grid-template-columns: minmax(0, 1fr); gap: 20px; }
+  .co-sidebar { position: static; }
 }
 
 .co-main {
@@ -150,6 +161,10 @@
 .co-date-row {
   display: flex;
   gap: 8px;
+  /* 90px day select + month select + the field's own label overflowed the
+     column at 320px; let the pair wrap rather than run off the card. */
+  flex-wrap: wrap;
+  min-width: 0;
 }
 
 .co-day-select {

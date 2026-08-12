@@ -30,3 +30,6 @@ linkjoin-extension-firefox.zip
 # Machine-local agent settings (permissions etc). .claude/settings.json and any
 # shared skills are intentionally tracked.
 .claude/settings.local.json
+
+# Local MCP server config (machine-specific ports)
+.mcp.json

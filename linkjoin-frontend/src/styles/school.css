@@ -318,7 +318,9 @@
 
 .sc-hl {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  /* minmax(0,…) not 1fr: a bare 1fr floors at min-content, so an unbreakable
+     string blows the track past the container and clips against .sc-root. */
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 72px;
   align-items: center;
   max-width: var(--sc-max);
@@ -540,7 +542,7 @@
 /* Identity comparison mock */
 .sc-identity-compare {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
 }
 .sc-identity-col {
   padding: 20px;
@@ -1008,7 +1010,7 @@
 
 @media (max-width: 860px) {
   .sc-hl {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
     gap: 40px;
     padding: 64px clamp(20px, 5vw, 40px);
   }
