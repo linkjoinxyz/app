@@ -171,8 +171,20 @@ async def create_org(body: CreateOrgRequest, background_tasks: BackgroundTasks, 
 
 
 @router.post("/mine", status_code=201)
-async def create_my_org(body: dict, user: dict = Depends(get_confirmed_user)):
-    """School admin with no org creates their org during onboarding."""
+async def create_my_org(body: dict, user: dict = Depends(get_current_user)):
+    """School admin with no org creates their org during onboarding.
+
+    get_current_user, not get_confirmed_user: a self-serve signup arrives here
+    seconds after registering, before they have opened the confirmation email,
+    and staff-provisioned admins are created pre-confirmed so they never hit it.
+    Requiring confirmation to even name your school pushed the whole funnel
+    through an inbox round-trip.
+
+    Safe to allow unconfirmed because this endpoint is inert: one org per
+    account (409 below), created pending, seat-capped, and granting no
+    entitlement. Everything that reaches other people — invites, roster import —
+    still requires a confirmed address.
+    """
     require_school_admin(user)
     if user.get("org_id"):
         raise HTTPException(status_code=409, detail="Already belongs to an org")
@@ -183,6 +195,12 @@ async def create_my_org(body: dict, user: dict = Depends(get_confirmed_user)):
     doc = {
         "org_id": org_id,
         "name": name,
+        # Self-serve orgs start unverified: seat-capped by
+        # roles.assert_org_seats_available, and their members fall back to trial
+        # entitlement until staff verify. Staff-created orgs (POST /orgs) carry
+        # no verification_status at all and are therefore unrestricted.
+        "verification_status": "pending",
+        "created_via": "self_serve",
         "type": body.get("type") or "school",
         "address": body.get("address") or None,
         "city": body.get("city") or None,

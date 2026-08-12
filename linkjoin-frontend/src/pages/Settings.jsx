@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext.jsx'
 import { apiFetch, apiGet, apiPost, apiDelete, apiPatch } from '../api/client.js'
 import { usersApi } from '../api/users.js'
@@ -192,6 +192,7 @@ function MfaSection({ user, showToast }) {
 export default function Settings() {
   const { email: authEmail, logout, role, orgId, isPremium, accountType } = useAuth()
   const navigate = useNavigate()
+  const { hash } = useLocation()
   const fileRef = useRef()
   // Institutional accounts get these features bundled with their school's plan —
   // there's no individual premium relationship to advertise, so skip the badge/accent.
@@ -233,6 +234,18 @@ export default function Settings() {
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState('')
+
+  // The trial banner links to /settings#billing. A plain anchor jump does not
+  // work here: Billing is the last section of a long page and its contents
+  // (and height) change once usersApi.me() resolves, so the browser's own hash
+  // scroll lands short. Re-run once `user` arrives instead.
+  useEffect(() => {
+    if (hash !== '#billing') return
+    const el = document.getElementById('billing')
+    if (!el) return
+    const smooth = !window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+    el.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto', block: 'center' })
+  }, [hash, user])
 
   useEffect(() => {
     usersApi.me().then(u => {

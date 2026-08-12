@@ -163,7 +163,7 @@ export default function School() {
         </div>
         <div className="sc-nav-right">
           <Link to="/login" className="sc-nav-login">Log in</Link>
-          <Link to="/signup" className="sc-btn-primary">Get started</Link>
+          <Link to="/signup?type=school" className="sc-btn-primary">Get started</Link>
         </div>
       </nav>
 
@@ -176,7 +176,7 @@ export default function School() {
           real-time visibility into who showed up, when, and who needs follow-up.
         </p>
         <div className="sc-hero-actions">
-          <Link to="/signup" className="sc-btn-primary">Get started</Link>
+          <Link to="/signup?type=school" className="sc-btn-primary">Get started</Link>
           <Link to="/demo" className="sc-btn-ghost">Request a demo</Link>
         </div>
       </section>
@@ -486,7 +486,7 @@ export default function School() {
           go live the same day.
         </p>
         <div className="sc-cta-actions">
-          <Link to="/signup" className="sc-btn-primary">Get started</Link>
+          <Link to="/signup?type=school" className="sc-btn-primary">Get started</Link>
           <Link to="/demo" className="sc-btn-ghost">Request a demo</Link>
         </div>
       </section>

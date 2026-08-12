@@ -179,6 +179,127 @@ function StepSetPassword({ onNext, onBack }) {
   )
 }
 
+/**
+ * Phone + 2FA enrolment for an admin who already has a password.
+ *
+ * auth.get_confirmed_user 403s every admin-role account with neither
+ * mfa_enabled nor a number ("mfa_setup_required"), so a self-serve school admin
+ * is locked out of the whole API until this is done — including the org profile
+ * fetch in the next step. StepSetPassword covers the same ground for
+ * staff-provisioned accounts, which arrive with a temp password; this is the
+ * variant for someone who set their own password at signup.
+ */
+function StepEnableMfa({ onNext }) {
+  const { refreshAuth } = useAuth()
+  const [phase, setPhase] = useState('form')
+  const [phone, setPhone] = useState('')
+  const [phoneCountry, setPhoneCountry] = useState('1')
+  const [code, setCode] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [resending, setResending] = useState(false)
+  const [err, setErr] = useState('')
+
+  function fullPhone() { return phoneCountry + phone.replace(/\D/g, '') }
+
+  async function sendCode() {
+    if (phone.replace(/\D/g, '').length < 7) { setErr('Enter a valid phone number.'); return }
+    setSaving(true); setErr('')
+    try {
+      await apiPatch('/users/mfa', { enable: true, phone: fullPhone() })
+      setPhase('verify')
+    } catch (e) {
+      setErr(e?.message || 'Could not send the code. Please try again.')
+    }
+    setSaving(false)
+  }
+
+  async function verify() {
+    if (code.length !== 6) { setErr('Enter the 6-digit code.'); return }
+    setSaving(true); setErr('')
+    try {
+      await apiPost('/auth/mfa/setup-verify', { code })
+      // The account is no longer mfa_setup_required, so the rest of the API
+      // unblocks; refresh so the next step's fetches are not 403'd.
+      refreshAuth({})
+      onNext()
+    } catch (e) {
+      setErr(e?.message || 'Invalid code. Please try again.')
+      setSaving(false)
+    }
+  }
+
+  async function resend() {
+    setResending(true); setErr('')
+    try { await apiPatch('/users/mfa', { enable: true, phone: fullPhone() }) }
+    catch (e) { setErr(e?.message || 'Could not resend code.') }
+    setResending(false)
+  }
+
+  if (phase === 'verify') {
+    return (
+      <div className="aob-step-body">
+        <div className="aob-step-title">Verify your phone</div>
+        <div className="aob-step-desc">
+          A 6-digit code was sent to +{fullPhone()}. Enter it to finish enabling two-factor authentication.
+        </div>
+        <div className="aob-field">
+          <label className="aob-label" htmlFor="ob-mfa2-code">Verification code</label>
+          <input
+            id="ob-mfa2-code" className="aob-input" type="text" inputMode="numeric" maxLength={6}
+            value={code} onChange={e => { setCode(e.target.value.replace(/\D/g, '')); setErr('') }}
+            placeholder="000000" autoFocus autoComplete="one-time-code"
+            onKeyDown={e => e.key === 'Enter' && verify()}
+          />
+        </div>
+        {err && <div className="aob-error">{err}</div>}
+        <div style={{ marginTop: 8, fontSize: 13, color: 'rgba(255,255,255,0.35)' }}>
+          Didn't receive it?{' '}
+          <button className="aob-link-btn" onClick={resend} disabled={resending}>
+            {resending ? 'Sending...' : 'Resend code'}
+          </button>
+        </div>
+        <div className="aob-actions">
+          <button className="aob-btn aob-btn--ghost" onClick={() => { setPhase('form'); setCode(''); setErr('') }}>Back</button>
+          <button className="aob-btn aob-btn--primary" onClick={verify} disabled={saving || code.length !== 6}>
+            {saving ? 'Verifying...' : 'Verify'}
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="aob-step-body">
+      <div className="aob-step-title">Secure your account</div>
+      <div className="aob-step-desc">
+        Administrator accounts require two-factor authentication before they can access school data.
+      </div>
+      <div className="aob-field">
+        <label className="aob-label" htmlFor="ob-mfa2-phone">Phone number</label>
+        <div className="aob-phone-row">
+          <select className="aob-country-select" value={phoneCountry} onChange={e => setPhoneCountry(e.target.value)}>
+            {Object.entries(countryCodes).map(([c, v]) => (
+              <option key={c} value={v}>{c} +{v}</option>
+            ))}
+          </select>
+          <input
+            id="ob-mfa2-phone" className="aob-phone-input" type="tel" value={phone}
+            onChange={e => { setPhone(e.target.value); setErr('') }}
+            placeholder="555 555 1234" autoComplete="tel-national"
+            onKeyDown={e => e.key === 'Enter' && sendCode()}
+          />
+        </div>
+      </div>
+      {err && <div className="aob-error">{err}</div>}
+      <div className="aob-actions">
+        <button className="aob-btn aob-btn--primary" onClick={sendCode} disabled={saving || !phone}>
+          {saving ? 'Sending...' : 'Send code'}
+        </button>
+      </div>
+    </div>
+  )
+}
+
 function Step1OrgProfile({ onNext, onBack, form, setForm }) {
   const { orgId, refreshAuth } = useAuth()
   const [loading, setLoading] = useState(!form.name && !!orgId)
@@ -278,8 +399,12 @@ function Step1OrgProfile({ onNext, onBack, form, setForm }) {
 const BLANK_ROW = () => ({ email: '', role: 'teacher', status: null })
 
 function Step2InviteStaff({ onNext, onSkip, onBack, rows, setRows }) {
-  const { orgId } = useAuth()
+  const { orgId, confirmed } = useAuth()
   const [sending, setSending] = useState(false)
+  // Inviting reaches other people's inboxes, so it stays behind email
+  // confirmation even though naming your school does not. Said plainly here
+  // rather than letting every row fail with a generic error.
+  const [needsConfirm, setNeedsConfirm] = useState(false)
 
   function setRow(i, key, val) {
     setRows(prev => prev.map((r, idx) => idx === i ? { ...r, [key]: val, status: null } : r))
@@ -302,9 +427,17 @@ function Step2InviteStaff({ onNext, onSkip, onBack, rows, setRows }) {
       rows.map(async (r, i) => {
         if (!r.email.trim() || r.status === 'sent') return
         try {
-          await apiPost('/invites', { email: r.email.trim().toLowerCase(), role: r.role, org_id: orgId })
+          // /invites keys off `type`, not `role` — omitting it 422s every row,
+          // which silently broke this entire step. Teachers use the 'teacher'
+          // type; a co-admin is a 'school_admin' invite scoped to our own org.
+          await apiPost('/invites', {
+            type: r.role === 'teacher' ? 'teacher' : 'school_admin',
+            email: r.email.trim().toLowerCase(),
+            org_id: orgId,
+          })
           setRows(prev => prev.map((x, idx) => idx === i ? { ...x, status: 'sent' } : x))
-        } catch {
+        } catch (e) {
+          if (e?.body?.detail === 'Email not confirmed') setNeedsConfirm(true)
           setRows(prev => prev.map((x, idx) => idx === i ? { ...x, status: 'error' } : x))
         }
       })
@@ -316,6 +449,14 @@ function Step2InviteStaff({ onNext, onSkip, onBack, rows, setRows }) {
     <div className="aob-step-body">
       <div className="aob-step-title">Invite your staff</div>
       <div className="aob-step-desc">Add email addresses for teachers and administrators. You can invite more later from the Admin dashboard.</div>
+
+      {(needsConfirm || !confirmed) && (
+        <div className="aob-error" role="status">
+          Confirm your email address before sending invites — check your inbox for
+          the link. You can skip this step and invite your staff later from the
+          Admin dashboard.
+        </div>
+      )}
 
       <div className={`aob-invite-list${rows.length > 4 ? ' aob-invite-list--scroll' : ''}`}>
         {rows.map((row, i) => (
@@ -329,7 +470,8 @@ function Step2InviteStaff({ onNext, onSkip, onBack, rows, setRows }) {
             >
               <option value="teacher">Teacher</option>
               <option value="school_admin">School Admin</option>
-              <option value="district_admin">District Admin</option>
+              {/* District Admin is deliberately absent: it grants read access
+                  across child orgs, so it stays a platform-admin grant. */}
             </select>
             <input
               className={`aob-input aob-email-input${row.status === 'error' ? ' aob-input--error' : ''}`}
@@ -405,10 +547,19 @@ function Step3Done({ onFinish, onBack }) {
 }
 
 export default function AdminOnboarding() {
-  const { markOnboardingDone, mustChangePassword, logout } = useAuth()
+  const { markOnboardingDone, mustChangePassword, mfaSetupRequired, logout } = useAuth()
   const navigate = useNavigate()
-  const totalSteps = mustChangePassword ? 4 : 3
+  // A self-serve signup sets its own password, so it never sees
+  // StepSetPassword — but it is still an admin role, and auth.get_confirmed_user
+  // 403s those until 2FA exists ("mfa_setup_required").
+  //
+  // Sequenced after the org step rather than before it: POST /orgs/mine is
+  // reachable without 2FA, everything afterwards is not, and mfaSetupRequired is
+  // derived from /users/me so it is still false on the first render.
+  const needsMfa = mfaSetupRequired && !mustChangePassword
+  const totalSteps = (mustChangePassword ? 4 : 3) + (needsMfa ? 1 : 0)
   const [step, setStep] = useState(1)
+  const STEP_MFA = 5
   const [orgForm, setOrgForm] = useState({ name: '', type: 'school', address: '', city: '', state: '', website: '', timezone: '' })
   const [inviteRows, setInviteRows] = useState([BLANK_ROW()])
 
@@ -424,12 +575,13 @@ export default function AdminOnboarding() {
         <div className="aob-header">
           <img src="/images/logo-text.svg" width="140" height="32" alt="LinkJoin" />
           <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-            <ProgressDots step={step} total={totalSteps} />
+            <ProgressDots step={step === STEP_MFA ? 2 : step > 1 && needsMfa ? step + 1 : step} total={totalSteps} />
             <button className="aob-signout" onClick={() => logout().then(() => navigate('/login'))}>Sign out</button>
           </div>
         </div>
 
-        {step === 1 && <Step1OrgProfile onNext={() => setStep(2)} onBack={undefined} form={orgForm} setForm={setOrgForm} />}
+        {step === STEP_MFA && <StepEnableMfa onNext={() => setStep(2)} />}
+        {step === 1 && <Step1OrgProfile onNext={() => setStep(needsMfa ? STEP_MFA : 2)} onBack={undefined} form={orgForm} setForm={setOrgForm} />}
         {step === 2 && <Step2InviteStaff onNext={() => mustChangePassword ? setStep(3) : setStep(4)} onSkip={() => mustChangePassword ? setStep(3) : setStep(4)} onBack={() => setStep(1)} rows={inviteRows} setRows={setInviteRows} />}
         {step === 3 && mustChangePassword && <StepSetPassword onNext={() => setStep(4)} onBack={() => setStep(2)} />}
         {step === 4 && <Step3Done onFinish={finish} onBack={() => mustChangePassword ? setStep(3) : setStep(2)} />}

@@ -49,7 +49,18 @@ def is_admin_role(user: dict) -> bool:
 def is_premium(user: dict) -> bool:
     """Entitlement predicate. Mirrors isPremium in the frontend AuthContext."""
     if user.get("account_type") == "institutional":
-        return True  # School plan bundles "Everything in Individual" — always entitled
+        # Self-serve school signups arrive institutional before anyone has
+        # checked they are a school, and institutional bypasses billing
+        # entirely — so an ungated grant here is unlimited free Premium to
+        # anyone who ticks "I'm a school". Until staff verify the org they fall
+        # through to the ordinary trial rules like any other new account.
+        #
+        # Only an explicit False gates. A missing field means an account that
+        # predates verification (every institutional account today), which stays
+        # entitled — same fail-open convention as auth.is_confirmed, and it
+        # means this ships without a migration.
+        if user.get("org_verified") is not False:
+            return True  # School plan bundles "Everything in Individual"
     status = user.get("premium_status", "expired")
     if status in ("active", "grandfathered"):
         return True
@@ -58,6 +69,35 @@ def is_premium(user: dict) -> bool:
         if trial_end and datetime.now(timezone.utc) < trial_end.replace(tzinfo=timezone.utc):
             return True
     return False
+
+
+# Seats an unverified, self-serve org may fill before staff verify it. Big
+# enough to run a real pilot (a department, a couple of classes), small enough
+# that nobody onboards a district on an unchecked claim of being a school.
+PENDING_ORG_SEAT_CAP = 10
+
+
+async def assert_org_seats_available(org_id: str, adding: int = 1) -> None:
+    """Cap membership of an org still awaiting verification.
+
+    Verified orgs and orgs created by staff are uncapped: verification_status is
+    only ever "pending" on the self-serve path, so anything else (including a
+    missing field on every org that predates this) is unlimited.
+    """
+    from app.database import motor_db
+
+    org = await motor_db.orgs.find_one({"org_id": org_id}, {"verification_status": 1})
+    if not org or org.get("verification_status") != "pending":
+        return
+    current = await motor_db.login.count_documents({"org_id": org_id})
+    if current + adding > PENDING_ORG_SEAT_CAP:
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                f"This organization is limited to {PENDING_ORG_SEAT_CAP} members "
+                "until it is verified. Contact support to lift the limit."
+            ),
+        )
 
 
 def require_premium(user: dict) -> None:
