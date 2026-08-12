@@ -144,7 +144,13 @@
   background: rgba(6,15,26,0.92);
 }
 
-.nh-nav-logo img { display: block; }
+/* Absorb any growth in the logo rather than in the row. Without min-width:0 a
+   flex item floors at its content size, so a wider-than-expected button pushes
+   the row past the viewport instead of squeezing the logo -- and .nh-nav is
+   fixed, so that overflow pans the whole page on iOS. */
+.nh-nav-logo { min-width: 0; flex-shrink: 1; }
+.nh-nav-logo img { display: block; max-width: 100%; height: auto; }
+.nh-nav-right { flex-shrink: 0; }
 
 .nh-nav-links {
   display: flex;
@@ -214,6 +220,15 @@
 }
 
 .nh-btn-lg { padding: 14px 28px; font-size: 17px; border-radius: 10px; }
+
+/* Buttons are nowrap by design, but long labels ("Deploying to a school or
+   district?") outrun the smallest phones. Let those wrap instead of clip. */
+@media (max-width: 400px) {
+  .nh-btn-primary, .nh-btn-ghost, .nh-btn-white {
+    white-space: normal;
+    max-width: 100%;
+  }
+}
 
 .nh-btn-white { background: white; color: var(--c-black); }
 .nh-btn-white:hover { filter: brightness(0.95); }
@@ -1343,6 +1358,18 @@
 
 @media (max-width: 580px) {
   .nh-nav-login { display: none; }
+}
+
+/* The nav is a fixed row: logo + "Get started" + hamburger. At 393px (iPhone
+   15, the most common phone) the desktop 20px padding / 32px gap left it 6px
+   of slack in Chromium -- it had already eaten its own right padding. Safari
+   renders that text a hair wider, so the row crossed the viewport edge and,
+   being position:fixed, let the whole page pan sideways. Reclaim ~58px here so
+   the row has real headroom instead of rounding-error headroom. */
+@media (max-width: 430px) {
+  .nh-nav { padding: 0 16px; gap: 12px; }
+  .nh-nav-logo img { max-width: 110px; }
+  .nh-nav-right { gap: 8px; }
 }
 
 @media (max-width: 380px) {

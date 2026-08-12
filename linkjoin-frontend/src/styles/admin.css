@@ -1248,7 +1248,14 @@
   margin-bottom: 24px;
   border-bottom: 1px solid rgba(255,255,255,0.08);
   padding-bottom: 0;
+  /* Up to 9 tabs render here; on a phone the row is ~660px wide against a
+     393px viewport, so the later tabs (Data Quality, Meeting Log, Audit Log)
+     were clipped away with no way to reach them. Scroll the strip instead. */
+  overflow-x: auto;
+  scrollbar-width: none;
 }
+.admin-tabs::-webkit-scrollbar { display: none; }
+.admin-tab { flex: 0 0 auto; }
 
 .admin-tab {
   background: none;
@@ -2673,7 +2680,10 @@ button.iv-status-pill { cursor: pointer; }
 
 .ti-import-cards {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  /* Three fixed columns can't hold "Clever" / "ClassLink" / "CSV" side by side
+     on a 320px screen. auto-fit collapses to fewer columns instead of
+     overflowing, and minmax(0,…) keeps each card inside its track. */
+  grid-template-columns: repeat(auto-fit, minmax(min(140px, 100%), 1fr));
   gap: 10px;
 }
 

@@ -22,11 +22,21 @@ describe('parseServerDate', () => {
     expect(parseServerDate('2026-07-21T09:00:00-05:00').toISOString()).toBe('2026-07-21T14:00:00.000Z')
   })
 
-  it('keeps a date-only value on its own calendar day west of Greenwich', () => {
-    // new Date('2026-07-21') is UTC midnight, which is Jul 20 in Chicago.
+  it('keeps a date-only value on its own calendar day in the viewer timezone', () => {
+    // new Date('2026-07-21') is UTC midnight, which is Jul 20 west of Greenwich.
+    // parseServerDate anchors date-only values at LOCAL noon, so the calendar
+    // day survives in the viewer's own zone at any offset. Every caller renders
+    // with toLocaleDateString(undefined, ...) — the viewer's zone — so that is
+    // the contract worth pinning.
+    //
+    // Asserted with the local getters rather than an explicit foreign timeZone:
+    // a foreign zone would require anchoring at UTC noon instead, which reads
+    // back a day late at UTC+12/+13 (Auckland, Fiji) and a day early at UTC-12.
+    // It would also make this test pass or fail based on the machine's own zone.
     const d = parseServerDate('2026-07-21')
-    expect(d.toLocaleDateString('en-US', { timeZone: 'America/Chicago' })).toBe('7/21/2026')
-    expect(d.toLocaleDateString('en-US', { timeZone: 'Asia/Tokyo' })).toBe('7/21/2026')
+    expect(d.getFullYear()).toBe(2026)
+    expect(d.getMonth()).toBe(6) // 0-indexed: July
+    expect(d.getDate()).toBe(21)
   })
 
   it('returns null rather than an Invalid Date for empty or junk input', () => {

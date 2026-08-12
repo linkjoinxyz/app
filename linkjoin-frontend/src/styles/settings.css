@@ -132,11 +132,16 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
+  /* Flex items floor at content width; a school address like
+     emma.wilson@student.lincoln.edu is one unbreakable token and pushed this
+     column past the card on a 320px screen. */
+  min-width: 0;
 }
 
 .settings-avatar-email {
   font-size: 13px;
   color: rgba(255, 255, 255, 0.45);
+  overflow-wrap: anywhere;
 }
 
 .settings-avatar-btns {

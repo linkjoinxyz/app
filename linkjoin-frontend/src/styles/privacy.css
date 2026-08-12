@@ -90,6 +90,8 @@ html::-webkit-scrollbar, body::-webkit-scrollbar { display: none; }
 .pp-link {
   color: var(--c-accent-550);
   text-decoration: none;
+  /* Bare subprocessor URLs are one unbreakable token on narrow screens. */
+  overflow-wrap: anywhere;
 }
 .pp-link:hover { text-decoration: underline; }
 
@@ -149,6 +151,10 @@ html::-webkit-scrollbar, body::-webkit-scrollbar { display: none; }
   font-size: 13.5px;
   color: rgba(255,255,255,0.88);
   margin-right: 10px;
+  /* Paths like /classes/{class_id}/students/{user_id} have no break
+     opportunity, so they run past the viewport and clip on mobile. */
+  overflow-wrap: anywhere;
+  min-width: 0;
 }
 
 .pp-endpoint-desc {

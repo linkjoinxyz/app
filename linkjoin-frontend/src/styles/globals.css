@@ -153,7 +153,29 @@ textarea:focus-visible,
     }
 }
 
-html { background-color: var(--blue); scrollbar-gutter: stable; }
+html {
+    background-color: var(--blue);
+    scrollbar-gutter: stable;
+    /* iOS Safari inflates text in some block layouts ("font boosting"), which
+       silently widens nowrap rows past what every desktop browser reports.
+       Pin it so measured layouts match what iPhones actually render. */
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+}
+
+/* Viewport bound (site-wide safety net). Nothing may scroll the document
+   horizontally on any page. `clip` rather than `hidden` on purpose: `hidden`
+   makes the element a scroll container, which silently breaks every
+   `position: sticky` header below it. `hidden` is the pre-Safari-16 fallback,
+   overridden by `clip` wherever it is supported.
+   This is a backstop, not a fix -- it hides overflow rather than resolving it,
+   so real offenders still get fixed at the source (see school.css grid tracks,
+   privacy.css overflow-wrap). Audit with the viewport sweep in
+   scripts/audit-viewport.mjs before assuming a page is clean. */
+html, body {
+    overflow-x: hidden;
+    overflow-x: clip;
+}
 
 button:hover {cursor: pointer}
 
