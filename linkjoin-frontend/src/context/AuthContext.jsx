@@ -24,6 +24,9 @@ export function AuthProvider({ children }) {
   const [mfaEnabled, setMfaEnabledState] = useState(() => localStorage.getItem('lj_mfa_enabled') === 'true')
   const [premiumStatus, setPremiumStatus] = useState(() => localStorage.getItem('lj_premium_status') || null)
   const [trialEnd, setTrialEnd] = useState(() => localStorage.getItem('lj_trial_end') || null)
+  // Self-serve orgs are seat-capped and on trial entitlement until staff verify.
+  // Defaults true so nothing is restricted before /users/me has answered.
+  const [orgVerified, setOrgVerified] = useState(() => localStorage.getItem('lj_org_verified') !== 'false')
   // Mirrors the gate in auth.get_confirmed_user: an admin with neither MFA
   // enrolled nor a phone number is 403'd on everything outside a small
   // self-service allowlist. Computed from /users/me (which stays reachable) so it
@@ -60,6 +63,9 @@ export function AuthProvider({ children }) {
       const mfa = !!data.mfa_enabled
       const premStatus = data.premium_status || null
       const trEnd = data.trial_end || null
+      // Explicit false only. Missing means an account that predates
+      // verification, which stays unrestricted — mirrors roles.is_premium.
+      const orgVer = data.org_verified !== false
       if (r) localStorage.setItem('lj_role', r); else localStorage.removeItem('lj_role')
       if (o) localStorage.setItem('lj_org_id', o); else localStorage.removeItem('lj_org_id')
       localStorage.setItem('lj_account_type', at)
@@ -68,6 +74,8 @@ export function AuthProvider({ children }) {
       if (mfa) localStorage.setItem('lj_mfa_enabled', 'true'); else localStorage.removeItem('lj_mfa_enabled')
       if (premStatus) localStorage.setItem('lj_premium_status', premStatus); else localStorage.removeItem('lj_premium_status')
       if (trEnd) localStorage.setItem('lj_trial_end', trEnd); else localStorage.removeItem('lj_trial_end')
+      localStorage.setItem('lj_org_verified', orgVer ? 'true' : 'false')
+      setOrgVerified(orgVer)
       setRole(r)
       setOrgId(o)
       setAccountType(at)
@@ -157,9 +165,11 @@ export function AuthProvider({ children }) {
     localStorage.removeItem('lj_mfa_enabled')
     localStorage.removeItem('lj_premium_status')
     localStorage.removeItem('lj_trial_end')
+    localStorage.removeItem('lj_org_verified')
     setToken(null)
     setEmail(null)
     setConfirmed(false)
+    setOrgVerified(true)
     setAccountType('personal')
     setRole(null)
     setOrgId(null)
@@ -185,7 +195,7 @@ export function AuthProvider({ children }) {
       onboardingDone, markOnboardingDone,
       mustChangePassword, clearMustChangePassword,
       mfaEnabled, setMfaEnabled, mfaSetupRequired,
-      premiumStatus, trialEnd, isPremium, trialDaysLeft,
+      premiumStatus, trialEnd, isPremium, trialDaysLeft, orgVerified,
       login, logout, refreshAuth,
     }}>
       {children}

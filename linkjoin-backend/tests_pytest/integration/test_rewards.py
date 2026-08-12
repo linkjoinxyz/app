@@ -13,7 +13,21 @@ from datetime import datetime, timedelta, timezone
 import pytest
 
 from app.database import motor_db
+from app.utils import get_school_year_start
 from tests_pytest.conftest import RUN_ID
+
+
+def _monday_this_school_year() -> datetime:
+    """A Monday the rewards window actually covers.
+
+    /attendance/me/rewards only counts the current school year, so a hardcoded
+    date passes until that date rolls out of the window and then fails forever.
+    """
+    now = datetime.now(timezone.utc)
+    start = get_school_year_start({}, now)
+    first = start + timedelta(days=-start.weekday() % 7)   # first Monday on/after the start
+    last = now - timedelta(days=now.weekday() + 7)         # Monday of the last full week
+    return max(first, last).replace(hour=9, minute=5, second=0, microsecond=0)
 
 
 @pytest.fixture(autouse=True)
@@ -57,16 +71,17 @@ async def personal_student_no_premium():
 
 async def test_later_recorded_row_wins_over_earlier_duplicate(as_user, institutional_student_user):
     email = institutional_student_user["username"]
-    day = datetime(2026, 3, 2, 9, 5, tzinfo=timezone.utc)  # a Monday, on time
+    day = _monday_this_school_year()  # a Monday, on time
+    record_date = day.date().isoformat()
     await motor_db.attendance.insert_many([
         {
             "student_email": email, "class_id": "class-x", "opened_at": day,
-            "minutes_late": 0, "record_date": "2026-03-02", "recorded_at": day,
+            "minutes_late": 0, "record_date": record_date, "recorded_at": day,
         },
         {
             "student_email": email, "class_id": "class-x",
             "opened_at": day + timedelta(minutes=45), "minutes_late": 45,
-            "record_date": "2026-03-02", "recorded_at": day + timedelta(minutes=50),
+            "record_date": record_date, "recorded_at": day + timedelta(minutes=50),
         },
     ])
 
@@ -79,15 +94,16 @@ async def test_later_recorded_row_wins_over_earlier_duplicate(as_user, instituti
 
 async def test_absent_override_supersedes_earlier_join(as_user, institutional_student_user):
     email = institutional_student_user["username"]
-    join_time = datetime(2026, 3, 2, 9, 0, tzinfo=timezone.utc)
+    join_time = _monday_this_school_year()
+    record_date = join_time.date().isoformat()
     await motor_db.attendance.insert_many([
         {
             "student_email": email, "class_id": "class-x", "opened_at": join_time,
-            "minutes_late": 0, "record_date": "2026-03-02", "recorded_at": join_time,
+            "minutes_late": 0, "record_date": record_date, "recorded_at": join_time,
         },
         {
             "student_email": email, "class_id": "class-x", "opened_at": None,
-            "minutes_late": None, "record_date": "2026-03-02",
+            "minutes_late": None, "record_date": record_date,
             "recorded_at": join_time + timedelta(hours=1), "manual": True,
         },
     ])

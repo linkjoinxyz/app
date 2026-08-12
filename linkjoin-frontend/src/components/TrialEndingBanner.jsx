@@ -44,19 +44,26 @@ export default function TrialEndingBanner() {
     setDismissed(true)
   }
 
-  const when =
-    trialDaysLeft === 0 ? 'today'
-      : trialDaysLeft === 1 ? 'tomorrow'
-        : `in ${trialDaysLeft} days`
+  // trialDaysRemaining ceils, so any end still in the future is at least 1.
+  // 0 therefore means the trial is already over -- it read "ends today" for as
+  // long as the account stayed on premium_status 'trial', which is days or
+  // weeks after the fact, not just on the last day.
+  const ended = trialDaysLeft === 0
+  const headline = ended
+    ? 'Your free trial has ended.'
+    : `Your free trial ends ${trialDaysLeft === 1 ? 'tomorrow' : `in ${trialDaysLeft} days`}.`
 
   return (
     <div className="trial-banner" role="status">
       <span className="trial-banner-text">
-        <strong>Your free trial ends {when}.</strong>{' '}
-        Keep calendar import, email meeting detection, auto-delete and vacation mode.
+        <strong>{headline}</strong>{' '}
+        {ended ? 'Upgrade to restore' : 'Keep'} calendar import, email meeting
+        detection, auto-delete and vacation mode.
       </span>
-      <button className="trial-banner-btn" onClick={() => navigate('/pricing')}>
-        See plans
+      {/* Settings, not /pricing: the upgrade action lives in the Billing
+          section, so /pricing was a marketing detour on the way to it. */}
+      <button className="trial-banner-btn" onClick={() => navigate('/settings#billing')}>
+        {ended ? 'Upgrade' : 'See plans'}
       </button>
       <button className="trial-banner-dismiss" onClick={dismiss} aria-label="Dismiss">
         &times;

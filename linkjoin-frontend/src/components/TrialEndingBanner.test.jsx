@@ -6,6 +6,12 @@ import TrialEndingBanner from './TrialEndingBanner.jsx'
 const mockUseAuth = vi.fn()
 vi.mock('../context/AuthContext.jsx', () => ({ useAuth: () => mockUseAuth() }))
 
+const navigateSpy = vi.fn()
+vi.mock('react-router-dom', async (importOriginal) => ({
+  ...(await importOriginal()),
+  useNavigate: () => navigateSpy,
+}))
+
 function renderBanner(auth, path = '/meetings') {
   mockUseAuth.mockReturnValue(auth)
   return render(
@@ -22,6 +28,7 @@ function renderBanner(auth, path = '/meetings') {
 describe('TrialEndingBanner', () => {
   beforeEach(() => {
     mockUseAuth.mockReset()
+    navigateSpy.mockReset()
     localStorage.clear()
   })
 
@@ -36,12 +43,32 @@ describe('TrialEndingBanner', () => {
     expect(screen.getByText(/ends in 3 days/i)).toBeInTheDocument()
   })
 
-  it.each([
-    [1, /ends tomorrow/i],
-    [0, /ends today/i],
-  ])('phrases the last days naturally (%i)', (days, pattern) => {
+  it('phrases the last day naturally', () => {
+    renderBanner({ premiumStatus: 'trial', trialDaysLeft: 1 })
+    expect(screen.getByText(/ends tomorrow/i)).toBeInTheDocument()
+  })
+
+  /**
+   * trialDaysRemaining ceils, so a trial still running always has at least 1 day
+   * left: 0 means it is already over. This said "ends today" for as long as the
+   * account stayed on premium_status 'trial' — days or weeks past the fact, not
+   * only on the final day.
+   */
+  it('says the trial has ended once it is over, not "ends today"', () => {
+    renderBanner({ premiumStatus: 'trial', trialDaysLeft: 0 })
+    expect(screen.getByText(/your free trial has ended/i)).toBeInTheDocument()
+    expect(screen.queryByText(/ends today/i)).toBeNull()
+  })
+
+  /**
+   * /pricing is the marketing page; the actual upgrade button lives in the
+   * Billing section of Settings, so the CTA used to land a paying-intent user
+   * one more click away from checkout.
+   */
+  it.each([0, 2])('sends the upgrade action to Billing in Settings (%i days left)', (days) => {
     renderBanner({ premiumStatus: 'trial', trialDaysLeft: days })
-    expect(screen.getByText(pattern)).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /upgrade|see plans/i }))
+    expect(navigateSpy).toHaveBeenCalledWith('/settings#billing')
   })
 
   it('never shows for an account that is not on a trial', () => {

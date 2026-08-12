@@ -5,7 +5,7 @@ from app.auth import create_token, get_confirmed_user, get_current_user, is_conf
 from app.config import get_settings
 from app.database import motor_db
 from app.email_service import send_email
-from app.roles import TEACHER_ROLES, require_school_admin, get_accessible_org_ids
+from app.roles import TEACHER_ROLES, require_school_admin, get_accessible_org_ids, assert_org_seats_available
 from app.audit import log_audit
 from app.utils import track_event
 
@@ -80,18 +80,29 @@ async def create_invite(
     has_token = _settings.add_accounts_token and x_admin_token == _settings.add_accounts_token
 
     if invite_type == "school_admin":
-        if not is_platform_admin and not has_token:
-            raise HTTPException(status_code=403, detail="Admin token or platform admin account required for school_admin invites")
-        org_id = body.get("org_id")
-        if not org_id:
-            raise HTTPException(status_code=422, detail="org_id required")
+        privileged = is_platform_admin or has_token
+        if privileged:
+            org_id = body.get("org_id")
+            if not org_id:
+                raise HTTPException(status_code=422, detail="org_id required")
+        else:
+            # A school admin may add another admin to their OWN org — otherwise
+            # self-serve orgs need staff for every co-administrator. Scoped to
+            # their own org_id rather than the body's, so the path parameter is
+            # never the authority. district_admin stays privileged: it reads
+            # child orgs via get_accessible_org_ids, so it is a cross-org grant
+            # and not a school admin's to hand out.
+            require_school_admin(user)
+            org_id = user.get("org_id")
+            if not org_id:
+                raise HTTPException(status_code=422, detail="No org_id on your account")
         org = await motor_db.orgs.find_one({"org_id": org_id}, {"name": 1})
         if not org:
             raise HTTPException(status_code=404, detail="Org not found")
         email = (body.get("email") or "").lower().strip() or None
         reusable = False
         requested_role = body.get("role", "school_admin")
-        role = requested_role if (is_platform_admin or has_token) and requested_role in ("school_admin", "district_admin") else "school_admin"
+        role = requested_role if privileged and requested_role in ("school_admin", "district_admin") else "school_admin"
 
     elif invite_type == "teacher":
         if is_platform_admin:
@@ -138,6 +149,11 @@ async def create_invite(
             {"class_id": class_id, "type": "student_class", "status": "pending"},
             {"$set": {"status": "rescinded"}},
         )
+
+    # Staff invites consume a seat. Student join codes are reusable and are not
+    # counted here — the roster import is where student headcount is bounded.
+    if org_id and invite_type != "student_class":
+        await assert_org_seats_available(org_id, adding=1)
 
     expiry_days = _CLASS_EXPIRY_DAYS if invite_type == "student_class" else _ADMIN_EXPIRY_DAYS
     invite = {

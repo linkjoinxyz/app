@@ -14,7 +14,7 @@ from app.auth import (
     is_org_disabled, _reject_if_pre_password_change,
 )
 from app.roles import is_admin_role, ensure_trial_started
-from app.limiter import limiter
+from app.limiter import limiter, check_account_rate_limit, clear_account_rate_limit
 from app.models.user import RegisterRequest, LoginRequest, ResetPasswordRequest
 from app.config import get_settings
 from app.email_service import send_email
@@ -30,6 +30,27 @@ _settings = get_settings()
 
 # Pre-computed hash used to equalize timing for non-existent users
 _DUMMY_HASH = hasher.hash("__dummy_timing_password__")
+
+# Per-IP ceiling for the auth endpoints. Sized for a shared egress IP -- a whole
+# school or district NATs to one address, and a class starting at the same bell
+# is a normal traffic shape, not an attack. Abuse is bounded per-account below,
+# where a single target is the meaningful unit.
+_IP_AUTH_BURST = "120/minute"
+
+# Registration is held tighter than login: it creates rows rather than checking
+# an existing one, so it is the spam-shaped endpoint. Still well above a staff
+# room signing up together, which the old 5/minute was not.
+_IP_REGISTER_BURST = "60/minute"
+
+# Failed attempts allowed against ONE account before it throttles. Generous
+# enough for a person mistyping a password, far below what guessing needs.
+_LOGIN_ATTEMPTS = 10
+_LOGIN_WINDOW_SECONDS = 300
+
+# Reset emails sent to one address per window. Bounds mailbombing a single
+# mailbox without limiting how many different people can reset at once.
+_RESET_EMAILS = 5
+_RESET_WINDOW_SECONDS = 900
 
 
 def _gen_otp() -> str:
@@ -72,7 +93,7 @@ async def _blacklist_token(payload: dict) -> None:
 
 
 @router.post("/register", status_code=201)
-@limiter.limit("5/minute")
+@limiter.limit(_IP_REGISTER_BURST)
 async def register(request: Request, body: RegisterRequest, background_tasks: BackgroundTasks):
     email = body.email.lower()
 
@@ -113,6 +134,16 @@ async def register(request: Request, body: RegisterRequest, background_tasks: Ba
         "org_name": email.split("@")[1],
         "created_at": datetime.now(timezone.utc),
     }
+
+    if body.account_intent == "school":
+        # Enough to reach the existing /onboarding wizard, which creates the org
+        # via POST /orgs/mine. The trial fields above stay as they are: until
+        # staff verify the org, is_premium ignores the institutional grant and
+        # falls back to them, so this is a normal 14-day trial and not free
+        # Premium for anyone who claims to be a school.
+        account["account_type"] = "institutional"
+        account["role"] = "school_admin"
+        account["org_verified"] = False
 
     if body.jwt:
         account["confirmed"] = "true"
@@ -206,7 +237,9 @@ async def confirm_email(token: str):
 
 
 @router.post("/resend-confirmation")
-@limiter.limit("3/minute")
+# Authenticated and self-targeted, so the per-account bound is implicit; the IP
+# ceiling just needs to clear a school where several people sign up at once.
+@limiter.limit(_IP_AUTH_BURST)
 async def resend_confirmation(request: Request, background_tasks: BackgroundTasks, user: dict = Depends(get_current_user)):
     if is_confirmed(user):
         return {"message": "Already confirmed"}
@@ -225,7 +258,10 @@ async def resend_confirmation(request: Request, background_tasks: BackgroundTask
 
 
 @router.post("/login")
-@limiter.limit("10/minute")
+# Per-IP is a coarse abuse ceiling only: an entire school NATs to one address,
+# so the old 10/minute here 429'd most of a class signing in at the same bell.
+# The real guessing bound is the per-account check below.
+@limiter.limit(_IP_AUTH_BURST)
 async def login(request: Request, body: LoginRequest):
     if body.jwt:
         try:
@@ -239,6 +275,8 @@ async def login(request: Request, body: LoginRequest):
         if not body.email or not body.password:
             raise HTTPException(status_code=422, detail="Email and password required")
         email = body.email.lower()
+
+        await check_account_rate_limit(email, "login", _LOGIN_ATTEMPTS, _LOGIN_WINDOW_SECONDS)
 
         user = await motor_db.login.find_one({"username": email})
         if not user:
@@ -260,6 +298,10 @@ async def login(request: Request, body: LoginRequest):
     user = await motor_db.login.find_one({"username": email})
     if not user:
         raise HTTPException(status_code=401, detail="Invalid credentials")
+
+    # Credentials checked out — drop the failure counter so someone who mistyped
+    # twice before getting it right is not left throttled.
+    await clear_account_rate_limit(email, "login")
 
     consent = user.get("parental_consent")
     if consent and consent.get("required") and consent.get("status") == "pending":
@@ -361,7 +403,7 @@ def _allowed_google_audiences() -> set[str]:
 
 
 @router.post("/google-token")
-@limiter.limit("10/minute")
+@limiter.limit(_IP_AUTH_BURST)
 async def google_token_auth(request: Request, body: dict):
     access_token = body.get("access_token")
     if not access_token:
@@ -466,9 +508,14 @@ async def google_token_auth(request: Request, body: dict):
 
 
 @router.post("/forgot-password")
-@limiter.limit("3/minute")
+# 3/minute per IP locked out a whole school the moment one person used it. The
+# abuse here is mailbombing one address, so it is bounded per account instead.
+@limiter.limit(_IP_AUTH_BURST)
 async def forgot_password(request: Request, body: dict, background_tasks: BackgroundTasks):
     email = (body.get("email") or "").lower()
+    # Before the existence check, so it cannot be used to enumerate accounts by
+    # timing or by which addresses throttle.
+    await check_account_rate_limit(email, "reset", _RESET_EMAILS, _RESET_WINDOW_SECONDS)
     user = await motor_db.login.find_one({"username": email})
     if not user:
         return {"message": "If that email exists you will receive a reset link"}
@@ -537,7 +584,9 @@ async def forgot_password(request: Request, body: dict, background_tasks: Backgr
 
 
 @router.post("/reset-password/{token}")
-@limiter.limit("5/hour")
+# Each reset carries a single-use signed token, so the token is the real bound.
+# 5/hour per IP just meant the second person in a building could not reset.
+@limiter.limit(_IP_AUTH_BURST)
 async def reset_password_with_token(request: Request, token: str, body: ResetPasswordRequest):
     try:
         payload = decode_token(token)
@@ -570,7 +619,8 @@ async def reset_password_with_token(request: Request, token: str, body: ResetPas
 
 
 @router.post("/refresh")
-@limiter.limit("30/minute")
+# Every device in a 1:1 school refreshes from the same egress IP.
+@limiter.limit(_IP_AUTH_BURST)
 async def refresh_access_token(request: Request, body: dict):
     """Exchange a refresh token for a new access token.
 

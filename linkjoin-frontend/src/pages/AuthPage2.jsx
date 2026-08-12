@@ -171,6 +171,9 @@ export default function AuthPage2({ defaultTab = 'login' }) {
 
   const [tab, setTab] = useState(defaultTab)
   useEffect(() => { setTab(defaultTab) }, [defaultTab])
+  // ?type=school arrives from the /schools CTAs, which used to land here and
+  // silently create a personal account that could never create an org.
+  const [isSchool, setIsSchool] = useState(params.get('type') === 'school')
   const [headingDir, setHeadingDir] = useState(null)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -265,10 +268,16 @@ export default function AuthPage2({ defaultTab = 'login' }) {
         login(data.access_token, data.email, data.confirmed ?? false, data)
         navigate(data.mfa_setup_required ? '/settings' : redirect, { replace: true })
       } else {
-        const data = await authApi.register({ email, password, offset, timezone })
+        const data = await authApi.register({
+          email, password, offset, timezone,
+          account_intent: isSchool ? 'school' : 'personal',
+        })
         if (data.access_token) {
           login(data.access_token, data.email, data.confirmed ?? false, data)
-          navigate(redirect, { replace: true })
+          // A school signup lands as school_admin with no org yet; PrivateRoute
+          // sends org admins who have not finished onboarding to /onboarding,
+          // where Step 1 creates the org.
+          navigate(isSchool ? '/onboarding' : redirect, { replace: true })
         }
       }
     } catch (e) {
@@ -333,6 +342,36 @@ export default function AuthPage2({ defaultTab = 'login' }) {
               <button className={`ap-tab${isLogin ? ' active' : ''}`} onClick={() => switchTab('login')}>Log in</button>
               <button className={`ap-tab${!isLogin ? ' active' : ''}`} onClick={() => switchTab('signup')}>Sign up</button>
             </div>
+
+            {/* Account kind. Only on sign-up: it decides whether the account can
+                create an organization, which cannot be changed later without staff. */}
+            {!isLogin && (
+              <div className="ap-kind" role="radiogroup" aria-label="Account type">
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked={!isSchool}
+                  className={`ap-kind-btn${!isSchool ? ' active' : ''}`}
+                  onClick={() => setIsSchool(false)}
+                >
+                  For myself
+                </button>
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked={isSchool}
+                  className={`ap-kind-btn${isSchool ? ' active' : ''}`}
+                  onClick={() => setIsSchool(true)}
+                >
+                  For my school
+                </button>
+              </div>
+            )}
+            {!isLogin && isSchool && (
+              <div className="ap-kind-note">
+                You'll set up your organization and invite staff next.
+              </div>
+            )}
 
             {error && <div className="ap-error">{ERROR_MESSAGES[error] || error}</div>}
 

@@ -60,7 +60,11 @@ export default function BillingSection({ user, showToast }) {
   }
 
   return (
-    <section className="settings-section">
+    // id: the trial banner links to /settings#billing so the upgrade action is
+    // what you land on, not the top of a long settings page. Settings.jsx does
+    // the scrolling -- keeping useLocation out of here leaves this component
+    // renderable without a router.
+    <section className="settings-section" id="billing">
       <div className="settings-section-title">Billing</div>
       <div className="settings-row settings-row--last">
         <div>

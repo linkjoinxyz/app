@@ -118,6 +118,42 @@ html.nobar::-webkit-scrollbar, html.nobar body::-webkit-scrollbar { display: non
 
 .ap-tab.active { color: white; }
 .ap-tab:not(.active) { color: rgba(255,255,255,0.38); }
+
+/* Account kind (sign-up only). Quieter than .ap-tabs on purpose: log-in vs
+   sign-up is the primary choice on this screen, this is a qualifier under it. */
+.ap-kind {
+  display: flex;
+  gap: 8px;
+  margin: -12px 0 16px;
+}
+
+.ap-kind-btn {
+  flex: 1;
+  min-width: 0;
+  padding: 9px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(255,255,255,0.10);
+  background: rgba(255,255,255,0.03);
+  color: rgba(255,255,255,0.45);
+  font: 600 13px Montserrat, sans-serif;
+  cursor: pointer;
+  transition: color 0.18s, border-color 0.18s, background 0.18s;
+}
+
+.ap-kind-btn:hover { color: rgba(255,255,255,0.7); }
+
+.ap-kind-btn.active {
+  color: white;
+  border-color: var(--c-accent-550);
+  background: rgba(43,143,216,0.14);
+}
+
+.ap-kind-note {
+  margin: -8px 0 16px;
+  font: 400 12px Montserrat, sans-serif;
+  color: rgba(255,255,255,0.4);
+  line-height: 1.5;
+}
 .ap-tab:not(.active):hover { color: rgba(255,255,255,0.65); }
 
 /* ── Error ── */

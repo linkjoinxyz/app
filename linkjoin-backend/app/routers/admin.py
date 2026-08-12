@@ -2,6 +2,7 @@ import asyncio
 import csv
 import io
 import json
+import logging
 import re
 import secrets
 import string
@@ -12,12 +13,12 @@ from fastapi.responses import StreamingResponse
 from app.auth import get_confirmed_user
 from app.config import get_settings
 from app.database import motor_db
-from app.email_service import send_email
+from app.email_service import send_email, send_email_batch
 from app.routers.classes import _cascade_delete_class_data
 from app.utils import configure_data, gen_id, STAFF_HIDDEN_FIELDS
 from app.websocket_manager import manager
 from app.audit import log_audit
-from app.roles import TEACHER_ROLES, require_platform_admin, get_accessible_org_ids
+from app.roles import TEACHER_ROLES, require_platform_admin, get_accessible_org_ids, assert_org_seats_available
 from argon2 import PasswordHasher
 
 _hasher = PasswordHasher()
@@ -133,6 +134,8 @@ def _mask_ip(ip: str | None) -> str | None:
     return "x.x"
 
 
+log = logging.getLogger(__name__)
+
 router = APIRouter(prefix="/admin", tags=["admin"])
 
 
@@ -223,6 +226,22 @@ async def set_user_role(user_id: str, body: dict, user: dict = Depends(get_confi
     return {"message": "Role updated"}
 
 
+# Declared before /orgs/{org_id}: FastAPI matches routes in declaration
+# order, so a later literal path is swallowed by the parameterized one
+# ("pending" arrives as an org_id and 404s "Org not found").
+@router.get("/orgs/pending")
+async def list_pending_orgs(user: dict = Depends(get_confirmed_user)):
+    """Self-serve orgs awaiting verification. Seat-capped and on trial
+    entitlement until approved via PATCH /admin/orgs/{org_id}/verify."""
+    require_platform_admin(user)
+    orgs = await motor_db.orgs.find(
+        {"verification_status": "pending"}, {"_id": 0}
+    ).sort("created_at", -1).to_list(200)
+    for org in orgs:
+        org["member_count"] = await motor_db.login.count_documents({"org_id": org["org_id"]})
+    return orgs
+
+
 @router.get("/orgs/{org_id}")
 async def get_org_detail(org_id: str, user: dict = Depends(get_confirmed_user)):
     require_platform_admin(user)
@@ -253,6 +272,150 @@ async def update_org_detail(org_id: str, body: dict, user: dict = Depends(get_co
     await motor_db.orgs.update_one({"org_id": org_id}, {"$set": updates})
     await log_audit(user["username"], "admin.update_org", detail={"org_id": org_id, "fields": list(updates.keys())})
     return {"message": "Updated"}
+
+
+# Gmail throttles rapid authenticated connections and caps daily volume, so a
+# roster import is chunked rather than fired as one unbounded run.
+_EMAIL_BATCH_SIZE = 50
+
+
+async def _send_batch_and_record(messages: list[dict], org_id: str, kind: str) -> None:
+    """Send onboarding mail in batches and record what actually happened.
+
+    Replaces one add_task(send_email) per member, which opened a fresh TLS
+    handshake and AUTH to Gmail for every single recipient. Failures used to be
+    a log line only; since the welcome email carries the temp password, a
+    dropped send meant that person could never log in and nobody knew.
+    """
+    if not messages:
+        return
+    for start in range(0, len(messages), _EMAIL_BATCH_SIZE):
+        chunk = messages[start:start + _EMAIL_BATCH_SIZE]
+        result = await asyncio.to_thread(send_email_batch, chunk)
+        failed = set(result.get("failed") or [])
+        now = datetime.now(timezone.utc)
+        rows = [{
+            "org_id": org_id,
+            "kind": kind,
+            "to": m["to"],
+            "subject": m["subject"],
+            "status": "failed" if m["to"] in failed else "sent",
+            "created_at": now,
+        } for m in chunk]
+        try:
+            await motor_db.email_deliveries.insert_many(rows)
+        except Exception:
+            log.exception("[email] could not record delivery outcomes for org %s", org_id)
+        if failed:
+            log.error("[email] %d/%d %s emails failed for org %s",
+                      len(failed), len(chunk), kind, org_id)
+
+
+def _require_org_admin_access(user: dict, org_id: str) -> bool:
+    """Platform admin, or an admin of THIS org. Returns whether it was the former.
+
+    Scoped to the caller's own org_id rather than the path parameter, so the URL
+    is never the authority on which roster you may touch. Callers need the
+    return value: an org admin is additionally restricted to their own hierarchy
+    further down (get_accessible_org_ids), while a platform admin is not.
+    """
+    is_platform_admin = user.get("admin") == "true"
+    is_own_org_admin = (
+        user.get("role") in {"school_admin", "district_admin"} and user.get("org_id") == org_id
+    )
+    if not is_platform_admin and not is_own_org_admin:
+        raise HTTPException(status_code=403, detail="Access denied")
+    return is_platform_admin
+
+
+@router.get("/leads")
+async def list_leads(user: dict = Depends(get_confirmed_user), limit: int = Query(100, le=500)):
+    """Demo/contact submissions. These are the entire inbound org pipeline, and
+    used to exist only as an email to one inbox — visible here so a filtered or
+    failed notification does not mean a lost lead (emailed:false flags those)."""
+    require_platform_admin(user)
+    rows = await motor_db.leads.find({}, {"_id": 0}).sort("created_at", -1).to_list(limit)
+    return rows
+
+
+@router.get("/orgs/{org_id}/email-failures")
+async def list_email_failures(org_id: str, user: dict = Depends(get_confirmed_user)):
+    """Onboarding emails that never landed.
+
+    A welcome email is the only copy of a member's temp password, so a failed
+    send is an account nobody can get into. Surfaced per-org so an admin can see
+    and retry it instead of discovering it as a support ticket.
+    """
+    _require_org_admin_access(user, org_id)
+    rows = await motor_db.email_deliveries.find(
+        {"org_id": org_id, "status": "failed"}, {"_id": 0}
+    ).sort("created_at", -1).to_list(500)
+    return rows
+
+
+@router.post("/orgs/{org_id}/resend-welcome")
+async def resend_welcome(org_id: str, body: dict, background_tasks: BackgroundTasks,
+                         user: dict = Depends(get_confirmed_user)):
+    """Reissue a temp password and resend the welcome email to one member.
+
+    The original password was hashed on write and only ever existed in the email
+    that failed, so recovery means minting a new one rather than resending the
+    old message.
+    """
+    _require_org_admin_access(user, org_id)
+    email = (body.get("email") or "").strip().lower()
+    if not email:
+        raise HTTPException(status_code=422, detail="email is required")
+    member = await motor_db.login.find_one({"username": email, "org_id": org_id})
+    if not member:
+        raise HTTPException(status_code=404, detail="No such member in this organization")
+
+    org = await motor_db.orgs.find_one({"org_id": org_id}, {"name": 1})
+    org_name = (org or {}).get("name", "your school")
+    temp_pw = _gen_temp_password()
+    await motor_db.login.update_one(
+        {"username": email},
+        {"$set": {"password": _hasher.hash(temp_pw), "must_change_password": True}},
+    )
+    html = _welcome_email_html(email, org_name, member.get("role", "teacher"), temp_pw, _settings.frontend_url)
+    background_tasks.add_task(
+        _send_batch_and_record,
+        [{"html_content": html, "subject": f"Welcome to {org_name} on LinkJoin", "to": email}],
+        org_id, "welcome_resend",
+    )
+    await log_audit(user["username"], "admin.resend_welcome", detail={"email": email, "org_id": org_id})
+    return {"message": "Resending"}
+
+
+@router.patch("/orgs/{org_id}/verify")
+async def verify_org(org_id: str, user: dict = Depends(get_confirmed_user)):
+    """Approve a self-serve org: lifts the seat cap and the entitlement gate.
+
+    Both gates read a denormalized flag rather than joining on every request:
+    verification_status on the org (seats) and org_verified on each member
+    (roles.is_premium). So both have to be written here.
+    """
+    require_platform_admin(user)
+    org = await motor_db.orgs.find_one({"org_id": org_id}, {"_id": 0, "org_id": 1, "name": 1})
+    if not org:
+        raise HTTPException(status_code=404, detail="Org not found")
+
+    await motor_db.orgs.update_one(
+        {"org_id": org_id},
+        {"$set": {
+            "verification_status": "verified",
+            "verified_at": datetime.now(timezone.utc),
+            "verified_by": user["username"],
+        }},
+    )
+    result = await motor_db.login.update_many(
+        {"org_id": org_id}, {"$set": {"org_verified": True}}
+    )
+    await log_audit(
+        user["username"], "admin.verify_org",
+        detail={"org_id": org_id, "members_updated": result.modified_count},
+    )
+    return {"message": "Verified", "members_updated": result.modified_count}
 
 
 @router.patch("/orgs/{org_id}/members/{user_id}/role")
@@ -386,10 +549,7 @@ async def import_staff(
     background_tasks: BackgroundTasks,
     user: dict = Depends(get_confirmed_user),
 ):
-    is_platform_admin = user.get("admin") == "true"
-    is_own_org_admin = user.get("role") in {"school_admin", "district_admin"} and user.get("org_id") == org_id
-    if not is_platform_admin and not is_own_org_admin:
-        raise HTTPException(status_code=403, detail="Access denied")
+    is_platform_admin = _require_org_admin_access(user, org_id)
 
     org = await motor_db.orgs.find_one({"org_id": org_id})
     if not org:
@@ -400,6 +560,7 @@ async def import_staff(
     rows = body.get("rows", [])
     if not rows or not isinstance(rows, list):
         raise HTTPException(status_code=422, detail="rows must be a non-empty list")
+    await assert_org_seats_available(org_id, adding=len(rows))
 
     # A non-platform admin may only rewrite accounts that are already inside their
     # own org hierarchy. Without this, the update branch below reassigns role/org_id
@@ -409,6 +570,7 @@ async def import_staff(
     accessible_org_ids = None if is_platform_admin else await get_accessible_org_ids(user)
 
     results = []
+    pending_emails: list[dict] = []
     for row in rows:
         email = (row.get("email") or "").strip().lower()
         role = (row.get("role") or "teacher").strip()
@@ -466,10 +628,15 @@ async def import_staff(
                             "error": "Created by another request. Please retry this row."})
             continue
         html = _welcome_email_html(email, org_name, role, temp_pw, app_url)
-        background_tasks.add_task(send_email, html, f"Welcome to {org_name} on LinkJoin", email)
+        pending_emails.append({
+            "html_content": html,
+            "subject": f"Welcome to {org_name} on LinkJoin",
+            "to": email,
+        })
         results.append({"email": email, "status": "created"})
         await log_audit(user["username"], "admin.import_staff_created", detail={"email": email, "role": role, "org_id": org_id})
 
+    background_tasks.add_task(_send_batch_and_record, pending_emails, org_id, "welcome_staff")
     return {"results": results}
 
 
@@ -480,7 +647,11 @@ async def import_org_members(
     background_tasks: BackgroundTasks,
     user: dict = Depends(get_confirmed_user),
 ):
-    require_platform_admin(user)
+    # Was platform-admin only, which put LinkJoin staff on the critical path for
+    # every school's roster. Now matches import-staff/import-parents: an admin
+    # of this org may import into it. The FERPA School Official notice is shown
+    # during onboarding (AdminOnboarding Step1).
+    _require_org_admin_access(user, org_id)
     org = await motor_db.orgs.find_one({"org_id": org_id})
     if not org:
         raise HTTPException(status_code=404, detail="Org not found")
@@ -489,9 +660,11 @@ async def import_org_members(
     rows = body.get("rows", [])
     if not rows or not isinstance(rows, list):
         raise HTTPException(status_code=422, detail="rows must be a non-empty list")
+    await assert_org_seats_available(org_id, adding=len(rows))
 
     app_url = _settings.frontend_url
     results = []
+    pending_emails: list[dict] = []
     for row in rows:
         email = (row.get("email") or "").strip().lower()
         role = (row.get("role") or "").strip()
@@ -525,7 +698,11 @@ async def import_org_members(
                 grant_url = f"{app_url}/consent/grant?token={consent_token}"
                 student_name = f"{first_name} {last_name}".strip() or email
                 consent_html = _consent_email_html(student_name, org_name, grant_url)
-                background_tasks.add_task(send_email, consent_html, f"Parental consent required for {org_name} on LinkJoin", parent_email)
+                pending_emails.append({
+                    "html_content": consent_html,
+                    "subject": f"Parental consent required for {org_name} on LinkJoin",
+                    "to": parent_email,
+                })
                 await log_audit(user["username"], "consent.parental_required", detail={"email": email, "parent_email": parent_email, "org_id": org_id})
             await motor_db.login.update_one({"username": email}, update)
             results.append({"email": email, "status": "updated"})
@@ -573,17 +750,26 @@ async def import_org_members(
         await log_audit(user["username"], "admin.import_member_created", detail={"email": email, "role": role, "org_id": org_id})
 
         html = _welcome_email_html(email, org_name, role, temp_pw, app_url)
-        background_tasks.add_task(send_email, html, f"Welcome to {org_name} on LinkJoin", email)
+        pending_emails.append({
+            "html_content": html,
+            "subject": f"Welcome to {org_name} on LinkJoin",
+            "to": email,
+        })
 
         if consent_needed:
             grant_url = f"{app_url}/consent/grant?token={new_user['parental_consent']['token']}"
             student_name = f"{first_name} {last_name}".strip() or email
             consent_html = _consent_email_html(student_name, org_name, grant_url)
-            background_tasks.add_task(send_email, consent_html, f"Parental consent required for {org_name} on LinkJoin", parent_email)
+            pending_emails.append({
+                "html_content": consent_html,
+                "subject": f"Parental consent required for {org_name} on LinkJoin",
+                "to": parent_email,
+            })
             await log_audit(user["username"], "consent.parental_required", detail={"email": email, "parent_email": parent_email, "org_id": org_id})
 
         results.append({"email": email, "status": "created"})
 
+    background_tasks.add_task(_send_batch_and_record, pending_emails, org_id, "welcome_member")
     return {"results": results}
 
 
@@ -594,10 +780,7 @@ async def import_org_parents(
     background_tasks: BackgroundTasks,
     user: dict = Depends(get_confirmed_user),
 ):
-    is_platform_admin = user.get("admin") == "true"
-    is_own_org_admin = user.get("role") in {"school_admin", "district_admin"} and user.get("org_id") == org_id
-    if not is_platform_admin and not is_own_org_admin:
-        raise HTTPException(status_code=403, detail="Access denied")
+    is_platform_admin = _require_org_admin_access(user, org_id)
     org = await motor_db.orgs.find_one({"org_id": org_id})
     if not org:
         raise HTTPException(status_code=404, detail="Org not found")
@@ -606,6 +789,7 @@ async def import_org_parents(
     rows = body.get("rows", [])
     if not rows or not isinstance(rows, list):
         raise HTTPException(status_code=422, detail="rows must be a non-empty list")
+    await assert_org_seats_available(org_id, adding=len(rows))
 
     app_url = _settings.frontend_url
 
@@ -616,6 +800,7 @@ async def import_org_parents(
     accessible_org_ids = None if is_platform_admin else await get_accessible_org_ids(user)
 
     results = []
+    pending_emails: list[dict] = []
     for row in rows:
         parent_email = (row.get("parent_email") or "").strip().lower()
         student_email = (row.get("student_email") or "").strip().lower()
@@ -674,7 +859,11 @@ async def import_org_parents(
                 })
                 continue
             html = _welcome_email_html(parent_email, org_name, "parent", temp_pw, app_url)
-            background_tasks.add_task(send_email, html, f"Welcome to {org_name} on LinkJoin - Parent Portal", parent_email)
+            pending_emails.append({
+                "html_content": html,
+                "subject": f"Welcome to {org_name} on LinkJoin - Parent Portal",
+                "to": parent_email,
+            })
             status = "created"
         else:
             parent_user_id = existing_parent["user_id"]
@@ -701,6 +890,7 @@ async def import_org_parents(
         await log_audit(user["username"], "admin.import_parent", detail={"parent_email": parent_email, "student_email": student_email, "org_id": org_id})
         results.append({"parent_email": parent_email, "student_email": student_email, "status": status})
 
+    background_tasks.add_task(_send_batch_and_record, pending_emails, org_id, "welcome_parent")
     return {"results": results}
 
 

@@ -52,6 +52,7 @@ import AdminOnboarding from './pages/AdminOnboarding.jsx'
 import { Analytics } from '@vercel/analytics/react'
 import IncidentBanner from './components/IncidentBanner.jsx'
 import MfaSetupBanner from './components/MfaSetupBanner.jsx'
+import OrgPendingBanner from './components/OrgPendingBanner.jsx'
 import TrialEndingBanner from './components/TrialEndingBanner.jsx'
 import Status from './pages/Status.jsx'
 import ApiDocs from './pages/ApiDocs.jsx'
@@ -136,7 +137,7 @@ function AppInner() {
   }, [])
   return (
     <div className="lj-banner-stack" ref={stackRef}>
-      <MfaSetupBanner /><TrialEndingBanner /><IncidentBanner />
+      <MfaSetupBanner /><OrgPendingBanner /><TrialEndingBanner /><IncidentBanner />
     </div>
   )
 }

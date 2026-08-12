@@ -1,5 +1,5 @@
 from pydantic import BaseModel, EmailStr, field_validator
-from typing import Optional
+from typing import Literal, Optional
 
 
 class RegisterRequest(BaseModel):
@@ -12,6 +12,10 @@ class RegisterRequest(BaseModel):
     timezone: Optional[str] = ""
     keep: Optional[bool] = False
     under_13: Optional[bool] = False
+    # "school" provisions the account as an unverified school admin so it can
+    # run the existing /onboarding wizard and create its own org. Defaults to
+    # personal, so every existing client keeps its current behaviour.
+    account_intent: Literal["personal", "school"] = "personal"
 
     @field_validator("password")
     @classmethod

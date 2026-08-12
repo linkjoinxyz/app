@@ -56,23 +56,32 @@ def send_email(html_content: str, subject: str, to: str, images: list[dict] | No
         server.sendmail(_settings.gmail_from, to, msg.as_string())
 
 
-def send_email_batch(messages: list[dict]) -> int:
+def send_email_batch(messages: list[dict]) -> dict:
     """Send many messages over a single authenticated connection.
 
     One TLS handshake plus one AUTH instead of N — Gmail throttles concurrent
     authenticated connections from one account, and the handshake dominates
     per-message cost. A failed recipient is logged and skipped rather than
-    aborting the rest of the batch. Returns the number sent.
+    aborting the rest of the batch.
+
+    Returns {"sent": int, "failed": [address, ...]}. Callers that onboard
+    accounts need the failed list, not just a count: a welcome email is the only
+    copy of a temp password, so a silently dropped recipient is someone who
+    cannot log in at all. If the connection itself fails, every address that was
+    never attempted is reported as failed.
 
     Not durable: these run in BackgroundTasks and die with the process. That is
     an accepted tradeoff for share notifications, not an oversight.
     """
     if not messages:
-        return 0
+        return {"sent": 0, "failed": []}
     sent = 0
+    failed: list[str] = []
+    attempted = 0
     try:
         with _connect() as server:
             for m in messages:
+                attempted += 1
                 try:
                     msg = _build_message(
                         m["html_content"], m["subject"], m["to"],
@@ -83,6 +92,10 @@ def send_email_batch(messages: list[dict]) -> int:
                     sent += 1
                 except Exception:
                     log.exception("[email] failed to send to %s", m.get("to"))
+                    failed.append(m.get("to"))
     except Exception:
         log.exception("[email] batch connection failed, %d/%d sent", sent, len(messages))
-    return sent
+    # Anything the loop never reached (connection died, or never opened) is
+    # unsent and must be reported, not assumed delivered.
+    failed.extend(m.get("to") for m in messages[attempted:])
+    return {"sent": sent, "failed": failed}

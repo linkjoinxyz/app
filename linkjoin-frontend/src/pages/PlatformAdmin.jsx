@@ -101,6 +101,106 @@ function OrgsTab() {
   )
 }
 
+// ─── Pending Orgs Tab ─────────────────────────────────────────────────────────
+
+/**
+ * Self-serve school signups awaiting verification. Until approved they are
+ * seat-capped and their members run on ordinary trial entitlement, so this
+ * queue is what turns an inbound signup into a real School plan customer.
+ */
+function PendingOrgsTab() {
+  const [orgs, setOrgs] = useState(null)
+  const [busy, setBusy] = useState({})
+  const [err, setErr] = useState('')
+
+  function load() {
+    apiGet('/admin/orgs/pending')
+      .then(data => setOrgs(Array.isArray(data) ? data : []))
+      .catch(() => setOrgs([]))
+  }
+  useEffect(load, [])
+
+  async function verify(orgId) {
+    setBusy(b => ({ ...b, [orgId]: true })); setErr('')
+    try {
+      await apiPatch(`/admin/orgs/${orgId}/verify`, {})
+      load()
+    } catch (e) {
+      setErr(e?.body?.detail || e?.message || 'Could not verify')
+    }
+    setBusy(b => ({ ...b, [orgId]: false }))
+  }
+
+  if (orgs === null) return <div className="pa-empty">Loading...</div>
+  if (!orgs.length) return <div className="pa-empty">No organizations awaiting verification.</div>
+
+  return (
+    <div>
+      {err && <div className="pa-error">{err}</div>}
+      <table className="pa-table">
+        <thead>
+          <tr><th>Organization</th><th>Type</th><th>Members</th><th>Created</th><th></th></tr>
+        </thead>
+        <tbody>
+          {orgs.map(o => (
+            <tr key={o.org_id}>
+              <td>{o.name}</td>
+              <td>{o.type}</td>
+              <td>{o.member_count}</td>
+              <td>{o.created_at ? String(o.created_at).slice(0, 10) : '—'}</td>
+              <td>
+                <button className="pa-btn" disabled={busy[o.org_id]} onClick={() => verify(o.org_id)}>
+                  {busy[o.org_id] ? 'Verifying...' : 'Verify'}
+                </button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+// ─── Leads Tab ────────────────────────────────────────────────────────────────
+
+/**
+ * Demo and contact submissions. These used to exist only as an email to one
+ * inbox, so a filtered or failed notification was a silently lost lead —
+ * emailed:false marks the ones that never got delivered.
+ */
+function LeadsTab() {
+  const [leads, setLeads] = useState(null)
+
+  useEffect(() => {
+    apiGet('/admin/leads')
+      .then(data => setLeads(Array.isArray(data) ? data : []))
+      .catch(() => setLeads([]))
+  }, [])
+
+  if (leads === null) return <div className="pa-empty">Loading...</div>
+  if (!leads.length) return <div className="pa-empty">No leads yet.</div>
+
+  return (
+    <table className="pa-table">
+      <thead>
+        <tr><th>Received</th><th>Name</th><th>Email</th><th>School / District</th><th>Kind</th><th>Notified</th></tr>
+      </thead>
+      <tbody>
+        {leads.map((l, i) => (
+          <tr key={i}>
+            <td>{l.created_at ? String(l.created_at).slice(0, 16).replace('T', ' ') : '—'}</td>
+            <td>{`${l.first_name || ''} ${l.last_name || ''}`.trim() || '—'}</td>
+            <td><a href={`mailto:${l.email}`} style={{ color: "var(--c-accent-550)" }}>{l.email}</a></td>
+            <td>{l.school || '—'}</td>
+            <td>{l.kind}</td>
+            <td>{l.emailed ? 'Sent' : <span className="pa-dim">Not sent</span>}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  )
+}
+
 // ─── Users Tab ────────────────────────────────────────────────────────────────
 
 function UsersTab() {
@@ -714,12 +814,16 @@ export default function PlatformAdmin() {
           <button className={`admin-tab${activeTab === 'invites' ? ' admin-tab--active' : ''}`} onClick={() => setActiveTab('invites')}>Invites</button>
           <button className={`admin-tab${activeTab === 'analytics' ? ' admin-tab--active' : ''}`} onClick={() => setActiveTab('analytics')}>Analytics</button>
           <button className={`admin-tab${activeTab === 'incidents' ? ' admin-tab--active' : ''}`} onClick={() => setActiveTab('incidents')}>Incidents</button>
+          <button className={`admin-tab${activeTab === 'pending' ? ' admin-tab--active' : ''}`} onClick={() => setActiveTab('pending')}>Pending orgs</button>
+          <button className={`admin-tab${activeTab === 'leads' ? ' admin-tab--active' : ''}`} onClick={() => setActiveTab('leads')}>Leads</button>
         </div>
         {activeTab === 'orgs' && <OrgsTab />}
         {activeTab === 'users' && <UsersTab />}
         {activeTab === 'invites' && <InvitesTab />}
         {activeTab === 'analytics' && <AnalyticsTab />}
         {activeTab === 'incidents' && <IncidentsTab />}
+        {activeTab === 'pending' && <PendingOrgsTab />}
+        {activeTab === 'leads' && <LeadsTab />}
       </div>
     </div>
   )
