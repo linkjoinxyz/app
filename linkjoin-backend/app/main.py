@@ -259,6 +259,16 @@ async def lifespan(app: FastAPI):
     # migration handles once.
 
     from app.scheduler import run_leader_loop
+    from app.config import running_locally
+
+    # A local process must not run the scheduler. Its leader lock lives in a local
+    # Redis the deployed app cannot see, so it is a second leader by construction:
+    # every reminder fires twice, from real Twilio credentials. See the guard in
+    # config.py for why .env presence is the local signal.
+    if running_locally() and not _settings.run_scheduler_locally:
+        log.info("[scheduler] not started: local process (set RUN_SCHEDULER_LOCALLY=true to override)")
+        yield
+        return
 
     def _log_task_exception(task: asyncio.Task) -> None:
         """A bare create_task swallows the traceback: if scheduler init raised,
