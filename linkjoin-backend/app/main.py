@@ -220,6 +220,16 @@ async def lifespan(app: FastAPI):
         motor_db.parent_reminder_log.create_index(
             [("class_id", 1), ("student_user_id", 1), ("parent_user_id", 1), ("date", 1)], unique=True
         ),
+        # Dedup claim for per-link SMS reminders (scheduler._send_sms). Unique so a
+        # second scheduler cannot double-send; TTL so the claims do not accumulate.
+        motor_db.sms_reminder_log.create_index(
+            [("username", 1), ("link_id", 1), ("date", 1)], unique=True
+        ),
+        _soft_index(
+            motor_db.sms_reminder_log.create_index(
+                "sent_at", expireAfterSeconds=604800, name="sent_at_ttl_7d"
+            )
+        ),
         motor_db.open_log.create_index([("username", 1), ("opened_at", -1)]),
         motor_db.open_log.create_index([("username", 1), ("link_id", 1), ("opened_at", -1)]),
         motor_db.invites.create_index("token", unique=True),
