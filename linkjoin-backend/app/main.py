@@ -220,6 +220,16 @@ async def lifespan(app: FastAPI):
         motor_db.parent_reminder_log.create_index(
             [("class_id", 1), ("student_user_id", 1), ("parent_user_id", 1), ("date", 1)], unique=True
         ),
+        # Dedup claim for per-link SMS reminders (scheduler._send_sms). Unique so a
+        # second scheduler cannot double-send; TTL so the claims do not accumulate.
+        motor_db.sms_reminder_log.create_index(
+            [("username", 1), ("link_id", 1), ("date", 1)], unique=True
+        ),
+        _soft_index(
+            motor_db.sms_reminder_log.create_index(
+                "sent_at", expireAfterSeconds=604800, name="sent_at_ttl_7d"
+            )
+        ),
         motor_db.open_log.create_index([("username", 1), ("opened_at", -1)]),
         motor_db.open_log.create_index([("username", 1), ("link_id", 1), ("opened_at", -1)]),
         motor_db.invites.create_index("token", unique=True),
@@ -259,6 +269,16 @@ async def lifespan(app: FastAPI):
     # migration handles once.
 
     from app.scheduler import run_leader_loop
+    from app.config import running_locally
+
+    # A local process must not run the scheduler. Its leader lock lives in a local
+    # Redis the deployed app cannot see, so it is a second leader by construction:
+    # every reminder fires twice, from real Twilio credentials. See the guard in
+    # config.py for why .env presence is the local signal.
+    if running_locally() and not _settings.run_scheduler_locally:
+        log.info("[scheduler] not started: local process (set RUN_SCHEDULER_LOCALLY=true to override)")
+        yield
+        return
 
     def _log_task_exception(task: asyncio.Task) -> None:
         """A bare create_task swallows the traceback: if scheduler init raised,

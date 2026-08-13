@@ -34,8 +34,10 @@ to refresh the index after significant changes.
 
 <!-- gstack-gbrain-search-guidance:end -->
 
-## Deployment (GitHub Pages)
-- After CSS/layout changes, verify CSS override ordering and confirm all JS files (e.g., navtoggle.js) are copied by the deploy workflow before considering the task done.
+## Deployment
+- Backend: `linkjoin-backend` only, built and pushed by `.github/workflows/deploy-backend.yml` (gated on Test Backend passing on `main`), then restarted manually in Azure App Service.
+- Frontend: `linkjoin-frontend` on Vercel.
+- The legacy root Starlette app (`app/`, `templates/`, `static/`, root `Procfile`/`Dockerfile`) was deleted 2026-08-13. It hardcoded the production database with no leader lock and no send dedup, so running it locally double-sent real reminder texts.
 ## Frontend Verification
 - When confirming account/DB state, check for cached localStorage that may cause the frontend to show stale data, and note this to the user.
 ## Billing & Rate Limits

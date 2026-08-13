@@ -1,5 +1,19 @@
+from pathlib import Path
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from functools import lru_cache
+
+# The database holding real users. Anything running against it is production.
+PRODUCTION_DATABASE = "zoom_opener"
+
+# Presence of this file is what "running locally" means. The image is built from
+# a git checkout and .env is gitignored, so a deployed container never has one —
+# which is why the guards below cannot fire in production.
+_ENV_FILE = Path(__file__).resolve().parent.parent / ".env"
+
+
+def running_locally() -> bool:
+    return _ENV_FILE.exists()
 
 
 class Settings(BaseSettings):
@@ -61,6 +75,32 @@ class Settings(BaseSettings):
     stripe_secret_key: str = ""
     stripe_webhook_secret: str = ""
     stripe_price_id: str = ""
+
+    # Escape hatches, both off by default. Set them in .env only for as long as
+    # you actually need them.
+    allow_production_database: bool = False
+    run_scheduler_locally: bool = False
+
+    @model_validator(mode="after")
+    def _keep_local_runs_off_production(self):
+        """Refuse to boot a local process against the production database.
+
+        mongo_database defaults to the production name, so `uvicorn app.main:app`
+        with no override silently attached to real users — with real Twilio and
+        Gmail credentials from .env. A stray dev server left running for two weeks
+        ran the scheduler against production and every reminder text went out
+        twice, because its leader lock lived in a local Redis that the deployed
+        app cannot see.
+        """
+        if running_locally() and self.mongo_database == PRODUCTION_DATABASE \
+                and not self.allow_production_database:
+            raise ValueError(
+                f"Refusing to start: MONGO_DATABASE is the production database "
+                f"({PRODUCTION_DATABASE!r}) and a .env file is present, so this is a "
+                f"local process. Set MONGO_DATABASE (e.g. linkjoin_localdev) in .env, "
+                f"or ALLOW_PRODUCTION_DATABASE=true if you really mean it."
+            )
+        return self
 
 
 @lru_cache

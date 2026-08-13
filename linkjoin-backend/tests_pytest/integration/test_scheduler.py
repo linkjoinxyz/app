@@ -112,6 +112,29 @@ async def test_send_sms_sends_when_vacation_mode_but_not_entitled(personal_user_
     assert fake.sent, "vacation_mode is set but the owner isn't premium-entitled, so the SMS should still send"
 
 
+async def test_send_sms_sends_once_per_link_per_day(personal_user_no_trial, monkeypatch):
+    """Two schedulers firing the same job must produce one text, not two.
+
+    The Redis leader lock only covers schedulers sharing a Redis; a stray local
+    process holds its own lock and fires everything a second time.
+    """
+    await motor_db.login.update_one(
+        {"username": personal_user_no_trial["username"]}, {"$set": {"number": 15551234567}}
+    )
+    fake = _FakeTwilio()
+    monkeypatch.setattr("twilio.rest.Client", lambda *a, **kw: fake)
+
+    job = {
+        "link": {"id": 99, "username": personal_user_no_trial["username"], "name": "Test", "text": "5"},
+        "job_id": "irrelevant-job-id",
+        "repeat": "week",
+    }
+    await _send_sms(job)
+    await _send_sms(job)
+
+    assert len(fake.sent) == 1, f"expected exactly one text, got {len(fake.sent)}"
+
+
 _DAY_ABBRS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 
 # The scheduler evaluates only the current day's session, so a test session set

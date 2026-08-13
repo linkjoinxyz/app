@@ -229,6 +229,28 @@ async def _send_sms(job_data: dict) -> None:
         if today != d:
             return
 
+    # Claim the send atomically before making it, the way check_absences and
+    # send_class_reminders already do. The Redis leader lock only deduplicates
+    # schedulers that share a Redis: a stray local uvicorn (or a second deploy)
+    # holds its own lock and is a second leader by construction, and this was the
+    # one send path with no dedup behind it, so those users got every reminder
+    # twice. One cron job fires at most once per link per day, so the UTC date is
+    # the occurrence key.
+    claim_key = {
+        "username": link["username"],
+        "link_id": link.get("id"),
+        "date": datetime.now(timezone.utc).date().isoformat(),
+    }
+    try:
+        claim = await motor_db.sms_reminder_log.update_one(
+            claim_key, {"$setOnInsert": {**claim_key, "sent_at": datetime.now(timezone.utc)}}, upsert=True
+        )
+    except DuplicateKeyError:
+        claim = None
+    if claim is None or claim.upserted_id is None:
+        log.info("[SMS] skipping — reminder already sent today for link %s", link.get("id"))
+        return
+
     body = _text_messages[0].format(
         name=link.get("name", ""), text=link.get("text", ""), id=link.get("id", "")
     )
